@@ -1,0 +1,5 @@
+.db_credentials
+keys/
+logs/
+backups/
+migrate_from_bootcamp.php.done

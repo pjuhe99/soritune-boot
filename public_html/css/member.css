@@ -1,0 +1,108 @@
+/* ══════════════════════════════════════════════════════════════
+   Member Dashboard (LMS 기반)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Login ──────────────────────────────────────────────────── */
+.member-login {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #fff;
+}
+
+.member-login .login-box {
+    width: 100%;
+    max-width: 360px;
+}
+
+.member-login .login-box .login-title {
+    text-align: center;
+    font-size: var(--lg-font-size);
+    font-weight: 800;
+    color: var(--color-semi-black);
+    margin-bottom: 4px;
+}
+
+.member-login .login-subtitle {
+    text-align: center;
+    color: var(--color-777);
+    font-size: var(--md-font-size);
+    margin-bottom: 30px;
+}
+
+/* ── Dashboard ──────────────────────────────────────────────── */
+.member-dashboard {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #fff;
+}
+
+.member-header {
+    background: #fff;
+    border-bottom: 1px solid var(--bg-tint);
+    padding: 20px;
+    padding-top: calc(var(--safe-top) + 20px);
+    text-align: center;
+}
+
+.member-header .header-title {
+    font-size: var(--lg-font-size);
+    font-weight: 800;
+    color: var(--color-semi-black);
+    margin-bottom: 4px;
+}
+
+.member-header .member-cohort {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+}
+
+.member-content {
+    padding: 20px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.member-info-card {
+    background: var(--bg-tint);
+    border-radius: var(--radius);
+    padding: 30px 20px;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.member-name {
+    font-size: var(--lg-font-size);
+    font-weight: 800;
+    color: var(--color-semi-black);
+}
+
+.member-point {
+    margin-top: 16px;
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--main-color);
+}
+
+.member-point-label {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    margin-top: 4px;
+}
+
+.member-placeholder {
+    background: var(--bg-tint);
+    border-radius: var(--radius);
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--color-gray);
+    font-size: var(--md-font-size);
+}
+
+.member-logout-wrap {
+    text-align: center;
+    margin-top: 30px;
+}

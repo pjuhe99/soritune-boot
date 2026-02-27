@@ -1,0 +1,688 @@
+<?php
+/**
+ * boot.soritune.com - Admin API
+ * Handles all admin actions: login, tasks, guides, calendar, CRUD
+ * V2: multi-role support, auto-assign tasks, cohorts CRUD
+ */
+
+require_once __DIR__ . '/../auth.php';
+header('Content-Type: application/json; charset=utf-8');
+
+$action = getAction();
+$method = getMethod();
+
+switch ($action) {
+
+// ── Auth ────────────────────────────────────────────────────
+
+case 'login':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $loginId  = trim($input['login_id'] ?? '');
+    $password = $input['password'] ?? '';
+
+    if (!$loginId || !$password) jsonError('아이디와 비밀번호를 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT * FROM admins WHERE login_id = ? AND is_active = 1');
+    $stmt->execute([$loginId]);
+    $admin = $stmt->fetch();
+
+    if (!$admin || !password_verify($password, $admin['password_hash'])) {
+        jsonError('아이디 또는 비밀번호가 올바르지 않습니다.');
+    }
+
+    // Fetch roles from admin_roles table
+    $stmt = $db->prepare('SELECT role FROM admin_roles WHERE admin_id = ?');
+    $stmt->execute([$admin['id']]);
+    $roles = array_column($stmt->fetchAll(), 'role');
+
+    if (empty($roles)) {
+        jsonError('할당된 역할이 없습니다. 관리자에게 문의해주세요.');
+    }
+
+    $db->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
+    loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort']);
+
+    jsonSuccess([
+        'admin' => [
+            'admin_id'    => $admin['id'],
+            'admin_name'  => $admin['name'],
+            'admin_roles' => $roles,
+            'cohort'      => $admin['cohort'],
+            'team'        => $admin['team'],
+            'class_time'  => $admin['class_time'],
+        ],
+    ], '로그인 성공');
+    break;
+
+case 'logout':
+    logoutAdmin();
+    jsonSuccess([], '로그아웃 되었습니다.');
+    break;
+
+case 'check_session':
+    $s = getAdminSession();
+    if ($s) {
+        jsonSuccess(['logged_in' => true, 'admin' => $s]);
+    } else {
+        jsonSuccess(['logged_in' => false]);
+    }
+    break;
+
+// ── Dashboard Data ──────────────────────────────────────────
+
+case 'weekly_goals':
+    $admin = requireAdmin();
+    $cohort = getEffectiveCohort($admin);
+    $today = date('Y-m-d');
+    $db = getDB();
+    $stmt = $db->prepare('SELECT * FROM calendar WHERE start_date <= ? AND end_date >= ? AND cohort = ? ORDER BY start_date LIMIT 1');
+    $stmt->execute([$today, $today, $cohort]);
+    $goal = $stmt->fetch();
+    jsonSuccess(['goal' => $goal ?: null]);
+    break;
+
+case 'today_tasks':
+    $admin = requireAdmin();
+    $cohort = getEffectiveCohort($admin);
+    $date = $_GET['date'] ?? date('Y-m-d');
+    $roles = $admin['admin_roles'];
+    $adminId = $admin['admin_id'];
+
+    $db = getDB();
+    if (hasRole($admin, 'operation')) {
+        // Operation sees all tasks for the cohort on this date
+        $stmt = $db->prepare('
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
+            ORDER BY t.completed, t.end_date, t.title
+        ');
+        $stmt->execute([$date, $date, $cohort]);
+    } else {
+        // Non-operation: assigned to me, OR unassigned with my role
+        $placeholders = implode(',', array_fill(0, count($roles), '?'));
+        $stmt = $db->prepare("
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.start_date <= ? AND t.end_date >= ?
+              AND (t.assignee_admin_id = ?
+                   OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+              AND t.cohort = ?
+            ORDER BY t.completed, t.end_date, t.title
+        ");
+        $params = [$date, $date, $adminId];
+        $params = array_merge($params, $roles);
+        $params[] = $cohort;
+        $stmt->execute($params);
+    }
+    jsonSuccess(['tasks' => $stmt->fetchAll()]);
+    break;
+
+case 'overdue_tasks':
+    $admin = requireAdmin();
+    $cohort = getEffectiveCohort($admin);
+    $today = date('Y-m-d');
+    $roles = $admin['admin_roles'];
+    $adminId = $admin['admin_id'];
+
+    $db = getDB();
+    if (hasRole($admin, 'operation')) {
+        $stmt = $db->prepare('
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
+            ORDER BY t.end_date
+        ');
+        $stmt->execute([$today, $cohort]);
+    } else {
+        $placeholders = implode(',', array_fill(0, count($roles), '?'));
+        $stmt = $db->prepare("
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.end_date < ? AND t.completed = 0
+              AND (t.assignee_admin_id = ?
+                   OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+              AND t.cohort = ?
+            ORDER BY t.end_date
+        ");
+        $params = [$today, $adminId];
+        $params = array_merge($params, $roles);
+        $params[] = $cohort;
+        $stmt->execute($params);
+    }
+    jsonSuccess(['tasks' => $stmt->fetchAll()]);
+    break;
+
+case 'toggle_task':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin();
+    $input = getJsonInput();
+    $taskId = (int)($input['task_id'] ?? 0);
+    $completed = !empty($input['completed']) ? 1 : 0;
+
+    if (!$taskId) jsonError('task_id가 필요합니다.');
+
+    $db = getDB();
+    $stmt = $db->prepare('UPDATE tasks SET completed = ?, updated_at = NOW() WHERE id = ?');
+    $stmt->execute([$completed, $taskId]);
+    jsonSuccess([], $completed ? '완료 처리되었습니다.' : '미완료로 변경되었습니다.');
+    break;
+
+// ── Guides ──────────────────────────────────────────────────
+
+case 'guide_list':
+    $admin = requireAdmin();
+    $cohort = getEffectiveCohort($admin);
+    $roles = $admin['admin_roles'];
+
+    $db = getDB();
+    if (hasRole($admin, 'operation')) {
+        $stmt = $db->prepare('SELECT * FROM guides WHERE cohort = ? AND is_active = 1 ORDER BY sort_order, title');
+        $stmt->execute([$cohort]);
+    } else {
+        $placeholders = implode(',', array_fill(0, count($roles), '?'));
+        $stmt = $db->prepare("SELECT * FROM guides WHERE role IN ({$placeholders}) AND cohort = ? AND is_active = 1 ORDER BY sort_order, title");
+        $params = array_merge($roles, [$cohort]);
+        $stmt->execute($params);
+    }
+    jsonSuccess(['guides' => $stmt->fetchAll()]);
+    break;
+
+// ── Cohort Management (operation only) ──────────────────────
+
+case 'change_cohort':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $newCohort = trim($input['cohort'] ?? '');
+    if (!$newCohort) jsonError('기수를 입력해주세요.');
+    updateSetting('current_cohort', $newCohort);
+    jsonSuccess([], "기수가 '{$newCohort}'으로 변경되었습니다.");
+    break;
+
+case 'cohort_list':
+    requireAdmin(['operation']);
+    $db = getDB();
+    // Get distinct cohorts from admins + members + cohorts table
+    $stmt = $db->query("
+        SELECT DISTINCT cohort FROM (
+            SELECT cohort FROM admins WHERE cohort IS NOT NULL
+            UNION
+            SELECT cohort FROM members
+            UNION
+            SELECT cohort FROM tasks
+            UNION
+            SELECT cohort FROM cohorts
+        ) AS c ORDER BY cohort
+    ");
+    $cohorts = array_column($stmt->fetchAll(), 'cohort');
+    $current = getSetting('current_cohort');
+
+    // Get cohorts table data
+    $stmt2 = $db->query('SELECT * FROM cohorts ORDER BY cohort');
+    $cohortDetails = $stmt2->fetchAll();
+
+    jsonSuccess(['cohorts' => $cohorts, 'current_cohort' => $current, 'cohort_details' => $cohortDetails]);
+    break;
+
+case 'cohort_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort    = trim($input['cohort'] ?? '');
+    $startDate = $input['start_date'] ?? '';
+    $endDate   = $input['end_date'] ?? '';
+
+    if (!$cohort || !$startDate || !$endDate) jsonError('기수명, 시작일, 종료일을 모두 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('INSERT INTO cohorts (cohort, start_date, end_date) VALUES (?, ?, ?)');
+    $stmt->execute([$cohort, $startDate, $endDate]);
+    jsonSuccess(['id' => (int)$db->lastInsertId()], '기수가 추가되었습니다.');
+    break;
+
+case 'cohort_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('기수 ID가 필요합니다.');
+
+    $fields = [];
+    $params = [];
+    foreach (['cohort', 'start_date', 'end_date'] as $f) {
+        if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]); }
+    }
+    if (!$fields) jsonError('수정할 내용이 없습니다.');
+
+    $params[] = $id;
+    $db = getDB();
+    $db->prepare('UPDATE cohorts SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    jsonSuccess([], '기수 정보가 수정되었습니다.');
+    break;
+
+case 'cohort_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('기수 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('DELETE FROM cohorts WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '기수가 삭제되었습니다.');
+    break;
+
+// ── Member CRUD (operation only) ────────────────────────────
+
+case 'member_list':
+    $admin = requireAdmin(['operation']);
+    $cohort = getEffectiveCohort($admin);
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id, name, phone, cohort, point, is_active, last_login_at, created_at FROM members WHERE cohort = ? ORDER BY name');
+    $stmt->execute([$cohort]);
+    jsonSuccess(['members' => $stmt->fetchAll()]);
+    break;
+
+case 'member_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $name   = trim($input['name'] ?? '');
+    $phone  = trim($input['phone'] ?? '');
+    $cohort = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    if (!$name || !$phone) jsonError('이름과 전화번호를 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('INSERT INTO members (name, phone, cohort) VALUES (?, ?, ?)');
+    $stmt->execute([$name, $phone, $cohort]);
+    jsonSuccess(['id' => (int)$db->lastInsertId()], '회원이 추가되었습니다.');
+    break;
+
+case 'member_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('회원 ID가 필요합니다.');
+
+    $fields = [];
+    $params = [];
+    foreach (['name', 'phone', 'cohort'] as $f) {
+        if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]); }
+    }
+    if (isset($input['point'])) { $fields[] = 'point = ?'; $params[] = (int)$input['point']; }
+    if (isset($input['is_active'])) { $fields[] = 'is_active = ?'; $params[] = $input['is_active'] ? 1 : 0; }
+    if (!$fields) jsonError('수정할 내용이 없습니다.');
+
+    $params[] = $id;
+    $db = getDB();
+    $db->prepare('UPDATE members SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    jsonSuccess([], '회원 정보가 수정되었습니다.');
+    break;
+
+case 'member_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('회원 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('DELETE FROM members WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '회원이 삭제되었습니다.');
+    break;
+
+// ── Admin CRUD (operation only) ─────────────────────────────
+
+case 'admin_list':
+    $admin = requireAdmin(['operation']);
+    $db = getDB();
+    $stmt = $db->query('
+        SELECT a.id, a.name, a.login_id, a.cohort, a.team, a.class_time, a.is_active, a.last_login_at,
+               GROUP_CONCAT(ar.role ORDER BY ar.role) AS roles_csv
+        FROM admins a
+        LEFT JOIN admin_roles ar ON a.id = ar.admin_id
+        GROUP BY a.id
+        ORDER BY a.name
+    ');
+    $admins = $stmt->fetchAll();
+    // Convert roles_csv to array
+    foreach ($admins as &$a) {
+        $a['roles'] = $a['roles_csv'] ? explode(',', $a['roles_csv']) : [];
+        unset($a['roles_csv']);
+    }
+    unset($a);
+    jsonSuccess(['admins' => $admins]);
+    break;
+
+case 'admin_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $name      = trim($input['name'] ?? '');
+    $loginId   = trim($input['login_id'] ?? '');
+    $password  = $input['password'] ?? '';
+    $roles     = $input['roles'] ?? [];
+    $cohort    = trim($input['cohort'] ?? '') ?: null;
+    $team      = trim($input['team'] ?? '') ?: null;
+    $classTime = trim($input['class_time'] ?? '') ?: null;
+
+    if (!$name || !$loginId || !$password || empty($roles)) jsonError('필수 항목을 모두 입력해주세요.');
+
+    $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    foreach ($roles as $r) {
+        if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+    }
+
+    if (in_array('operation', $roles)) $cohort = null;
+
+    $db = getDB();
+    // Check duplicate login_id
+    $stmt = $db->prepare('SELECT id FROM admins WHERE login_id = ?');
+    $stmt->execute([$loginId]);
+    if ($stmt->fetch()) jsonError('이미 사용 중인 아이디입니다.');
+
+    // Insert admin (role column = first role for backward compat)
+    $primaryRole = $roles[0];
+    $stmt = $db->prepare('INSERT INTO admins (name, login_id, password_hash, role, cohort, team, class_time) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$name, $loginId, password_hash($password, PASSWORD_DEFAULT), $primaryRole, $cohort, $team, $classTime]);
+    $newId = (int)$db->lastInsertId();
+
+    // Insert roles
+    $stmt = $db->prepare('INSERT INTO admin_roles (admin_id, role) VALUES (?, ?)');
+    foreach ($roles as $r) {
+        $stmt->execute([$newId, $r]);
+    }
+
+    jsonSuccess(['id' => $newId], '관리자가 추가되었습니다.');
+    break;
+
+case 'admin_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('관리자 ID가 필요합니다.');
+
+    $db = getDB();
+    $fields = [];
+    $params = [];
+    foreach (['name', 'login_id', 'cohort', 'team', 'class_time'] as $f) {
+        if (isset($input[$f])) {
+            $val = trim($input[$f]);
+            $fields[] = "{$f} = ?";
+            $params[] = $val ?: null;
+        }
+    }
+    if (isset($input['is_active'])) { $fields[] = 'is_active = ?'; $params[] = $input['is_active'] ? 1 : 0; }
+    if (!empty($input['password'])) {
+        $fields[] = 'password_hash = ?';
+        $params[] = password_hash($input['password'], PASSWORD_DEFAULT);
+    }
+
+    // Handle roles update
+    if (isset($input['roles']) && is_array($input['roles'])) {
+        $roles = $input['roles'];
+        $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+        foreach ($roles as $r) {
+            if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+        }
+
+        if (in_array('operation', $roles) && isset($input['cohort'])) {
+            // Override cohort to null for operation
+            $cohortIdx = array_search('cohort = ?', $fields);
+            if ($cohortIdx !== false) {
+                $params[$cohortIdx] = null;
+            }
+        }
+
+        // Update primary role column
+        $fields[] = 'role = ?';
+        $params[] = $roles[0];
+
+        // Update admin_roles table
+        $db->prepare('DELETE FROM admin_roles WHERE admin_id = ?')->execute([$id]);
+        $stmtRole = $db->prepare('INSERT INTO admin_roles (admin_id, role) VALUES (?, ?)');
+        foreach ($roles as $r) {
+            $stmtRole->execute([$id, $r]);
+        }
+    }
+
+    if ($fields) {
+        $params[] = $id;
+        $db->prepare('UPDATE admins SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    }
+
+    jsonSuccess([], '관리자 정보가 수정되었습니다.');
+    break;
+
+case 'admin_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('관리자 ID가 필요합니다.');
+    if ($id === $admin['admin_id']) jsonError('본인 계정은 삭제할 수 없습니다.');
+
+    $db = getDB();
+    // admin_roles will be cascade-deleted
+    $db->prepare('DELETE FROM admins WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '관리자가 삭제되었습니다.');
+    break;
+
+// ── Task CRUD (operation only for create/update/delete) ─────
+
+case 'task_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $title     = trim($input['title'] ?? '');
+    $roles     = $input['roles'] ?? [];
+    $startDate = $input['start_date'] ?? '';
+    $endDate   = $input['end_date'] ?? '';
+    $content   = trim($input['content_markdown'] ?? '') ?: null;
+    $cohort    = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+
+    if (!$title || empty($roles) || !$startDate || !$endDate) jsonError('필수 항목을 모두 입력해주세요.');
+
+    $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    foreach ($roles as $r) {
+        if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+    }
+
+    $db = getDB();
+    $insertStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $createdCount = 0;
+
+    foreach ($roles as $role) {
+        // Find active admins with this role in the matching cohort
+        $stmt = $db->prepare('
+            SELECT a.id FROM admins a
+            JOIN admin_roles ar ON a.id = ar.admin_id
+            WHERE ar.role = ? AND a.is_active = 1
+              AND (a.cohort = ? OR a.cohort IS NULL)
+        ');
+        $stmt->execute([$role, $cohort]);
+        $admins = $stmt->fetchAll();
+
+        if (empty($admins)) {
+            // No admins with this role — create one unassigned task
+            $insertStmt->execute([$title, $role, null, $startDate, $endDate, $content, $cohort]);
+            $createdCount++;
+        } else {
+            // Create one task per admin
+            foreach ($admins as $a) {
+                $insertStmt->execute([$title, $role, $a['id'], $startDate, $endDate, $content, $cohort]);
+                $createdCount++;
+            }
+        }
+    }
+
+    jsonSuccess(['created_count' => $createdCount], "Task가 {$createdCount}개 생성되었습니다.");
+    break;
+
+case 'task_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('Task ID가 필요합니다.');
+
+    $fields = [];
+    $params = [];
+    foreach (['title', 'role', 'start_date', 'end_date', 'content_markdown', 'cohort'] as $f) {
+        if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]) ?: null; }
+    }
+    if (array_key_exists('assignee_admin_id', $input)) {
+        $fields[] = 'assignee_admin_id = ?';
+        $params[] = $input['assignee_admin_id'] ? (int)$input['assignee_admin_id'] : null;
+    }
+    if (isset($input['completed'])) { $fields[] = 'completed = ?'; $params[] = $input['completed'] ? 1 : 0; }
+    if (!$fields) jsonError('수정할 내용이 없습니다.');
+
+    $params[] = $id;
+    $db = getDB();
+    $db->prepare('UPDATE tasks SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    jsonSuccess([], 'Task가 수정되었습니다.');
+    break;
+
+case 'task_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('Task ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('DELETE FROM tasks WHERE id = ?')->execute([$id]);
+    jsonSuccess([], 'Task가 삭제되었습니다.');
+    break;
+
+// ── Guide CRUD (operation only) ─────────────────────────────
+
+case 'guide_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $title  = trim($input['title'] ?? '');
+    $url    = trim($input['url'] ?? '');
+    $role   = trim($input['role'] ?? '');
+    $note   = trim($input['note'] ?? '') ?: null;
+    $cohort = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $sort   = (int)($input['sort_order'] ?? 0);
+
+    if (!$title || !$url || !$role) jsonError('필수 항목을 모두 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('INSERT INTO guides (title, url, role, note, cohort, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$title, $url, $role, $note, $cohort, $sort]);
+    jsonSuccess(['id' => (int)$db->lastInsertId()], '가이드가 추가되었습니다.');
+    break;
+
+case 'guide_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('가이드 ID가 필요합니다.');
+
+    $fields = [];
+    $params = [];
+    foreach (['title', 'url', 'role', 'note', 'cohort'] as $f) {
+        if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]) ?: null; }
+    }
+    if (isset($input['sort_order'])) { $fields[] = 'sort_order = ?'; $params[] = (int)$input['sort_order']; }
+    if (isset($input['is_active'])) { $fields[] = 'is_active = ?'; $params[] = $input['is_active'] ? 1 : 0; }
+    if (!$fields) jsonError('수정할 내용이 없습니다.');
+
+    $params[] = $id;
+    $db = getDB();
+    $db->prepare('UPDATE guides SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    jsonSuccess([], '가이드가 수정되었습니다.');
+    break;
+
+case 'guide_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('가이드 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('DELETE FROM guides WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '가이드가 삭제되었습니다.');
+    break;
+
+// ── Calendar CRUD (operation only) ──────────────────────────
+
+case 'calendar_list':
+    $admin = requireAdmin();
+    $cohort = getEffectiveCohort($admin);
+    $db = getDB();
+    $stmt = $db->prepare('SELECT * FROM calendar WHERE cohort = ? ORDER BY start_date');
+    $stmt->execute([$cohort]);
+    jsonSuccess(['calendar' => $stmt->fetchAll()]);
+    break;
+
+case 'calendar_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $label   = trim($input['week_label'] ?? '');
+    $start   = $input['start_date'] ?? '';
+    $end     = $input['end_date'] ?? '';
+    $content = trim($input['content'] ?? '') ?: null;
+    $cohort  = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+
+    if (!$label || !$start || !$end) jsonError('필수 항목을 모두 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('INSERT INTO calendar (week_label, start_date, end_date, content, cohort) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([$label, $start, $end, $content, $cohort]);
+    jsonSuccess(['id' => (int)$db->lastInsertId()], '캘린더가 추가되었습니다.');
+    break;
+
+case 'calendar_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('캘린더 ID가 필요합니다.');
+
+    $fields = [];
+    $params = [];
+    foreach (['week_label', 'start_date', 'end_date', 'content', 'cohort'] as $f) {
+        if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]) ?: null; }
+    }
+    if (!$fields) jsonError('수정할 내용이 없습니다.');
+
+    $params[] = $id;
+    $db = getDB();
+    $db->prepare('UPDATE calendar SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    jsonSuccess([], '캘린더가 수정되었습니다.');
+    break;
+
+case 'calendar_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('캘린더 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('DELETE FROM calendar WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '캘린더가 삭제되었습니다.');
+    break;
+
+// ── Default ─────────────────────────────────────────────────
+
+default:
+    jsonError('Unknown action', 404);
+}
