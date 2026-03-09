@@ -652,12 +652,13 @@ const AdminApp = (() => {
         document.getElementById('btn-add-task').onclick = () => showTaskForm();
     }
 
+    const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
     function showTaskForm(data = {}) {
         const isEdit = !!data.id;
 
         let roleSection;
         if (isEdit) {
-            // Edit mode: single role select (already assigned)
             roleSection = `
                 <div class="form-group">
                     <label class="form-label">담당 역할</label>
@@ -667,7 +668,6 @@ const AdminApp = (() => {
                 </div>
             `;
         } else {
-            // Create mode: multi-role checkboxes
             roleSection = `
                 <div class="form-group">
                     <label class="form-label">담당 역할 * (복수 선택 가능)</label>
@@ -678,20 +678,88 @@ const AdminApp = (() => {
             `;
         }
 
+        // Date mode selector (create only)
+        const dateModeSection = isEdit ? '' : `
+            <div class="form-group">
+                <label class="form-label">날짜 설정 방식 *</label>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0">
+                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="radio" name="tf-date-mode" value="direct" checked> 날짜 직접 선택
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="radio" name="tf-date-mode" value="week"> 주차/요일 선택
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="radio" name="tf-date-mode" value="daily"> 데일리 반복
+                    </label>
+                </div>
+            </div>
+        `;
+
+        // Direct date fields
+        const directDateSection = `
+            <div id="tf-mode-direct" class="tf-date-section">
+                <div class="form-group">
+                    <label class="form-label">시작일 *</label>
+                    <input type="date" class="form-input" id="tf-start" value="${data.start_date || ''}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">종료일 *</label>
+                    <input type="date" class="form-input" id="tf-end" value="${data.end_date || ''}">
+                </div>
+            </div>
+        `;
+
+        // Week/day fields
+        const weekDaySection = isEdit ? '' : `
+            <div id="tf-mode-week" class="tf-date-section" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">주차 *</label>
+                    <input type="number" class="form-input" id="tf-week-num" min="1" max="52" placeholder="예: 1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">요일 *</label>
+                    <select class="form-select" id="tf-weekday">
+                        <option value="1">월요일</option>
+                        <option value="2">화요일</option>
+                        <option value="3">수요일</option>
+                        <option value="4">목요일</option>
+                        <option value="5">금요일</option>
+                        <option value="6">토요일</option>
+                        <option value="0">일요일</option>
+                    </select>
+                </div>
+                <p class="text-muted" style="font-size:0.8rem;margin-top:-8px">* cohort 시작일 기준 N주차의 해당 요일로 날짜가 계산됩니다.</p>
+            </div>
+        `;
+
+        // Daily repeat fields
+        const dailySection = isEdit ? '' : `
+            <div id="tf-mode-daily" class="tf-date-section" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">반복 요일 * (복수 선택 가능)</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0">
+                        ${WEEKDAY_LABELS.map((label, i) => `
+                            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                                <input type="checkbox" class="tf-daily-day" value="${i}"> ${label}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+                <p class="text-muted" style="font-size:0.8rem;margin-top:-8px">* cohort 시작일~종료일 범위에서 선택한 요일에 해당하는 날짜마다 task가 생성됩니다.</p>
+            </div>
+        `;
+
         const body = `
             <div class="form-group">
                 <label class="form-label">제목 *</label>
                 <input type="text" class="form-input" id="tf-title" value="${App.esc(data.title || '')}">
             </div>
             ${roleSection}
-            <div class="form-group">
-                <label class="form-label">시작일 *</label>
-                <input type="date" class="form-input" id="tf-start" value="${data.start_date || ''}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">종료일 *</label>
-                <input type="date" class="form-input" id="tf-end" value="${data.end_date || ''}">
-            </div>
+            ${dateModeSection}
+            ${directDateSection}
+            ${weekDaySection}
+            ${dailySection}
             <div class="form-group">
                 <label class="form-label">내용</label>
                 <textarea class="form-textarea" id="tf-content" rows="4" style="resize:vertical">${App.esc(data.content_markdown || '')}</textarea>
@@ -702,23 +770,53 @@ const AdminApp = (() => {
             <button class="btn btn-primary" id="tf-save">${isEdit ? '수정' : '추가'}</button>
         `;
         App.openModal(isEdit ? 'Task 수정' : 'Task 추가', body, footer);
+
+        // Date mode switching (create only)
+        if (!isEdit) {
+            const modeRadios = document.querySelectorAll('input[name="tf-date-mode"]');
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    document.querySelectorAll('.tf-date-section').forEach(s => s.style.display = 'none');
+                    const target = document.getElementById('tf-mode-' + radio.value);
+                    if (target) target.style.display = '';
+                });
+            });
+        }
+
         document.getElementById('tf-save').onclick = async () => {
             const payload = {
                 title: document.getElementById('tf-title').value.trim(),
-                start_date: document.getElementById('tf-start').value,
-                end_date: document.getElementById('tf-end').value,
                 content_markdown: document.getElementById('tf-content').value.trim(),
             };
 
             if (isEdit) {
                 payload.id = data.id;
                 payload.role = document.getElementById('tf-role').value;
+                payload.start_date = document.getElementById('tf-start').value;
+                payload.end_date = document.getElementById('tf-end').value;
+                if (!payload.title || !payload.start_date || !payload.end_date) return Toast.warning('필수 항목을 모두 입력해주세요.');
             } else {
                 payload.roles = getCheckedRoles('tf');
                 if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
+
+                const mode = document.querySelector('input[name="tf-date-mode"]:checked').value;
+                payload.date_mode = mode;
+
+                if (mode === 'direct') {
+                    payload.start_date = document.getElementById('tf-start').value;
+                    payload.end_date = document.getElementById('tf-end').value;
+                    if (!payload.start_date || !payload.end_date) return Toast.warning('시작일과 종료일을 입력해주세요.');
+                } else if (mode === 'week') {
+                    payload.week_number = parseInt(document.getElementById('tf-week-num').value);
+                    payload.weekday = parseInt(document.getElementById('tf-weekday').value);
+                    if (!payload.week_number || isNaN(payload.weekday)) return Toast.warning('주차와 요일을 선택해주세요.');
+                } else if (mode === 'daily') {
+                    payload.repeat_days = Array.from(document.querySelectorAll('.tf-daily-day:checked')).map(cb => parseInt(cb.value));
+                    if (!payload.repeat_days.length) return Toast.warning('반복할 요일을 하나 이상 선택해주세요.');
+                }
             }
 
-            if (!payload.title || !payload.start_date || !payload.end_date) return Toast.warning('필수 항목을 모두 입력해주세요.');
+            if (!payload.title) return Toast.warning('제목을 입력해주세요.');
 
             App.showLoading();
             const r = await App.post(`/api/admin.php?action=${isEdit ? 'task_update' : 'task_create'}`, payload);

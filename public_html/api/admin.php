@@ -483,14 +483,13 @@ case 'task_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation']);
     $input = getJsonInput();
-    $title     = trim($input['title'] ?? '');
-    $roles     = $input['roles'] ?? [];
-    $startDate = $input['start_date'] ?? '';
-    $endDate   = $input['end_date'] ?? '';
-    $content   = trim($input['content_markdown'] ?? '') ?: null;
-    $cohort    = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $title    = trim($input['title'] ?? '');
+    $roles    = $input['roles'] ?? [];
+    $content  = trim($input['content_markdown'] ?? '') ?: null;
+    $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $dateMode = $input['date_mode'] ?? 'direct';
 
-    if (!$title || empty($roles) || !$startDate || !$endDate) jsonError('필수 항목을 모두 입력해주세요.');
+    if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
 
     $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
     foreach ($roles as $r) {
@@ -498,29 +497,92 @@ case 'task_create':
     }
 
     $db = getDB();
+
+    // Build date pairs based on mode
+    $datePairs = []; // array of [start_date, end_date]
+
+    if ($dateMode === 'direct') {
+        $startDate = $input['start_date'] ?? '';
+        $endDate   = $input['end_date'] ?? '';
+        if (!$startDate || !$endDate) jsonError('시작일과 종료일을 입력해주세요.');
+        $datePairs[] = [$startDate, $endDate];
+
+    } elseif ($dateMode === 'week') {
+        $weekNumber = (int)($input['week_number'] ?? 0);
+        $weekday    = (int)($input['weekday'] ?? -1);
+        if ($weekNumber < 1 || $weekday < 0 || $weekday > 6) jsonError('주차와 요일을 올바르게 입력해주세요.');
+
+        // Get cohort start_date
+        $stmt = $db->prepare('SELECT start_date FROM cohorts WHERE cohort = ?');
+        $stmt->execute([$cohort]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수의 시작일 정보가 없습니다. 기수 관리에서 먼저 설정해주세요.');
+
+        $cohortStart = new DateTime($cohortRow['start_date']);
+        // Week 1 starts on the Monday of the week containing cohort start_date
+        // PHP: 1=Mon, 7=Sun. Input weekday: 0=Sun, 1=Mon, ..., 6=Sat
+        $phpWeekday = $weekday === 0 ? 7 : $weekday; // Convert to ISO (1=Mon, 7=Sun)
+        $startDayOfWeek = (int)$cohortStart->format('N'); // 1=Mon, 7=Sun
+        // Monday of the week containing cohort start
+        $weekMonday = clone $cohortStart;
+        $weekMonday->modify('-' . ($startDayOfWeek - 1) . ' days');
+        // Add (weekNumber - 1) weeks
+        $weekMonday->modify('+' . ($weekNumber - 1) . ' weeks');
+        // Target date = that week's Monday + (phpWeekday - 1) days
+        $targetDate = clone $weekMonday;
+        $targetDate->modify('+' . ($phpWeekday - 1) . ' days');
+        $dateStr = $targetDate->format('Y-m-d');
+        $datePairs[] = [$dateStr, $dateStr];
+
+    } elseif ($dateMode === 'daily') {
+        $repeatDays = $input['repeat_days'] ?? [];
+        if (empty($repeatDays)) jsonError('반복할 요일을 선택해주세요.');
+
+        // Get cohort date range
+        $stmt = $db->prepare('SELECT start_date, end_date FROM cohorts WHERE cohort = ?');
+        $stmt->execute([$cohort]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수의 날짜 정보가 없습니다. 기수 관리에서 먼저 설정해주세요.');
+
+        // Convert repeat_days (0=Sun,1=Mon,...,6=Sat) to PHP day-of-week format
+        $current = new DateTime($cohortRow['start_date']);
+        $end     = new DateTime($cohortRow['end_date']);
+        while ($current <= $end) {
+            $dow = (int)$current->format('w'); // 0=Sun, 6=Sat
+            if (in_array($dow, $repeatDays)) {
+                $dateStr = $current->format('Y-m-d');
+                $datePairs[] = [$dateStr, $dateStr];
+            }
+            $current->modify('+1 day');
+        }
+        if (empty($datePairs)) jsonError('선택한 요일에 해당하는 날짜가 cohort 기간 내에 없습니다.');
+    } else {
+        jsonError('올바르지 않은 날짜 설정 방식입니다.');
+    }
+
     $insertStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
     $createdCount = 0;
 
-    foreach ($roles as $role) {
-        // Find active admins with this role in the matching cohort
-        $stmt = $db->prepare('
-            SELECT a.id FROM admins a
-            JOIN admin_roles ar ON a.id = ar.admin_id
-            WHERE ar.role = ? AND a.is_active = 1
-              AND (a.cohort = ? OR a.cohort IS NULL)
-        ');
-        $stmt->execute([$role, $cohort]);
-        $admins = $stmt->fetchAll();
+    foreach ($datePairs as [$sd, $ed]) {
+        foreach ($roles as $role) {
+            // Find active admins with this role in the matching cohort
+            $stmt = $db->prepare('
+                SELECT a.id FROM admins a
+                JOIN admin_roles ar ON a.id = ar.admin_id
+                WHERE ar.role = ? AND a.is_active = 1
+                  AND (a.cohort = ? OR a.cohort IS NULL)
+            ');
+            $stmt->execute([$role, $cohort]);
+            $admins = $stmt->fetchAll();
 
-        if (empty($admins)) {
-            // No admins with this role — create one unassigned task
-            $insertStmt->execute([$title, $role, null, $startDate, $endDate, $content, $cohort]);
-            $createdCount++;
-        } else {
-            // Create one task per admin
-            foreach ($admins as $a) {
-                $insertStmt->execute([$title, $role, $a['id'], $startDate, $endDate, $content, $cohort]);
+            if (empty($admins)) {
+                $insertStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort]);
                 $createdCount++;
+            } else {
+                foreach ($admins as $a) {
+                    $insertStmt->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort]);
+                    $createdCount++;
+                }
             }
         }
     }
