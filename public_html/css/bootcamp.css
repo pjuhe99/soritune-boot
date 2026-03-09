@@ -1,0 +1,256 @@
+/* ══════════════════════════════════════════════════════════════
+   Bootcamp Management Styles
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Filter Bar ────────────────────────────────────────────── */
+.bc-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+    margin-bottom: 16px;
+}
+.bc-filters .filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.bc-filters .filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-777);
+}
+.bc-filters select,
+.bc-filters input[type="date"] {
+    border: 1px solid var(--inp-border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: var(--sm-font-size);
+    font-family: inherit;
+    background: #fff;
+    min-width: 100px;
+}
+
+/* ── Checklist Grid ────────────────────────────────────────── */
+.bc-checklist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sm-font-size);
+}
+.bc-checklist-table th,
+.bc-checklist-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--bg-tint);
+    text-align: center;
+    white-space: nowrap;
+}
+.bc-checklist-table th {
+    background: var(--bg-tint);
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--color-777);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+.bc-checklist-table td:first-child,
+.bc-checklist-table th:first-child {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 1;
+    min-width: 80px;
+}
+.bc-checklist-table th:first-child {
+    background: var(--bg-tint);
+    z-index: 3;
+}
+.bc-checklist-table .member-name {
+    font-weight: 600;
+    color: var(--color-semi-black);
+}
+.bc-checklist-table .member-sub {
+    font-size: 10px;
+    color: var(--color-gray);
+}
+.bc-checklist-table .score-cell {
+    font-weight: 700;
+}
+.bc-checklist-table .score-cell.negative {
+    color: var(--warning-color);
+}
+.bc-checklist-table .score-cell.danger {
+    color: #fff;
+    background: var(--warning-color);
+    border-radius: 4px;
+}
+.bc-checklist-table .score-cell.positive {
+    color: #38a169;
+}
+
+/* ── Check Checkbox ────────────────────────────────────────── */
+.bc-check {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--main-color);
+    cursor: pointer;
+}
+
+/* ── Status Board ──────────────────────────────────────────── */
+.bc-status-card {
+    border: 1px solid var(--bg-tint);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.bc-status-card.eliminated {
+    border-left: 4px solid var(--warning-color);
+    background: rgba(229, 62, 62, 0.03);
+}
+.bc-status-info { flex: 1; min-width: 0; }
+.bc-status-name {
+    font-weight: 700;
+    font-size: var(--md-font-size);
+    color: var(--color-semi-black);
+}
+.bc-status-meta {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+.bc-status-checks {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.bc-check-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+}
+.bc-check-dot.pass { background: rgba(56,161,105,0.15); color: #38a169; }
+.bc-check-dot.fail { background: rgba(229,62,62,0.1); color: var(--warning-color); }
+.bc-check-dot.none { background: var(--bg-tint); color: var(--color-gray); }
+.bc-status-score {
+    font-size: 18px;
+    font-weight: 800;
+    min-width: 48px;
+    text-align: center;
+}
+
+/* ── Revival ───────────────────────────────────────────────── */
+.bc-revival-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--bg-tint);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+}
+.bc-revival-row .revival-check {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--main-color);
+}
+.bc-revival-row .revival-info { flex: 1; }
+.bc-revival-row .revival-name { font-weight: 700; }
+.bc-revival-row .revival-detail {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+}
+.bc-revival-row .revival-score {
+    font-weight: 800;
+    color: var(--warning-color);
+    font-size: 16px;
+}
+
+/* ── Coin ──────────────────────────────────────────────────── */
+.bc-coin-card {
+    background: var(--bg-tint);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+.bc-coin-card .coin-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--main-color);
+}
+.bc-coin-card .coin-label {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    margin-top: 2px;
+}
+
+/* ── Log Table ─────────────────────────────────────────────── */
+.bc-log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--sm-font-size);
+}
+.bc-log-table th,
+.bc-log-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--bg-tint);
+    text-align: left;
+}
+.bc-log-table th {
+    font-weight: 700;
+    color: var(--color-777);
+    font-size: 11px;
+    background: var(--bg-tint);
+}
+.bc-log-table .log-positive { color: #38a169; font-weight: 700; }
+.bc-log-table .log-negative { color: var(--warning-color); font-weight: 700; }
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.bc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.bc-toolbar-title {
+    font-weight: 800;
+    font-size: var(--md-font-size);
+    color: var(--color-semi-black);
+}
+
+/* ── Back link ─────────────────────────────────────────────── */
+.bc-back {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    text-decoration: none;
+    font-weight: 600;
+}
+.bc-back:hover { color: var(--main-color); }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .bc-filters { gap: 6px; }
+    .bc-filters select,
+    .bc-filters input[type="date"] {
+        min-width: 80px;
+        font-size: 11px;
+        padding: 5px 6px;
+    }
+    .bc-checklist-table th,
+    .bc-checklist-table td { padding: 6px 4px; font-size: 11px; }
+    .bc-check { width: 18px; height: 18px; }
+}

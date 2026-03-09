@@ -222,7 +222,10 @@ const AdminApp = (() => {
     // ── Guide Button ──
     function renderGuideButton() {
         const sec = document.getElementById('sec-guide-btn');
-        sec.innerHTML = `<button class="btn guide-btn btn-block" id="btn-guide">업무 가이드</button>`;
+        sec.innerHTML = `
+            <button class="btn guide-btn btn-block" id="btn-guide">업무 가이드</button>
+            ${isOperation() ? '<a href="/bootcamp/" class="btn btn-block mt-sm" style="border:1px solid var(--inp-border-color);font-weight:700;text-decoration:none;color:var(--color-semi-black)">부트캠프 관리</a>' : ''}
+        `;
         document.getElementById('btn-guide').onclick = showGuidePopup;
     }
 

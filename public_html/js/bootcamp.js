@@ -1,0 +1,987 @@
+/* ══════════════════════════════════════════════════════════════
+   Bootcamp Management App
+   체크리스트 / 현황판 / 패자부활전 / 코인 관리
+   ══════════════════════════════════════════════════════════════ */
+const BootcampApp = (() => {
+    const API = '/api/bootcamp.php?action=';
+    const ROLE_LABELS = { member: '회원', leader: '조장', subleader: '부조장' };
+
+    let admin = null;
+    let root = null;
+
+    // 공유 필터 상태
+    let cohorts = [];
+    let groups = [];
+    let missionTypes = [];
+    let selectedCohortId = 0;
+    let selectedGroupId = 0;
+    let selectedStageNo = 0;
+    let selectedDate = App.today();
+
+    // ── Init ──
+    async function init() {
+        root = document.getElementById('bootcamp-root');
+        App.showLoading();
+        const r = await App.get('/api/admin.php?action=check_session');
+        App.hideLoading();
+
+        if (!r.logged_in || !r.admin.admin_roles || !r.admin.admin_roles.includes('operation')) {
+            showLogin();
+            return;
+        }
+        admin = r.admin;
+        await loadMasterData();
+        showMain();
+    }
+
+    function showLogin() {
+        root.innerHTML = `
+            <div class="admin-login">
+                <div class="login-box">
+                    <div class="login-title">소리튠 부트캠프</div>
+                    <div class="login-subtitle">부트캠프 관리</div>
+                    <form id="login-form">
+                        <div class="form-group"><input type="text" class="form-input" id="login-id" placeholder="아이디" required></div>
+                        <div class="form-group"><input type="password" class="form-input" id="login-pw" placeholder="비밀번호" required></div>
+                        <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.getElementById('login-form').onsubmit = async (e) => {
+            e.preventDefault();
+            App.showLoading();
+            const r = await App.post('/api/admin.php?action=login', {
+                login_id: document.getElementById('login-id').value.trim(),
+                password: document.getElementById('login-pw').value,
+            });
+            App.hideLoading();
+            if (r.success && r.admin.admin_roles.includes('operation')) {
+                admin = r.admin;
+                await loadMasterData();
+                showMain();
+            } else if (r.success) {
+                Toast.error('운영팀 권한이 필요합니다.');
+            }
+        };
+    }
+
+    async function loadMasterData() {
+        const [rCohorts, rMissions] = await Promise.all([
+            App.get(API + 'cohorts'),
+            App.get(API + 'mission_types'),
+        ]);
+        cohorts = rCohorts.cohorts || [];
+        missionTypes = rMissions.mission_types || [];
+        if (cohorts.length && !selectedCohortId) {
+            // 활성 기수 우선, 없으면 첫 번째
+            const active = cohorts.find(c => c.is_active);
+            selectedCohortId = active ? parseInt(active.id) : parseInt(cohorts[0].id);
+        }
+    }
+
+    async function loadGroups() {
+        if (!selectedCohortId) { groups = []; return; }
+        const r = await App.get(API + 'groups', { cohort_id: selectedCohortId });
+        groups = r.groups || [];
+    }
+
+    // ── Main Layout ──
+    function showMain() {
+        root.innerHTML = `
+            <div class="admin-dashboard">
+                <div class="admin-header">
+                    <div class="admin-header-left">
+                        <span class="header-title">부트캠프 관리</span>
+                        <a href="/operation" class="bc-back">← 운영 대시보드</a>
+                    </div>
+                    <div class="admin-header-right">
+                        <span class="admin-name">${App.esc(admin.admin_name)}</span>
+                    </div>
+                </div>
+                <div class="admin-content">
+                    <div class="admin-tabs" id="bc-tabs">
+                        <div class="tab_wrap">
+                            <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
+                            <button class="tab" data-tab="#bc-tab-status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-revival">패자부활전</button>
+                            <button class="tab" data-tab="#bc-tab-coins">코인 관리</button>
+                            <button class="tab" data-tab="#bc-tab-members">회원 관리</button>
+                            <button class="tab" data-tab="#bc-tab-groups">조 관리</button>
+                        </div>
+                        <div class="tab-content active" id="bc-tab-checklist"></div>
+                        <div class="tab-content" id="bc-tab-status"></div>
+                        <div class="tab-content" id="bc-tab-revival"></div>
+                        <div class="tab-content" id="bc-tab-coins"></div>
+                        <div class="tab-content" id="bc-tab-members"></div>
+                        <div class="tab-content" id="bc-tab-groups"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        App.initTabs(document.getElementById('bc-tabs'));
+
+        // 탭 전환 시 데이터 로드
+        document.querySelectorAll('#bc-tabs .tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                if (tab === '#bc-tab-checklist') loadChecklist();
+                else if (tab === '#bc-tab-status') loadStatusBoard();
+                else if (tab === '#bc-tab-revival') loadRevival();
+                else if (tab === '#bc-tab-coins') loadCoins();
+                else if (tab === '#bc-tab-members') loadMembersMgmt();
+                else if (tab === '#bc-tab-groups') loadGroupsMgmt();
+            });
+        });
+
+        loadChecklist();
+    }
+
+    // ── Filter Bar HTML ──
+    function filterBarHtml(opts = {}) {
+        const showDate = opts.date !== false;
+        const showGroup = opts.group !== false;
+        const showStage = opts.stage !== false;
+        return `
+            <div class="bc-filters">
+                <div class="filter-item">
+                    <span class="filter-label">기수</span>
+                    <select id="fl-cohort">
+                        ${cohorts.map(c => `<option value="${c.id}" ${parseInt(c.id) === selectedCohortId ? 'selected' : ''}>${App.esc(c.cohort)}</option>`).join('')}
+                    </select>
+                </div>
+                ${showDate ? `
+                <div class="filter-item">
+                    <span class="filter-label">날짜</span>
+                    <input type="date" id="fl-date" value="${selectedDate}">
+                </div>` : ''}
+                ${showGroup ? `
+                <div class="filter-item">
+                    <span class="filter-label">조</span>
+                    <select id="fl-group">
+                        <option value="0">전체</option>
+                        ${groups.map(g => `<option value="${g.id}" ${parseInt(g.id) === selectedGroupId ? 'selected' : ''}>${App.esc(g.name)}</option>`).join('')}
+                    </select>
+                </div>` : ''}
+                ${showStage ? `
+                <div class="filter-item">
+                    <span class="filter-label">단계</span>
+                    <select id="fl-stage">
+                        <option value="0">전체</option>
+                        <option value="1" ${selectedStageNo === 1 ? 'selected' : ''}>1단계</option>
+                        <option value="2" ${selectedStageNo === 2 ? 'selected' : ''}>2단계</option>
+                    </select>
+                </div>` : ''}
+            </div>
+        `;
+    }
+
+    function bindFilterEvents(onFilter) {
+        const cohortEl = document.getElementById('fl-cohort');
+        const dateEl = document.getElementById('fl-date');
+        const groupEl = document.getElementById('fl-group');
+        const stageEl = document.getElementById('fl-stage');
+
+        if (cohortEl) cohortEl.onchange = async () => {
+            selectedCohortId = parseInt(cohortEl.value);
+            selectedGroupId = 0;
+            await loadGroups();
+            if (groupEl) {
+                groupEl.innerHTML = '<option value="0">전체</option>' +
+                    groups.map(g => `<option value="${g.id}">${App.esc(g.name)}</option>`).join('');
+            }
+            onFilter();
+        };
+        if (dateEl) dateEl.onchange = () => { selectedDate = dateEl.value; onFilter(); };
+        if (groupEl) groupEl.onchange = () => { selectedGroupId = parseInt(groupEl.value); onFilter(); };
+        if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
+    }
+
+    function scoreClass(score) {
+        if (score <= -10) return 'danger';
+        if (score < 0) return 'negative';
+        if (score > 0) return 'positive';
+        return '';
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 체크리스트 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadChecklist() {
+        const sec = document.getElementById('bc-tab-checklist');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">체크리스트</span>
+                <button class="btn btn-primary btn-sm" id="bc-checklist-save">저장</button>
+            </div>
+            ${filterBarHtml()}
+            <div id="bc-checklist-body"><div class="empty-state">로딩 중...</div></div>
+        `;
+
+        bindFilterEvents(renderChecklist);
+        document.getElementById('bc-checklist-save').onclick = saveChecklist;
+        renderChecklist();
+    }
+
+    async function renderChecklist() {
+        const body = document.getElementById('bc-checklist-body');
+        body.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const params = { cohort_id: selectedCohortId, date: selectedDate };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+
+        const r = await App.get(API + 'checklist', params);
+        if (!r.success) return;
+
+        const { members, checks, mission_types: mt } = r;
+        if (!members.length) {
+            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+            return;
+        }
+
+        body.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="bc-checklist-table">
+                    <thead>
+                        <tr>
+                            <th>회원</th>
+                            <th>점수</th>
+                            ${mt.map(m => `<th title="${App.esc(m.name)}">${App.esc(m.name.substring(0, 4))}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${members.map(m => {
+                            const mc = checks[m.id] || {};
+                            const sc = scoreClass(parseInt(m.current_score));
+                            return `
+                            <tr>
+                                <td>
+                                    <div class="member-name">${App.esc(m.nickname)}</div>
+                                    <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
+                                </td>
+                                <td class="score-cell ${sc}">${m.current_score}</td>
+                                ${mt.map(mi => {
+                                    const cv = mc[mi.id];
+                                    const checked = cv && cv.status ? 'checked' : '';
+                                    return `<td><input type="checkbox" class="bc-check" data-member="${m.id}" data-mission="${mi.code}" ${checked}></td>`;
+                                }).join('')}
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    async function saveChecklist() {
+        const checkboxes = document.querySelectorAll('.bc-check');
+        const items = [];
+        checkboxes.forEach(cb => {
+            items.push({
+                member_id: parseInt(cb.dataset.member),
+                mission_type_code: cb.dataset.mission,
+                status: cb.checked,
+            });
+        });
+
+        if (!items.length) return;
+
+        App.showLoading();
+        const r = await App.post(API + 'check_bulk_save', {
+            check_date: selectedDate,
+            items,
+        });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            renderChecklist();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 현황판 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadStatusBoard() {
+        const sec = document.getElementById('bc-tab-status');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">현황판</span>
+            </div>
+            ${filterBarHtml()}
+            <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
+        `;
+
+        bindFilterEvents(renderStatusBoard);
+        renderStatusBoard();
+    }
+
+    async function renderStatusBoard() {
+        const body = document.getElementById('bc-status-body');
+        body.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const params = { cohort_id: selectedCohortId, date: selectedDate };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+
+        const r = await App.get(API + 'status_board', params);
+        if (!r.success) return;
+
+        const { members, checks, mission_types: mt } = r;
+        if (!members.length) {
+            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+            return;
+        }
+
+        body.innerHTML = members.map(m => {
+            const mc = checks[m.id] || {};
+            const score = parseInt(m.current_score);
+            const isEliminated = score <= -10;
+            const sc = scoreClass(score);
+
+            return `
+                <div class="bc-status-card ${isEliminated ? 'eliminated' : ''}" data-member-id="${m.id}">
+                    <div class="bc-status-info">
+                        <div class="bc-status-name">
+                            ${App.esc(m.nickname)}
+                            ${isEliminated ? '<span class="badge badge-warning" style="font-size:10px;margin-left:4px">탈락</span>' : ''}
+                        </div>
+                        <div class="bc-status-meta">
+                            <span>${App.esc(m.group_name || '-')}</span>
+                            <span>${m.stage_no}단계</span>
+                            <span>${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span>
+                            <span>코인: ${m.current_coin || 0}</span>
+                        </div>
+                        <div class="bc-status-checks mt-sm">
+                            ${mt.map(mi => {
+                                const v = mc[mi.id];
+                                const cls = v === undefined ? 'none' : (v ? 'pass' : 'fail');
+                                const label = mi.name.substring(0, 2);
+                                return `<span class="bc-check-dot ${cls}" title="${App.esc(mi.name)}">${label}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="bc-status-score ${sc}">${score}</div>
+                </div>
+            `;
+        }).join('');
+
+        // 카드 클릭 시 상세(점수로그/코인로그) 모달
+        body.querySelectorAll('.bc-status-card').forEach(card => {
+            card.style.cursor = 'pointer';
+            card.onclick = () => showMemberDetail(parseInt(card.dataset.memberId));
+        });
+    }
+
+    async function showMemberDetail(memberId) {
+        App.showLoading();
+        const [rScore, rCoin] = await Promise.all([
+            App.get(API + 'score_logs', { member_id: memberId }),
+            App.get(API + 'coin_logs', { member_id: memberId }),
+        ]);
+        App.hideLoading();
+
+        const scoreLogs = rScore.logs || [];
+        const coinLogs = rCoin.logs || [];
+
+        const body = `
+            <div class="admin-tabs" id="detail-tabs" style="margin:0">
+                <div class="tab_wrap">
+                    <button class="tab active" data-tab="#detail-score">점수 이력</button>
+                    <button class="tab" data-tab="#detail-coin">코인 이력</button>
+                </div>
+                <div class="tab-content active" id="detail-score">
+                    ${scoreLogs.length ? `
+                    <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+                        <table class="bc-log-table">
+                            <thead><tr><th>일시</th><th>변동</th><th>전</th><th>후</th><th>사유</th></tr></thead>
+                            <tbody>
+                                ${scoreLogs.map(l => `
+                                    <tr>
+                                        <td style="white-space:nowrap">${(l.created_at || '').substring(0, 16)}</td>
+                                        <td class="${parseInt(l.score_change) >= 0 ? 'log-positive' : 'log-negative'}">${parseInt(l.score_change) > 0 ? '+' : ''}${l.score_change}</td>
+                                        <td>${l.before_score}</td>
+                                        <td>${l.after_score}</td>
+                                        <td>${App.esc(l.reason_detail || l.reason_type)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>` : '<div class="empty-state">이력이 없습니다.</div>'}
+                </div>
+                <div class="tab-content" id="detail-coin">
+                    ${coinLogs.length ? `
+                    <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+                        <table class="bc-log-table">
+                            <thead><tr><th>일시</th><th>변동</th><th>전</th><th>후</th><th>사유</th></tr></thead>
+                            <tbody>
+                                ${coinLogs.map(l => `
+                                    <tr>
+                                        <td style="white-space:nowrap">${(l.created_at || '').substring(0, 16)}</td>
+                                        <td class="${parseInt(l.coin_change) >= 0 ? 'log-positive' : 'log-negative'}">${parseInt(l.coin_change) > 0 ? '+' : ''}${l.coin_change}</td>
+                                        <td>${l.before_coin}</td>
+                                        <td>${l.after_coin}</td>
+                                        <td>${App.esc(l.reason_detail || l.reason_type)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>` : '<div class="empty-state">이력이 없습니다.</div>'}
+                </div>
+            </div>
+        `;
+        App.openModal('회원 상세', body);
+        App.initTabs(document.getElementById('detail-tabs'));
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 패자부활전 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadRevival() {
+        const sec = document.getElementById('bc-tab-revival');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">패자부활전</span>
+            </div>
+            <div class="admin-tabs" id="revival-tabs" style="margin:0">
+                <div class="tab_wrap">
+                    <button class="tab active" data-tab="#revival-candidates">대상자</button>
+                    <button class="tab" data-tab="#revival-history">처리 이력</button>
+                </div>
+                <div class="tab-content active" id="revival-candidates"></div>
+                <div class="tab-content" id="revival-history"></div>
+            </div>
+        `;
+
+        App.initTabs(document.getElementById('revival-tabs'));
+        document.querySelectorAll('#revival-tabs .tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.tab === '#revival-candidates') renderRevivalCandidates();
+                else renderRevivalHistory();
+            });
+        });
+
+        renderRevivalCandidates();
+    }
+
+    async function renderRevivalCandidates() {
+        const sec = document.getElementById('revival-candidates');
+        sec.innerHTML = `
+            ${filterBarHtml({ date: false })}
+            <div id="revival-list"><div class="empty-state">로딩 중...</div></div>
+        `;
+        bindFilterEvents(fetchRevivalCandidates);
+        fetchRevivalCandidates();
+    }
+
+    async function fetchRevivalCandidates() {
+        const list = document.getElementById('revival-list');
+        list.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const params = { cohort_id: selectedCohortId };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+
+        const r = await App.get(API + 'revival_candidates', params);
+        if (!r.success) return;
+
+        const candidates = r.candidates || [];
+        if (!candidates.length) {
+            list.innerHTML = '<div class="empty-state">탈락 대상자가 없습니다.</div>';
+            return;
+        }
+
+        list.innerHTML = `
+            ${candidates.map(c => `
+                <div class="bc-revival-row">
+                    <input type="checkbox" class="revival-check" value="${c.id}">
+                    <div class="revival-info">
+                        <div class="revival-name">${App.esc(c.nickname)}</div>
+                        <div class="revival-detail">${App.esc(c.group_name || '-')} · ${c.stage_no}단계 · ${App.esc(ROLE_LABELS[c.member_role] || '')}</div>
+                    </div>
+                    <div class="revival-score">${c.current_score}</div>
+                </div>
+            `).join('')}
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+                <input type="text" class="form-input" id="revival-note" placeholder="메모 (선택)" style="flex:1">
+                <button class="btn btn-primary btn-sm" id="revival-process">부활 처리</button>
+            </div>
+        `;
+
+        document.getElementById('revival-process').onclick = processRevival;
+    }
+
+    async function processRevival() {
+        const checked = Array.from(document.querySelectorAll('.revival-check:checked')).map(cb => parseInt(cb.value));
+        if (!checked.length) return Toast.warning('부활 대상을 선택해주세요.');
+
+        const note = document.getElementById('revival-note').value.trim() || null;
+        if (!await App.confirm(`${checked.length}명을 부활 처리하시겠습니까?\n점수가 -7로 보정됩니다.`)) return;
+
+        App.showLoading();
+        let success = 0;
+        for (const memberId of checked) {
+            const r = await App.post(API + 'revival_process', { member_id: memberId, note });
+            if (r.success) success++;
+        }
+        App.hideLoading();
+        Toast.success(`${success}명 부활 처리 완료`);
+        fetchRevivalCandidates();
+    }
+
+    async function renderRevivalHistory() {
+        const sec = document.getElementById('revival-history');
+        sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const r = await App.get(API + 'revival_logs', { cohort_id: selectedCohortId });
+        if (!r.success) return;
+
+        const logs = r.logs || [];
+        if (!logs.length) {
+            sec.innerHTML = '<div class="empty-state mt-md">이력이 없습니다.</div>';
+            return;
+        }
+
+        sec.innerHTML = `
+            <div style="overflow-x:auto" class="mt-md">
+                <table class="bc-log-table">
+                    <thead><tr><th>일시</th><th>회원</th><th>조</th><th>전</th><th>후</th><th>처리자</th><th>메모</th></tr></thead>
+                    <tbody>
+                        ${logs.map(l => `
+                            <tr>
+                                <td style="white-space:nowrap">${(l.created_at || '').substring(0, 16)}</td>
+                                <td>${App.esc(l.nickname)}</td>
+                                <td>${App.esc(l.group_name || '-')}</td>
+                                <td class="log-negative">${l.before_score}</td>
+                                <td>${l.after_score}</td>
+                                <td>${App.esc(l.operator_name || '-')}</td>
+                                <td>${App.esc(l.note || '-')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 코인 관리 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadCoins() {
+        const sec = document.getElementById('bc-tab-coins');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">코인 관리</span>
+            </div>
+            ${filterBarHtml({ date: false })}
+            <div id="bc-coin-body"><div class="empty-state">로딩 중...</div></div>
+        `;
+
+        bindFilterEvents(renderCoinList);
+        renderCoinList();
+    }
+
+    async function renderCoinList() {
+        const body = document.getElementById('bc-coin-body');
+        body.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const params = { cohort_id: selectedCohortId };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+
+        const r = await App.get(API + 'members', params);
+        if (!r.success) return;
+
+        const members = r.members || [];
+        if (!members.length) {
+            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+            return;
+        }
+
+        body.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>회원</th><th>조</th><th>단계</th><th>코인</th><th></th></tr></thead>
+                    <tbody>
+                        ${members.map(m => `
+                            <tr>
+                                <td>${App.esc(m.nickname)}</td>
+                                <td>${App.esc(m.group_name || '-')}</td>
+                                <td>${m.stage_no}단계</td>
+                                <td style="font-weight:700;color:var(--main-color)">${m.current_coin || 0}</td>
+                                <td class="actions">
+                                    <button class="btn-icon" onclick="BootcampApp._coinAction(${m.id}, '${App.esc(m.nickname)}', ${m.current_coin || 0})">적립/차감</button>
+                                    <button class="btn-icon" onclick="BootcampApp._coinLogs(${m.id}, '${App.esc(m.nickname)}')">이력</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function _coinAction(memberId, nickname, currentCoin) {
+        const body = `
+            <div class="bc-coin-card">
+                <div class="coin-label">${App.esc(nickname)} 현재 코인</div>
+                <div class="coin-value">${currentCoin}</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">변동량 (양수=적립, 음수=차감)</label>
+                <input type="number" class="form-input" id="coin-amount" placeholder="예: 10 또는 -5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">사유 유형</label>
+                <select class="form-select" id="coin-reason-type">
+                    <option value="manual_adjustment">수동 조정</option>
+                    <option value="leader_coin">조장 코인</option>
+                    <option value="study_open">스터디 개설</option>
+                    <option value="study_join">스터디 참여</option>
+                    <option value="completion_bonus">수료 보너스</option>
+                    <option value="event_reward">이벤트 보상</option>
+                    <option value="redemption">사용(차감)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">사유 상세 (선택)</label>
+                <input type="text" class="form-input" id="coin-reason-detail">
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="coin-submit">처리</button>
+        `;
+        App.openModal('코인 적립/차감', body, footer);
+
+        document.getElementById('coin-submit').onclick = async () => {
+            const amount = parseInt(document.getElementById('coin-amount').value);
+            if (!amount || isNaN(amount)) return Toast.warning('변동량을 입력해주세요.');
+
+            App.showLoading();
+            const r = await App.post(API + 'coin_change', {
+                member_id: memberId,
+                coin_change: amount,
+                reason_type: document.getElementById('coin-reason-type').value,
+                reason_detail: document.getElementById('coin-reason-detail').value.trim(),
+            });
+            App.hideLoading();
+            if (r.success) {
+                App.closeModal();
+                Toast.success(r.message);
+                renderCoinList();
+            }
+        };
+    }
+
+    async function _coinLogs(memberId, nickname) {
+        App.showLoading();
+        const r = await App.get(API + 'coin_logs', { member_id: memberId });
+        App.hideLoading();
+
+        const logs = r.logs || [];
+        const body = logs.length ? `
+            <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+                <table class="bc-log-table">
+                    <thead><tr><th>일시</th><th>변동</th><th>전</th><th>후</th><th>사유</th><th>처리자</th></tr></thead>
+                    <tbody>
+                        ${logs.map(l => `
+                            <tr>
+                                <td style="white-space:nowrap">${(l.created_at || '').substring(0, 16)}</td>
+                                <td class="${parseInt(l.coin_change) >= 0 ? 'log-positive' : 'log-negative'}">${parseInt(l.coin_change) > 0 ? '+' : ''}${l.coin_change}</td>
+                                <td>${l.before_coin}</td>
+                                <td>${l.after_coin}</td>
+                                <td>${App.esc(l.reason_detail || l.reason_type)}</td>
+                                <td>${App.esc(l.operator_name || '-')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="empty-state">이력이 없습니다.</div>';
+
+        App.openModal(`${nickname} 코인 이력`, body);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 회원 관리 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadMembersMgmt() {
+        const sec = document.getElementById('bc-tab-members');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">부트캠프 회원</span>
+                <button class="btn btn-primary btn-sm" id="bc-add-member">추가</button>
+            </div>
+            ${filterBarHtml({ date: false })}
+            <div id="bc-members-body"><div class="empty-state">로딩 중...</div></div>
+        `;
+
+        bindFilterEvents(renderMembersList);
+        document.getElementById('bc-add-member').onclick = () => showMemberForm();
+        renderMembersList();
+    }
+
+    async function renderMembersList() {
+        const body = document.getElementById('bc-members-body');
+        body.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const params = { cohort_id: selectedCohortId };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+
+        const r = await App.get(API + 'members', params);
+        if (!r.success) return;
+
+        const members = r.members || [];
+        if (!members.length) {
+            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+            return;
+        }
+
+        body.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>닉네임</th><th>이름</th><th>조</th><th>단계</th><th>역할</th><th>점수</th><th>코인</th><th></th></tr></thead>
+                    <tbody>
+                        ${members.map(m => {
+                            const sc = scoreClass(parseInt(m.current_score));
+                            return `
+                            <tr>
+                                <td>${App.esc(m.nickname)}</td>
+                                <td>${App.esc(m.real_name || '-')}</td>
+                                <td>${App.esc(m.group_name || '-')}</td>
+                                <td>${m.stage_no}단계</td>
+                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span></td>
+                                <td class="score-cell ${sc}" style="font-weight:700">${m.current_score}</td>
+                                <td>${m.current_coin || 0}</td>
+                                <td class="actions">
+                                    <button class="btn-icon" onclick="BootcampApp._editMember(${m.id})">수정</button>
+                                    <button class="btn-icon danger" onclick="BootcampApp._deleteMember(${m.id}, '${App.esc(m.nickname)}')">삭제</button>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function showMemberForm(data = {}) {
+        const isEdit = !!data.id;
+        const body = `
+            <div class="form-group">
+                <label class="form-label">닉네임 *</label>
+                <input type="text" class="form-input" id="mf-nickname" value="${App.esc(data.nickname || '')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">이름</label>
+                <input type="text" class="form-input" id="mf-realname" value="${App.esc(data.real_name || '')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">조</label>
+                <select class="form-select" id="mf-group">
+                    <option value="">미배정</option>
+                    ${groups.map(g => `<option value="${g.id}" ${parseInt(data.group_id) === parseInt(g.id) ? 'selected' : ''}>${App.esc(g.name)}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">단계</label>
+                <select class="form-select" id="mf-stage">
+                    <option value="1" ${parseInt(data.stage_no) === 1 || !data.stage_no ? 'selected' : ''}>1단계</option>
+                    <option value="2" ${parseInt(data.stage_no) === 2 ? 'selected' : ''}>2단계</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">역할</label>
+                <select class="form-select" id="mf-role">
+                    <option value="member" ${data.member_role === 'member' || !data.member_role ? 'selected' : ''}>회원</option>
+                    <option value="leader" ${data.member_role === 'leader' ? 'selected' : ''}>조장</option>
+                    <option value="subleader" ${data.member_role === 'subleader' ? 'selected' : ''}>부조장</option>
+                </select>
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="mf-save">${isEdit ? '수정' : '추가'}</button>
+        `;
+        App.openModal(isEdit ? '회원 수정' : '회원 추가', body, footer);
+
+        document.getElementById('mf-save').onclick = async () => {
+            const nickname = document.getElementById('mf-nickname').value.trim();
+            if (!nickname) return Toast.warning('닉네임을 입력해주세요.');
+
+            const payload = {
+                nickname,
+                real_name: document.getElementById('mf-realname').value.trim(),
+                group_id: parseInt(document.getElementById('mf-group').value) || null,
+                stage_no: parseInt(document.getElementById('mf-stage').value),
+                member_role: document.getElementById('mf-role').value,
+            };
+
+            if (isEdit) {
+                payload.id = data.id;
+            } else {
+                payload.cohort_id = selectedCohortId;
+            }
+
+            App.showLoading();
+            const r = await App.post(API + (isEdit ? 'member_update' : 'member_create'), payload);
+            App.hideLoading();
+            if (r.success) {
+                App.closeModal();
+                Toast.success(r.message);
+                renderMembersList();
+            }
+        };
+    }
+
+    async function _editMember(id) {
+        const r = await App.get(API + 'members', { cohort_id: selectedCohortId });
+        if (!r.success) return;
+        const m = (r.members || []).find(x => parseInt(x.id) === id);
+        if (m) showMemberForm(m);
+        else Toast.error('회원을 찾을 수 없습니다.');
+    }
+
+    async function _deleteMember(id, nickname) {
+        if (!await App.confirm(`'${nickname}' 회원을 삭제하시겠습니까?\n관련 체크/점수/코인 데이터도 모두 삭제됩니다.`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'member_delete', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); renderMembersList(); }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ── 조 관리 ──
+    // ══════════════════════════════════════════════════════════
+    async function loadGroupsMgmt() {
+        const sec = document.getElementById('bc-tab-groups');
+        await loadGroups();
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">조 관리</span>
+                <button class="btn btn-primary btn-sm" id="bc-add-group">추가</button>
+            </div>
+            <div class="bc-filters">
+                <div class="filter-item">
+                    <span class="filter-label">기수</span>
+                    <select id="fl-cohort-grp">
+                        ${cohorts.map(c => `<option value="${c.id}" ${parseInt(c.id) === selectedCohortId ? 'selected' : ''}>${App.esc(c.cohort)}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div id="bc-groups-body"></div>
+        `;
+
+        document.getElementById('fl-cohort-grp').onchange = async (e) => {
+            selectedCohortId = parseInt(e.target.value);
+            await loadGroups();
+            renderGroupsList();
+        };
+        document.getElementById('bc-add-group').onclick = () => showGroupForm();
+        renderGroupsList();
+    }
+
+    function renderGroupsList() {
+        const body = document.getElementById('bc-groups-body');
+        if (!groups.length) {
+            body.innerHTML = '<div class="empty-state">등록된 조가 없습니다.</div>';
+            return;
+        }
+        body.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>조 이름</th><th>코드</th><th></th></tr></thead>
+                    <tbody>
+                        ${groups.map(g => `
+                            <tr>
+                                <td>${App.esc(g.name)}</td>
+                                <td><code>${App.esc(g.code)}</code></td>
+                                <td class="actions">
+                                    <button class="btn-icon" onclick="BootcampApp._editGroup(${g.id}, '${App.esc(g.name)}', '${App.esc(g.code)}')">수정</button>
+                                    <button class="btn-icon danger" onclick="BootcampApp._deleteGroup(${g.id}, '${App.esc(g.name)}')">삭제</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function showGroupForm(data = {}) {
+        const isEdit = !!data.id;
+        const body = `
+            <div class="form-group">
+                <label class="form-label">조 이름 *</label>
+                <input type="text" class="form-input" id="gf-name" value="${App.esc(data.name || '')}" placeholder="예: 루크조">
+            </div>
+            <div class="form-group">
+                <label class="form-label">코드 *</label>
+                <input type="text" class="form-input" id="gf-code" value="${App.esc(data.code || '')}" placeholder="예: luke">
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="gf-save">${isEdit ? '수정' : '추가'}</button>
+        `;
+        App.openModal(isEdit ? '조 수정' : '조 추가', body, footer);
+
+        document.getElementById('gf-save').onclick = async () => {
+            const payload = {
+                name: document.getElementById('gf-name').value.trim(),
+                code: document.getElementById('gf-code').value.trim(),
+            };
+            if (!payload.name || !payload.code) return Toast.warning('이름과 코드를 입력해주세요.');
+
+            if (isEdit) payload.id = data.id;
+            else payload.cohort_id = selectedCohortId;
+
+            App.showLoading();
+            const r = await App.post(API + (isEdit ? 'group_update' : 'group_create'), payload);
+            App.hideLoading();
+            if (r.success) {
+                App.closeModal();
+                Toast.success(r.message);
+                await loadGroups();
+                renderGroupsList();
+            }
+        };
+    }
+
+    function _editGroup(id, name, code) {
+        showGroupForm({ id, name, code });
+    }
+
+    async function _deleteGroup(id, name) {
+        if (!await App.confirm(`'${name}' 조를 삭제하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'group_delete', { id });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            await loadGroups();
+            renderGroupsList();
+        }
+    }
+
+    // ── Public API ──
+    return {
+        init,
+        _editMember, _deleteMember,
+        _coinAction, _coinLogs,
+        _editGroup, _deleteGroup,
+    };
+})();
