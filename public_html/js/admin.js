@@ -319,6 +319,15 @@ const AdminApp = (() => {
         bindTaskEvents(document.getElementById('overdue-list'));
     }
 
+    // ── Markdown Rendering ──
+    function renderMarkdown(text) {
+        if (!text) return '';
+        if (typeof marked !== 'undefined') {
+            return marked.parse(text, { breaks: true });
+        }
+        return App.esc(text).replace(/\n/g, '<br>');
+    }
+
     // ── Task Card Rendering ──
     function renderTaskCard(task, isOverdue = false) {
         const completed = parseInt(task.completed);
@@ -335,7 +344,7 @@ const AdminApp = (() => {
                             ${isOperation() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
                         </div>
-                        ${hasContent ? `<div class="task-content collapsed" id="task-content-${task.id}">${App.esc(task.content_markdown)}</div>` : ''}
+                        ${hasContent ? `<div class="task-content collapsed" id="task-content-${task.id}">${renderMarkdown(task.content_markdown)}</div>` : ''}
                     </div>
                 </div>
             </div>

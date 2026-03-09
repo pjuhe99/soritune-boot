@@ -128,6 +128,7 @@
 /* ── Content ────────────────────────────────────────────────── */
 .admin-content {
     padding: 20px;
+    padding-bottom: 120px;
     max-width: 800px;
     margin: 0 auto;
 }
@@ -249,8 +250,55 @@
     font-size: var(--sm-font-size);
     color: var(--color-777);
     line-height: 1.6;
-    white-space: pre-line;
 }
+.task-content h1, .task-content h2, .task-content h3,
+.task-content h4, .task-content h5, .task-content h6 {
+    color: var(--color-semi-black);
+    margin: 8px 0 4px;
+    line-height: 1.4;
+}
+.task-content h1 { font-size: 1.2em; }
+.task-content h2 { font-size: 1.1em; }
+.task-content h3 { font-size: 1em; }
+.task-content p { margin: 4px 0; }
+.task-content ul, .task-content ol {
+    padding-left: 20px;
+    margin: 4px 0;
+}
+.task-content li { margin: 2px 0; }
+.task-content code {
+    background: var(--bg-tint);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+.task-content pre {
+    background: var(--bg-tint);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    margin: 6px 0;
+}
+.task-content pre code {
+    background: none;
+    padding: 0;
+}
+.task-content blockquote {
+    border-left: 3px solid var(--main-color);
+    padding-left: 10px;
+    margin: 6px 0;
+    color: var(--color-777);
+}
+.task-content a {
+    color: var(--main-color);
+    text-decoration: underline;
+}
+.task-content hr {
+    border: none;
+    border-top: 1px solid var(--bg-tint);
+    margin: 8px 0;
+}
+.task-content strong { color: var(--color-semi-black); }
 .task-content.collapsed {
     max-height: 0;
     overflow: hidden;
