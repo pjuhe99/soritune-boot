@@ -130,7 +130,24 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
                     </div>
-                    ` : (role === 'coach' || role === 'leader') ? `
+                    ` : role === 'coach' ? `
+                    <div class="admin-tabs" id="sec-tabs">
+                        <div class="tab_wrap">
+                            <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
+                            <button class="tab" data-tab="#bc-tab-status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-revival">패자부활전</button>
+                            <button class="tab" data-tab="#bc-tab-coins">코인 관리</button>
+                            <button class="tab" data-tab="#bc-tab-members">회원 관리</button>
+                            <button class="tab" data-tab="#bc-tab-groups">조 관리</button>
+                        </div>
+                        <div class="tab-content active" id="bc-tab-checklist"></div>
+                        <div class="tab-content" id="bc-tab-status"></div>
+                        <div class="tab-content" id="bc-tab-revival"></div>
+                        <div class="tab-content" id="bc-tab-coins"></div>
+                        <div class="tab-content" id="bc-tab-members"></div>
+                        <div class="tab-content" id="bc-tab-groups"></div>
+                    </div>
+                    ` : role === 'leader' ? `
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab_wrap">
                             <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>

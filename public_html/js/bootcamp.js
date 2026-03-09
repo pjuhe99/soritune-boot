@@ -89,6 +89,10 @@ const BootcampApp = (() => {
                     const tab = btn.dataset.tab;
                     if (tab === '#bc-tab-checklist') loadChecklist();
                     else if (tab === '#bc-tab-status') loadStatusBoard();
+                    else if (tab === '#bc-tab-revival') loadRevival();
+                    else if (tab === '#bc-tab-coins') loadCoins();
+                    else if (tab === '#bc-tab-members') loadMembersMgmt();
+                    else if (tab === '#bc-tab-groups') loadGroupsMgmt();
                 });
             });
         }

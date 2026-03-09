@@ -223,7 +223,7 @@ case 'groups':
 
 case 'group_create':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $cohortId = (int)($input['cohort_id'] ?? 0);
     $name = trim($input['name'] ?? '');
@@ -238,7 +238,7 @@ case 'group_create':
 
 case 'group_update':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
@@ -256,7 +256,7 @@ case 'group_update':
 
 case 'group_delete':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
@@ -302,7 +302,7 @@ case 'members':
 
 case 'member_create':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $cohortId = (int)($input['cohort_id'] ?? 0);
     $nickname = trim($input['nickname'] ?? '');
@@ -334,7 +334,7 @@ case 'member_create':
 
 case 'member_update':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
@@ -359,7 +359,7 @@ case 'member_update':
 
 case 'member_delete':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
@@ -596,7 +596,7 @@ case 'revival_candidates':
 
 case 'revival_process':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $note = trim($input['note'] ?? '') ?: null;
@@ -691,7 +691,7 @@ case 'coin_balance':
 
 case 'coin_change':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $coinChange = (int)($input['coin_change'] ?? 0);
@@ -776,7 +776,7 @@ case 'coin_logs':
 
 case 'score_adjust':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $scoreChange = (int)($input['score_change'] ?? 0);
@@ -814,7 +814,7 @@ case 'score_adjust':
 
 case 'score_recalculate':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'coach']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     if (!$memberId) jsonError('member_id 필요');
