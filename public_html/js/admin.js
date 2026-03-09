@@ -119,12 +119,14 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-tasks-mgmt">Task 관리</button>
                             <button class="tab" data-tab="#tab-guides-mgmt">가이드 관리</button>
                             <button class="tab" data-tab="#tab-calendar-mgmt">캘린더 관리</button>
+                            <button class="tab" data-tab="#tab-cohorts-mgmt">기수 관리</button>
                         </div>
                         <div class="tab-content active" id="tab-members"></div>
                         <div class="tab-content" id="tab-admins"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="tab-guides-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
+                        <div class="tab-content" id="tab-cohorts-mgmt"></div>
                     </div>
                     ` : `
                     <div class="admin-tabs" id="sec-tabs">
@@ -167,6 +169,7 @@ const AdminApp = (() => {
             loadTasksMgmt();
             loadGuidesMgmt();
             loadCalendarMgmt();
+            loadCohortsMgmt();
         }
     }
 
@@ -1064,6 +1067,100 @@ const AdminApp = (() => {
         if (r.success) { Toast.success(r.message); loadCalendarMgmt(); loadWeeklyGoal(); }
     }
 
+    // ── Cohorts Management ──
+    async function loadCohortsMgmt() {
+        const sec = document.getElementById('tab-cohorts-mgmt');
+        sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
+        const r = await App.get('/api/admin.php?action=cohort_list');
+        if (!r.success) return;
+
+        const details = r.cohort_details || [];
+        sec.innerHTML = `
+            <div class="mgmt-toolbar mt-md">
+                <span style="font-weight:600">기수 관리 (${details.length}개)</span>
+                <button class="btn btn-primary btn-sm" id="btn-add-cohort">추가</button>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>기수명</th><th>시작일</th><th>종료일</th><th>현재</th><th></th></tr></thead>
+                    <tbody>
+                        ${details.map(c => `
+                            <tr>
+                                <td>${App.esc(c.cohort)}</td>
+                                <td style="white-space:nowrap">${c.start_date}</td>
+                                <td style="white-space:nowrap">${c.end_date}</td>
+                                <td>${c.cohort === r.current_cohort ? '<span class="badge badge-success">현재</span>' : ''}</td>
+                                <td class="actions">
+                                    <button class="btn-icon" onclick="AdminApp._editCohort(${c.id})">수정</button>
+                                    <button class="btn-icon danger" onclick="AdminApp._deleteCohort(${c.id}, '${App.esc(c.cohort)}')">삭제</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        if (!details.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty-state">등록된 기수가 없습니다.</td></tr>';
+        document.getElementById('btn-add-cohort').onclick = () => showCohortForm();
+    }
+
+    function showCohortForm(data = {}) {
+        const isEdit = !!data.id;
+        const body = `
+            <div class="form-group">
+                <label class="form-label">기수명 *</label>
+                <input type="text" class="form-input" id="cf-cohort" value="${App.esc(data.cohort || '')}" placeholder="예: 1기">
+            </div>
+            <div class="form-group">
+                <label class="form-label">시작일 *</label>
+                <input type="date" class="form-input" id="cf-start" value="${data.start_date || ''}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">종료일 *</label>
+                <input type="date" class="form-input" id="cf-end" value="${data.end_date || ''}">
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="cf-save">${isEdit ? '수정' : '추가'}</button>
+        `;
+        App.openModal(isEdit ? '기수 수정' : '기수 추가', body, footer);
+        document.getElementById('cf-save').onclick = async () => {
+            const payload = {
+                cohort: document.getElementById('cf-cohort').value.trim(),
+                start_date: document.getElementById('cf-start').value,
+                end_date: document.getElementById('cf-end').value,
+            };
+            if (isEdit) payload.id = data.id;
+            if (!payload.cohort || !payload.start_date || !payload.end_date) return Toast.warning('모든 항목을 입력해주세요.');
+
+            App.showLoading();
+            const r = await App.post(`/api/admin.php?action=${isEdit ? 'cohort_update' : 'cohort_create'}`, payload);
+            App.hideLoading();
+            if (r.success) {
+                App.closeModal();
+                Toast.success(r.message);
+                loadCohortsMgmt();
+                renderCohortBar();
+            }
+        };
+    }
+
+    async function _editCohort(id) {
+        const r = await App.get('/api/admin.php?action=cohort_list');
+        if (!r.success) return;
+        const c = (r.cohort_details || []).find(x => x.id == id);
+        if (c) showCohortForm(c);
+    }
+
+    async function _deleteCohort(id, name) {
+        if (!await App.confirm(`'${name}' 기수를 삭제하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post('/api/admin.php?action=cohort_delete', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); loadCohortsMgmt(); renderCohortBar(); }
+    }
+
     // ── Public API ──
     return {
         init,
@@ -1072,5 +1169,6 @@ const AdminApp = (() => {
         _editTask, _deleteTask,
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
+        _editCohort, _deleteCohort,
     };
 })();
