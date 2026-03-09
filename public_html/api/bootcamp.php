@@ -165,7 +165,7 @@ function getMissionTypeId($db, $code) {
  * 리더의 조 스코핑: 리더이면 자기 bootcamp_group_id 반환, operation이면 null(제한 없음)
  */
 function getLeaderGroupScope($admin) {
-    if (hasRole($admin, 'operation')) return null;
+    if (hasRole($admin, 'operation') || hasRole($admin, 'coach')) return null;
     return $admin['bootcamp_group_id'] ?? null;
 }
 
@@ -442,7 +442,7 @@ case 'checklist':
 
 case 'check_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'leader']);
+    $admin = requireAdmin(['operation', 'leader', 'coach']);
     $input = getJsonInput();
 
     $memberId = (int)($input['member_id'] ?? 0);
@@ -470,7 +470,7 @@ case 'check_save':
 
 case 'check_bulk_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'leader']);
+    $admin = requireAdmin(['operation', 'leader', 'coach']);
     $input = getJsonInput();
     $checkDate = $input['check_date'] ?? '';
     $items = $input['items'] ?? [];

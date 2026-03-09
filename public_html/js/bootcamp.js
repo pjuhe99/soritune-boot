@@ -68,6 +68,34 @@ const BootcampApp = (() => {
         };
     }
 
+    // ── Coach Mode Init (called from admin.js) ──
+    async function initForCoach(coachAdmin) {
+        admin = coachAdmin;
+        leaderMode = false;
+
+        await loadMasterData();
+
+        // 활성 기수의 조 목록 로드
+        if (selectedCohortId) {
+            await loadGroups();
+            if (groups.length) selectedGroupId = parseInt(groups[0].id);
+        }
+
+        // 탭 이벤트 바인딩
+        const tabs = document.getElementById('sec-tabs');
+        if (tabs) {
+            tabs.querySelectorAll('.tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    if (tab === '#bc-tab-checklist') loadChecklist();
+                    else if (tab === '#bc-tab-status') loadStatusBoard();
+                });
+            });
+        }
+
+        loadChecklist();
+    }
+
     // ── Leader Mode Init (called from admin.js) ──
     async function initForLeader(leaderAdmin) {
         admin = leaderAdmin;
@@ -1027,6 +1055,7 @@ const BootcampApp = (() => {
     // ── Public API ──
     return {
         init,
+        initForCoach,
         initForLeader,
         _editMember, _deleteMember,
         _coinAction, _coinLogs,

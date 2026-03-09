@@ -130,7 +130,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
                     </div>
-                    ` : role === 'leader' ? `
+                    ` : (role === 'coach' || role === 'leader') ? `
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab_wrap">
                             <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
@@ -184,8 +184,12 @@ const AdminApp = (() => {
             loadCohortsMgmt();
         }
 
-        if (role === 'leader' && typeof BootcampApp !== 'undefined') {
-            BootcampApp.initForLeader(admin);
+        if ((role === 'coach' || role === 'leader') && typeof BootcampApp !== 'undefined') {
+            if (role === 'leader') {
+                BootcampApp.initForLeader(admin);
+            } else {
+                BootcampApp.initForCoach(admin);
+            }
         }
     }
 
