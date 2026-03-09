@@ -245,39 +245,47 @@
 
 .task-content {
     margin-top: 8px;
-    padding-top: 8px;
+    padding-top: 10px;
     border-top: 1px solid var(--bg-tint);
-    font-size: var(--sm-font-size);
+    font-size: var(--md-font-size);
     color: var(--color-777);
-    line-height: 1.6;
+    line-height: 1.7;
+    overflow: visible;
 }
 .task-content h1, .task-content h2, .task-content h3,
 .task-content h4, .task-content h5, .task-content h6 {
     color: var(--color-semi-black);
-    margin: 8px 0 4px;
-    line-height: 1.4;
+    line-height: 1.5;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: 700;
 }
-.task-content h1 { font-size: 1.2em; }
-.task-content h2 { font-size: 1.1em; }
-.task-content h3 { font-size: 1em; }
-.task-content p { margin: 4px 0; }
+.task-content h1:first-child, .task-content h2:first-child,
+.task-content h3:first-child, .task-content h4:first-child {
+    margin-top: 0;
+}
+.task-content h1 { font-size: 18px; font-weight: 800; }
+.task-content h2 { font-size: 16px; font-weight: 700; }
+.task-content h3 { font-size: 15px; font-weight: 700; }
+.task-content h4 { font-size: 14px; }
+.task-content p { margin: 6px 0; }
 .task-content ul, .task-content ol {
     padding-left: 20px;
-    margin: 4px 0;
+    margin: 6px 0;
 }
-.task-content li { margin: 2px 0; }
+.task-content li { margin: 3px 0; }
 .task-content code {
     background: var(--bg-tint);
-    padding: 1px 4px;
+    padding: 2px 5px;
     border-radius: 3px;
     font-size: 0.9em;
 }
 .task-content pre {
     background: var(--bg-tint);
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
     overflow-x: auto;
-    margin: 6px 0;
+    margin: 8px 0;
 }
 .task-content pre code {
     background: none;
@@ -285,8 +293,8 @@
 }
 .task-content blockquote {
     border-left: 3px solid var(--main-color);
-    padding-left: 10px;
-    margin: 6px 0;
+    padding-left: 12px;
+    margin: 8px 0;
     color: var(--color-777);
 }
 .task-content a {
@@ -296,7 +304,7 @@
 .task-content hr {
     border: none;
     border-top: 1px solid var(--bg-tint);
-    margin: 8px 0;
+    margin: 10px 0;
 }
 .task-content strong { color: var(--color-semi-black); }
 .task-content.collapsed {
