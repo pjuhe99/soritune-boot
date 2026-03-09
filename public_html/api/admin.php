@@ -89,18 +89,43 @@ case 'today_tasks':
     $date = $_GET['date'] ?? date('Y-m-d');
     $roles = $admin['admin_roles'];
     $adminId = $admin['admin_id'];
+    $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
     if (hasRole($admin, 'operation')) {
-        // Operation sees all tasks for the cohort on this date
-        $stmt = $db->prepare('
-            SELECT t.*, a.name AS assignee_name
-            FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id
-            WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
-            ORDER BY t.completed, t.end_date, t.title
-        ');
-        $stmt->execute([$date, $date, $cohort]);
+        if ($filterRole === 'mine') {
+            // My tasks only
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
+                  AND t.assignee_admin_id = ?
+                ORDER BY t.completed, t.end_date, t.title
+            ');
+            $stmt->execute([$date, $date, $cohort, $adminId]);
+        } elseif ($filterRole && $filterRole !== 'all') {
+            // Filter by specific role
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
+                  AND t.role = ?
+                ORDER BY t.completed, t.end_date, t.title
+            ');
+            $stmt->execute([$date, $date, $cohort, $filterRole]);
+        } else {
+            // All tasks
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
+                ORDER BY t.completed, t.end_date, t.title
+            ');
+            $stmt->execute([$date, $date, $cohort]);
+        }
     } else {
         // Non-operation: assigned to me, OR unassigned with my role
         $placeholders = implode(',', array_fill(0, count($roles), '?'));
@@ -128,17 +153,40 @@ case 'overdue_tasks':
     $today = date('Y-m-d');
     $roles = $admin['admin_roles'];
     $adminId = $admin['admin_id'];
+    $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
     if (hasRole($admin, 'operation')) {
-        $stmt = $db->prepare('
-            SELECT t.*, a.name AS assignee_name
-            FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id
-            WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
-            ORDER BY t.end_date
-        ');
-        $stmt->execute([$today, $cohort]);
+        if ($filterRole === 'mine') {
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
+                  AND t.assignee_admin_id = ?
+                ORDER BY t.end_date
+            ');
+            $stmt->execute([$today, $cohort, $adminId]);
+        } elseif ($filterRole && $filterRole !== 'all') {
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
+                  AND t.role = ?
+                ORDER BY t.end_date
+            ');
+            $stmt->execute([$today, $cohort, $filterRole]);
+        } else {
+            $stmt = $db->prepare('
+                SELECT t.*, a.name AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
+                ORDER BY t.end_date
+            ');
+            $stmt->execute([$today, $cohort]);
+        }
     } else {
         $placeholders = implode(',', array_fill(0, count($roles), '?'));
         $stmt = $db->prepare("

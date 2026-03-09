@@ -18,6 +18,7 @@ const AdminApp = (() => {
     let currentDate = App.today();
     let overdueOpen = false;
     let root = null;
+    let taskFilter = 'mine'; // task filter for operation: 'mine', 'all', or role name
 
     function isOperation() {
         return admin && admin.admin_roles && admin.admin_roles.includes('operation');
@@ -109,6 +110,7 @@ const AdminApp = (() => {
                     <div class="section" id="sec-weekly"></div>
                     <div class="section" id="sec-guide-btn"></div>
                     <div class="section" id="sec-date-nav"></div>
+                    ${isOperation() ? '<div class="section" id="sec-task-filter"></div>' : ''}
                     <div class="section" id="sec-tasks"></div>
                     <div class="section" id="sec-overdue"></div>
                     ${isOperation() ? `
@@ -162,6 +164,7 @@ const AdminApp = (() => {
 
         renderGuideButton();
         renderDateNav();
+        if (isOperation()) renderTaskFilter();
 
         if (isOperation()) {
             loadMembersMgmt();
@@ -271,12 +274,43 @@ const AdminApp = (() => {
         loadTodayTasks();
     }
 
+    // ── Task Filter (Operation only) ──
+    function renderTaskFilter() {
+        const sec = document.getElementById('sec-task-filter');
+        if (!sec) return;
+        const filters = [
+            { key: 'mine', label: '내 Task' },
+            { key: 'all', label: '전체' },
+            { key: 'coach', label: '코치' },
+            { key: 'head', label: '총괄' },
+            { key: 'leader', label: '팀장' },
+            { key: 'operation', label: '운영팀' },
+        ];
+        sec.innerHTML = `
+            <div class="task-filter-chips">
+                ${filters.map(f => `
+                    <button class="chip ${taskFilter === f.key ? 'active' : ''}" data-filter="${f.key}">${App.esc(f.label)}</button>
+                `).join('')}
+            </div>
+        `;
+        sec.querySelectorAll('.chip').forEach(btn => {
+            btn.onclick = () => {
+                taskFilter = btn.dataset.filter;
+                renderTaskFilter();
+                loadTodayTasks();
+                loadOverdueTasks();
+            };
+        });
+    }
+
     // ── Today's Tasks ──
     async function loadTodayTasks() {
         const sec = document.getElementById('sec-tasks');
         sec.innerHTML = '<div class="section-title">오늘의 Task</div><div class="empty-state">로딩 중...</div>';
 
-        const r = await App.get('/api/admin.php?action=today_tasks', { date: currentDate });
+        const params = { date: currentDate };
+        if (isOperation()) params.filter_role = taskFilter;
+        const r = await App.get('/api/admin.php?action=today_tasks', params);
         if (!r.success) return;
 
         const title = `<div class="section-title">오늘의 Task <span class="count">${r.tasks.length}개</span></div>`;
@@ -293,7 +327,9 @@ const AdminApp = (() => {
     // ── Overdue Tasks ──
     async function loadOverdueTasks() {
         const sec = document.getElementById('sec-overdue');
-        const r = await App.get('/api/admin.php?action=overdue_tasks');
+        const overdueParams = {};
+        if (isOperation()) overdueParams.filter_role = taskFilter;
+        const r = await App.get('/api/admin.php?action=overdue_tasks', overdueParams);
         if (!r.success) return;
 
         if (!r.tasks.length) {

@@ -343,6 +343,34 @@
     color: var(--warning-color);
 }
 
+/* ── Task Filter Chips ──────────────────────────────────────── */
+.task-filter-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.task-filter-chips .chip {
+    background: #fff;
+    border: 1px solid var(--inp-border-color);
+    border-radius: var(--radius-badge);
+    padding: 5px 16px;
+    font-size: var(--sm-font-size);
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-777);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.task-filter-chips .chip:hover {
+    border-color: var(--main-color);
+    color: var(--main-color);
+}
+.task-filter-chips .chip.active {
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+}
+
 .overdue-toggle:hover { background: var(--bg-tint); }
 
 .overdue-toggle .arrow { transition: transform 0.15s; }
