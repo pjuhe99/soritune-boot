@@ -8,6 +8,8 @@ const BootcampApp = (() => {
 
     let admin = null;
     let root = null;
+    let leaderMode = false;
+    let leaderGroupName = '';
 
     // 공유 필터 상태
     let cohorts = [];
@@ -64,6 +66,45 @@ const BootcampApp = (() => {
                 Toast.error('운영팀 권한이 필요합니다.');
             }
         };
+    }
+
+    // ── Leader Mode Init (called from admin.js) ──
+    async function initForLeader(leaderAdmin) {
+        admin = leaderAdmin;
+        leaderMode = true;
+
+        await loadMasterData();
+
+        // 리더의 bootcamp_group_id로 조 고정
+        const gid = admin.bootcamp_group_id;
+        if (gid) {
+            selectedGroupId = gid;
+            // 조의 cohort_id 파악
+            for (const c of cohorts) {
+                const r = await App.get(API + 'groups', { cohort_id: c.id });
+                const g = (r.groups || []).find(x => parseInt(x.id) === gid);
+                if (g) {
+                    selectedCohortId = parseInt(c.id);
+                    leaderGroupName = g.name;
+                    groups = r.groups;
+                    break;
+                }
+            }
+        }
+
+        // 탭 이벤트 바인딩
+        const tabs = document.getElementById('sec-tabs');
+        if (tabs) {
+            tabs.querySelectorAll('.tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    if (tab === '#bc-tab-checklist') loadChecklist();
+                    else if (tab === '#bc-tab-status') loadStatusBoard();
+                });
+            });
+        }
+
+        loadChecklist();
     }
 
     async function loadMasterData() {
@@ -140,16 +181,22 @@ const BootcampApp = (() => {
     // ── Filter Bar HTML ──
     function filterBarHtml(opts = {}) {
         const showDate = opts.date !== false;
-        const showGroup = opts.group !== false;
+        const showGroup = opts.group !== false && !leaderMode;
         const showStage = opts.stage !== false;
+        const showCohort = !leaderMode;
         return `
             <div class="bc-filters">
+                ${showCohort ? `
                 <div class="filter-item">
                     <span class="filter-label">기수</span>
                     <select id="fl-cohort">
                         ${cohorts.map(c => `<option value="${c.id}" ${parseInt(c.id) === selectedCohortId ? 'selected' : ''}>${App.esc(c.cohort)}</option>`).join('')}
                     </select>
-                </div>
+                </div>` : `
+                <div class="filter-item">
+                    <span class="filter-label">조</span>
+                    <span style="padding:6px 0;font-weight:700;font-size:var(--sm-font-size)">${App.esc(leaderGroupName || '-')}</span>
+                </div>`}
                 ${showDate ? `
                 <div class="filter-item">
                     <span class="filter-label">날짜</span>
@@ -980,6 +1027,7 @@ const BootcampApp = (() => {
     // ── Public API ──
     return {
         init,
+        initForLeader,
         _editMember, _deleteMember,
         _coinAction, _coinLogs,
         _editGroup, _deleteGroup,

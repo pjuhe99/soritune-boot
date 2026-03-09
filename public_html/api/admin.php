@@ -42,7 +42,8 @@ case 'login':
     }
 
     $db->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
-    loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort']);
+    $bcGroupId = $admin['bootcamp_group_id'] ? (int)$admin['bootcamp_group_id'] : null;
+    loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort'], $bcGroupId);
 
     jsonSuccess([
         'admin' => [
@@ -52,6 +53,7 @@ case 'login':
             'cohort'      => $admin['cohort'],
             'team'        => $admin['team'],
             'class_time'  => $admin['class_time'],
+            'bootcamp_group_id' => $bcGroupId,
         ],
     ], '로그인 성공');
     break;
@@ -393,10 +395,13 @@ case 'admin_list':
     $admin = requireAdmin(['operation']);
     $db = getDB();
     $stmt = $db->query('
-        SELECT a.id, a.name, a.login_id, a.cohort, a.team, a.class_time, a.is_active, a.last_login_at,
-               GROUP_CONCAT(ar.role ORDER BY ar.role) AS roles_csv
+        SELECT a.id, a.name, a.login_id, a.cohort, a.team, a.class_time, a.bootcamp_group_id,
+               a.is_active, a.last_login_at,
+               GROUP_CONCAT(ar.role ORDER BY ar.role) AS roles_csv,
+               bg.name AS bootcamp_group_name
         FROM admins a
         LEFT JOIN admin_roles ar ON a.id = ar.admin_id
+        LEFT JOIN bootcamp_groups bg ON a.bootcamp_group_id = bg.id
         GROUP BY a.id
         ORDER BY a.name
     ');
@@ -468,6 +473,10 @@ case 'admin_update':
             $fields[] = "{$f} = ?";
             $params[] = $val ?: null;
         }
+    }
+    if (array_key_exists('bootcamp_group_id', $input)) {
+        $fields[] = 'bootcamp_group_id = ?';
+        $params[] = $input['bootcamp_group_id'] ? (int)$input['bootcamp_group_id'] : null;
     }
     if (isset($input['is_active'])) { $fields[] = 'is_active = ?'; $params[] = $input['is_active'] ? 1 : 0; }
     if (!empty($input['password'])) {

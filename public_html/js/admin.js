@@ -130,6 +130,15 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
                     </div>
+                    ` : role === 'leader' ? `
+                    <div class="admin-tabs" id="sec-tabs">
+                        <div class="tab_wrap">
+                            <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
+                            <button class="tab" data-tab="#bc-tab-status">현황판</button>
+                        </div>
+                        <div class="tab-content active" id="bc-tab-checklist"></div>
+                        <div class="tab-content" id="bc-tab-status"></div>
+                    </div>
                     ` : `
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab_wrap">
@@ -173,6 +182,10 @@ const AdminApp = (() => {
             loadGuidesMgmt();
             loadCalendarMgmt();
             loadCohortsMgmt();
+        }
+
+        if (role === 'leader' && typeof BootcampApp !== 'undefined') {
+            BootcampApp.initForLeader(admin);
         }
     }
 

@@ -89,13 +89,14 @@ function logoutMember(): void {
 
 // ── Admin Session ──────────────────────────────────────────
 
-function loginAdmin(int $id, string $name, array $roles, ?string $cohort): void {
+function loginAdmin(int $id, string $name, array $roles, ?string $cohort, ?int $bootcampGroupId = null): void {
     startSessionFor('admin');
     session_regenerate_id(true);
     $_SESSION['admin_id']    = $id;
     $_SESSION['admin_name']  = $name;
     $_SESSION['admin_roles'] = $roles;
     $_SESSION['cohort']      = $cohort;
+    $_SESSION['bootcamp_group_id'] = $bootcampGroupId;
 }
 
 function getAdminSession(): ?array {
@@ -106,6 +107,7 @@ function getAdminSession(): ?array {
         'admin_name'  => $_SESSION['admin_name'],
         'admin_roles' => $_SESSION['admin_roles'] ?? [],
         'cohort'      => $_SESSION['cohort'],
+        'bootcamp_group_id' => $_SESSION['bootcamp_group_id'] ?? null,
     ];
 }
 

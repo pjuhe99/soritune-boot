@@ -162,6 +162,24 @@ function getMissionTypeId($db, $code) {
 }
 
 /**
+ * 리더의 조 스코핑: 리더이면 자기 bootcamp_group_id 반환, operation이면 null(제한 없음)
+ */
+function getLeaderGroupScope($admin) {
+    if (hasRole($admin, 'operation')) return null;
+    return $admin['bootcamp_group_id'] ?? null;
+}
+
+/**
+ * 리더가 해당 member_id에 접근 가능한지 확인
+ */
+function verifyMemberAccess($db, $memberId, $groupId) {
+    if (!$groupId) return true; // operation (no restriction)
+    $stmt = $db->prepare("SELECT id FROM bootcamp_members WHERE id = ? AND group_id = ?");
+    $stmt->execute([$memberId, $groupId]);
+    return (bool)$stmt->fetch();
+}
+
+/**
  * 외부 연동 API 키 인증
  */
 function requireApiKey() {
@@ -424,7 +442,7 @@ case 'checklist':
 
 case 'check_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'leader']);
     $input = getJsonInput();
 
     $memberId = (int)($input['member_id'] ?? 0);
@@ -436,6 +454,11 @@ case 'check_save':
         jsonError('member_id, check_date, mission_type_code, status 필요');
 
     $db = getDB();
+    $leaderGroup = getLeaderGroupScope($admin);
+    if ($leaderGroup && !verifyMemberAccess($db, $memberId, $leaderGroup)) {
+        jsonError('담당 조의 회원만 체크할 수 있습니다.', 403);
+    }
+
     $missionTypeId = getMissionTypeId($db, $missionCode);
     if (!$missionTypeId) jsonError("유효하지 않은 mission_type_code: {$missionCode}");
 
@@ -447,7 +470,7 @@ case 'check_save':
 
 case 'check_bulk_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation', 'leader']);
     $input = getJsonInput();
     $checkDate = $input['check_date'] ?? '';
     $items = $input['items'] ?? [];
@@ -455,6 +478,7 @@ case 'check_bulk_save':
     if (!$checkDate || empty($items)) jsonError('check_date, items 필요');
 
     $db = getDB();
+    $leaderGroup = getLeaderGroupScope($admin);
     $results = ['success' => 0, 'skipped' => 0, 'error' => 0];
 
     foreach ($items as $item) {
@@ -463,6 +487,11 @@ case 'check_bulk_save':
         $status = isset($item['status']) ? (bool)$item['status'] : null;
 
         if (!$memberId || !$missionCode || $status === null) {
+            $results['error']++;
+            continue;
+        }
+
+        if ($leaderGroup && !verifyMemberAccess($db, $memberId, $leaderGroup)) {
             $results['error']++;
             continue;
         }
