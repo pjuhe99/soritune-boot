@@ -233,11 +233,6 @@ function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source,
         ")->execute([$statusVal, $source, $sourceRef, $adminId, $existingRow['id']]);
         $action = ((int)$existingRow['status'] !== $statusVal) ? 'updated' : 'unchanged';
     } else {
-        // 미체크(status=0)인 새 레코드는 INSERT하지 않음
-        // 감점은 명시적 status=0 기록에만 적용되므로, 레코드 없음 = 미확인 = 감점 없음
-        if ($statusVal === 0) {
-            return ['action' => 'skipped', 'reason' => 'no record for unchecked'];
-        }
         $db->prepare("
             INSERT INTO member_mission_checks
                 (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref, created_by)

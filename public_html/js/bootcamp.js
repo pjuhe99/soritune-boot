@@ -371,19 +371,19 @@ const BootcampApp = (() => {
     async function saveChecklist() {
         const checkboxes = document.querySelectorAll('.bc-check');
         const items = [];
+        let hasChanges = false;
         checkboxes.forEach(cb => {
             const key = `${cb.dataset.member}_${cb.dataset.mission}`;
             const initial = checklistInitialState[key] || false;
-            if (cb.checked !== initial) {
-                items.push({
-                    member_id: parseInt(cb.dataset.member),
-                    mission_type_code: cb.dataset.mission,
-                    status: cb.checked,
-                });
-            }
+            if (cb.checked !== initial) hasChanges = true;
+            items.push({
+                member_id: parseInt(cb.dataset.member),
+                mission_type_code: cb.dataset.mission,
+                status: cb.checked,
+            });
         });
 
-        if (!items.length) {
+        if (!hasChanges) {
             Toast.info('변경된 항목이 없습니다.');
             return;
         }
