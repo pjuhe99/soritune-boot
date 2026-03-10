@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="/css/common.css?v=20260227">
     <link rel="stylesheet" href="/css/toast.css?v=20260227">
     <link rel="stylesheet" href="/css/admin.css?v=20260227">
-    <link rel="stylesheet" href="/css/bootcamp.css?v=20260310c">
+    <link rel="stylesheet" href="/css/bootcamp.css?v=20260310d">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -20,8 +20,9 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260227"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-    <script src="/js/bootcamp.js?v=20260310e"></script>
-    <script src="/js/admin.js?v=20260309"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="/js/bootcamp.js?v=20260310f"></script>
+    <script src="/js/admin.js?v=20260310"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>

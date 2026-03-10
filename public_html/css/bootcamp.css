@@ -322,3 +322,120 @@
     .bc-checklist-table td { padding: 6px 4px; font-size: 11px; }
     .bc-check { width: 18px; height: 18px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   QR Attendance
+   ══════════════════════════════════════════════════════════════ */
+
+/* Idle state */
+.qr-idle {
+    text-align: center;
+    padding: 40px 20px;
+}
+.qr-idle-icon {
+    font-size: 56px;
+    margin-bottom: 12px;
+}
+.qr-idle-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--color-semi-black, #333);
+    margin-bottom: 8px;
+}
+.qr-idle-desc {
+    font-size: 14px;
+    color: var(--color-mid-gray, #999);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+/* Active state */
+.qr-active-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.qr-timer {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-primary, #2563EB);
+}
+.qr-timer.expired {
+    color: var(--color-danger, #EF4444);
+}
+
+.qr-code-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+.qr-code-wrap img {
+    border-radius: 12px;
+}
+
+.qr-url-wrap {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.qr-url-wrap .form-input {
+    flex: 1;
+    font-size: 12px;
+    padding: 8px 10px;
+    background: var(--color-light-gray, #F5F5F5);
+}
+
+.qr-attendees-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border, #E5E7EB);
+}
+.qr-attendees-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-semi-black, #333);
+}
+.qr-attendees-count {
+    font-size: 14px;
+    color: var(--color-mid-gray, #999);
+}
+.qr-attendees-count strong {
+    color: var(--color-primary, #2563EB);
+}
+
+.qr-attendee-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--color-light-gray, #F5F5F5);
+    font-size: 13px;
+}
+.qr-attendee-num {
+    width: 24px;
+    text-align: center;
+    color: var(--color-mid-gray, #999);
+    font-size: 12px;
+    font-weight: 600;
+}
+.qr-attendee-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-semi-black, #333);
+}
+.qr-attendee-group {
+    font-size: 11px;
+    color: var(--color-mid-gray, #999);
+    background: var(--color-light-gray, #F5F5F5);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.qr-attendee-time {
+    font-size: 12px;
+    color: var(--color-mid-gray, #999);
+    font-variant-numeric: tabular-nums;
+}

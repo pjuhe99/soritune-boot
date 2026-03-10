@@ -1,0 +1,308 @@
+<?php
+/**
+ * boot.soritune.com - QR Attendance API
+ * 코치용 + 학생 공개용 QR 출석 엔드포인트
+ */
+
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../includes/bootcamp_functions.php';
+header('Content-Type: application/json; charset=utf-8');
+
+$action = getAction();
+$method = getMethod();
+
+// ── QR 상수 ──
+define('QR_SESSION_CODE_LENGTH', 12);       // bin2hex(random_bytes(6)) = 12자 hex
+define('QR_DEFAULT_EXPIRY_MINUTES', 120);
+
+// ── Helper: 세션 자동 만료 처리 ──
+function autoExpireSession($db, $sessionId) {
+    $db->prepare("
+        UPDATE qr_sessions SET status = 'expired'
+        WHERE id = ? AND status = 'active' AND expires_at <= NOW()
+    ")->execute([$sessionId]);
+}
+
+// ── Helper: 세션 코드로 유효한 세션 조회 ──
+function getActiveSession($db, $code) {
+    $stmt = $db->prepare("
+        SELECT id, session_code, admin_id, cohort_id, status, expires_at, created_at
+        FROM qr_sessions WHERE session_code = ?
+    ");
+    $stmt->execute([$code]);
+    $session = $stmt->fetch();
+    if (!$session) return null;
+
+    // 자동 만료
+    if ($session['status'] === 'active' && $session['expires_at'] <= date('Y-m-d H:i:s')) {
+        autoExpireSession($db, $session['id']);
+        $session['status'] = 'expired';
+    }
+
+    return $session;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Action Router
+// ══════════════════════════════════════════════════════════════
+
+switch ($action) {
+
+// ── 세션 생성 (코치 전용) ──
+case 'create_session':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['coach', 'operation']);
+    $db = getDB();
+
+    // 코치의 기수 확인
+    $cohort = getEffectiveCohort($admin);
+    if (!$cohort) jsonError('기수 정보가 없습니다.');
+
+    $cohortRow = $db->prepare("SELECT id FROM cohorts WHERE cohort = ? AND is_active = 1");
+    $cohortRow->execute([$cohort]);
+    $cohortData = $cohortRow->fetch();
+    if (!$cohortData) jsonError('활성 기수를 찾을 수 없습니다.');
+    $cohortId = (int)$cohortData['id'];
+
+    // 기존 활성 세션 종료
+    $db->prepare("
+        UPDATE qr_sessions SET status = 'closed', closed_at = NOW()
+        WHERE admin_id = ? AND status = 'active'
+    ")->execute([$admin['admin_id']]);
+
+    // 새 세션 생성
+    $sessionCode = bin2hex(random_bytes(QR_SESSION_CODE_LENGTH / 2));
+    $expiryMinutes = (int)getSetting('qr_expiry_minutes', QR_DEFAULT_EXPIRY_MINUTES);
+    $expiresAt = date('Y-m-d H:i:s', time() + $expiryMinutes * 60);
+
+    $db->prepare("
+        INSERT INTO qr_sessions (session_code, admin_id, cohort_id, expires_at)
+        VALUES (?, ?, ?, ?)
+    ")->execute([$sessionCode, $admin['admin_id'], $cohortId, $expiresAt]);
+
+    $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $sessionCode;
+
+    jsonSuccess([
+        'session_code' => $sessionCode,
+        'scan_url'     => $scanUrl,
+        'expires_at'   => $expiresAt,
+        'expiry_minutes' => $expiryMinutes,
+    ], 'QR 세션이 생성되었습니다.');
+    break;
+
+// ── 세션 종료 (코치 전용) ──
+case 'close_session':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['coach', 'operation']);
+    $db = getDB();
+
+    $input = getJsonInput();
+    $sessionCode = trim($input['session_code'] ?? '');
+    if (!$sessionCode) jsonError('session_code가 필요합니다.');
+
+    $session = getActiveSession($db, $sessionCode);
+    if (!$session) jsonError('세션을 찾을 수 없습니다.');
+
+    // 본인 세션만 종료 가능 (operation은 모두 가능)
+    if (!hasRole($admin, 'operation') && (int)$session['admin_id'] !== (int)$admin['admin_id']) {
+        jsonError('본인이 생성한 세션만 종료할 수 있습니다.', 403);
+    }
+
+    $db->prepare("
+        UPDATE qr_sessions SET status = 'closed', closed_at = NOW()
+        WHERE id = ? AND status = 'active'
+    ")->execute([$session['id']]);
+
+    jsonSuccess([], '세션이 종료되었습니다.');
+    break;
+
+// ── 세션 상태 + 출석자 목록 (코치 전용) ──
+case 'session_status':
+    $admin = requireAdmin(['coach', 'operation']);
+    $db = getDB();
+
+    // 코치의 활성 세션 조회
+    $stmt = $db->prepare("
+        SELECT id, session_code, cohort_id, status, expires_at, created_at
+        FROM qr_sessions
+        WHERE admin_id = ? AND status = 'active'
+        ORDER BY created_at DESC LIMIT 1
+    ");
+    $stmt->execute([$admin['admin_id']]);
+    $session = $stmt->fetch();
+
+    if (!$session) {
+        jsonSuccess(['has_session' => false]);
+        break;
+    }
+
+    // 자동 만료 체크
+    if ($session['expires_at'] <= date('Y-m-d H:i:s')) {
+        autoExpireSession($db, $session['id']);
+        jsonSuccess(['has_session' => false]);
+        break;
+    }
+
+    // 출석자 목록
+    $attendees = $db->prepare("
+        SELECT qa.member_id, qa.scanned_at, qa.group_id,
+               bm.nickname, bm.real_name,
+               bg.name AS group_name
+        FROM qr_attendance qa
+        JOIN bootcamp_members bm ON bm.id = qa.member_id
+        JOIN bootcamp_groups bg ON bg.id = qa.group_id
+        WHERE qa.qr_session_id = ?
+        ORDER BY qa.scanned_at DESC
+    ");
+    $attendees->execute([$session['id']]);
+
+    // 전체 활성 멤버 수 (해당 기수)
+    $totalStmt = $db->prepare("
+        SELECT COUNT(*) AS cnt FROM bootcamp_members
+        WHERE cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+    ");
+    $totalStmt->execute([$session['cohort_id']]);
+    $totalMembers = (int)$totalStmt->fetch()['cnt'];
+
+    $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $session['session_code'];
+
+    jsonSuccess([
+        'has_session'   => true,
+        'session_code'  => $session['session_code'],
+        'scan_url'      => $scanUrl,
+        'expires_at'    => $session['expires_at'],
+        'attendees'     => $attendees->fetchAll(),
+        'total_members' => $totalMembers,
+    ]);
+    break;
+
+// ── 세션 검증 (공개) ──
+case 'verify':
+    $code = trim($_GET['code'] ?? '');
+    if (!$code) jsonError('code가 필요합니다.');
+
+    $db = getDB();
+    $session = getActiveSession($db, $code);
+
+    if (!$session) {
+        jsonSuccess(['valid' => false, 'reason' => 'not_found']);
+        break;
+    }
+
+    if ($session['status'] !== 'active') {
+        jsonSuccess(['valid' => false, 'reason' => $session['status']]);
+        break;
+    }
+
+    jsonSuccess([
+        'valid'     => true,
+        'cohort_id' => (int)$session['cohort_id'],
+    ]);
+    break;
+
+// ── 조 목록 (공개, 유효 세션 필요) ──
+case 'groups':
+    $code = trim($_GET['code'] ?? '');
+    if (!$code) jsonError('code가 필요합니다.');
+
+    $db = getDB();
+    $session = getActiveSession($db, $code);
+    if (!$session || $session['status'] !== 'active') {
+        jsonError('유효하지 않은 세션입니다.');
+    }
+
+    $stmt = $db->prepare("
+        SELECT id, name, code FROM bootcamp_groups
+        WHERE cohort_id = ?
+        ORDER BY name
+    ");
+    $stmt->execute([$session['cohort_id']]);
+
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
+    break;
+
+// ── 조원 목록 (공개, 유효 세션 필요) ──
+case 'group_members':
+    $code = trim($_GET['code'] ?? '');
+    $groupId = (int)($_GET['group_id'] ?? 0);
+    if (!$code || !$groupId) jsonError('code와 group_id가 필요합니다.');
+
+    $db = getDB();
+    $session = getActiveSession($db, $code);
+    if (!$session || $session['status'] !== 'active') {
+        jsonError('유효하지 않은 세션입니다.');
+    }
+
+    $stmt = $db->prepare("
+        SELECT id, nickname FROM bootcamp_members
+        WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+        ORDER BY nickname
+    ");
+    $stmt->execute([$groupId, $session['cohort_id']]);
+
+    jsonSuccess(['members' => $stmt->fetchAll()]);
+    break;
+
+// ── 출석 기록 (공개) ──
+case 'record':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+
+    $input = getJsonInput();
+    $code = trim($input['session_code'] ?? '');
+    $memberId = (int)($input['member_id'] ?? 0);
+    if (!$code || !$memberId) jsonError('session_code와 member_id가 필요합니다.');
+
+    $db = getDB();
+    $session = getActiveSession($db, $code);
+    if (!$session || $session['status'] !== 'active') {
+        jsonError('세션이 만료되었거나 종료되었습니다.');
+    }
+
+    // 멤버 확인
+    $memberStmt = $db->prepare("
+        SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
+        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+    ");
+    $memberStmt->execute([$memberId, $session['cohort_id']]);
+    $member = $memberStmt->fetch();
+    if (!$member) jsonError('유효하지 않은 회원입니다.');
+
+    // 중복 출석 체크
+    $dupStmt = $db->prepare("
+        SELECT id FROM qr_attendance WHERE qr_session_id = ? AND member_id = ?
+    ");
+    $dupStmt->execute([$session['id'], $memberId]);
+    $already = (bool)$dupStmt->fetch();
+
+    if (!$already) {
+        // qr_attendance 기록
+        $db->prepare("
+            INSERT IGNORE INTO qr_attendance (qr_session_id, member_id, group_id, ip_address)
+            VALUES (?, ?, ?, ?)
+        ")->execute([$session['id'], $memberId, $member['group_id'], getClientIP()]);
+
+        // zoom_daily 미션 pass 처리
+        $zoomTypeId = getMissionTypeId($db, 'zoom_daily');
+        if ($zoomTypeId) {
+            saveCheck(
+                $db,
+                $memberId,
+                date('Y-m-d'),
+                $zoomTypeId,
+                1,                              // status = pass
+                'manual',                       // source (QR은 manual 취급, automation보다 우선)
+                'qr_session:' . $code,          // source_ref
+                (int)$session['admin_id']       // 코치 admin_id
+            );
+        }
+    }
+
+    jsonSuccess([
+        'member_name' => $member['nickname'],
+        'already'     => $already,
+    ]);
+    break;
+
+default:
+    jsonError('알 수 없는 action: ' . $action, 404);
+}

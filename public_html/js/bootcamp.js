@@ -90,6 +90,7 @@ const BootcampApp = (() => {
                     const tab = btn.dataset.tab;
                     if (tab === '#bc-tab-checklist') loadChecklist();
                     else if (tab === '#bc-tab-status') loadStatusBoard();
+                    else if (tab === '#bc-tab-qr') loadQR();
                     else if (tab === '#bc-tab-revival') loadRevival();
                     else if (tab === '#bc-tab-coins') loadCoins();
                     else if (tab === '#bc-tab-members') loadMembersMgmt();
@@ -1144,6 +1145,214 @@ const BootcampApp = (() => {
             Toast.success(r.message);
             await loadGroups();
             renderGroupsList();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // QR 출석
+    // ══════════════════════════════════════════════════════════════
+
+    const QR_API = '/api/qr.php?action=';
+    let qrRefreshTimer = null;
+    let qrSessionCode = null;
+
+    async function loadQR() {
+        const container = document.getElementById('bc-tab-qr');
+        if (!container) return;
+
+        // 이전 타이머 정리
+        if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
+
+        container.innerHTML = '<div class="empty-state mt-lg">로딩 중...</div>';
+
+        const r = await App.get(QR_API + 'session_status');
+        if (!r.success) return;
+
+        if (r.has_session) {
+            qrSessionCode = r.session_code;
+            renderQRActive(container, r);
+        } else {
+            qrSessionCode = null;
+            renderQRIdle(container);
+        }
+    }
+
+    function renderQRIdle(container) {
+        container.innerHTML = `
+            <div class="qr-idle">
+                <div class="qr-idle-icon">&#x1F4F1;</div>
+                <div class="qr-idle-title">QR 출석체크</div>
+                <div class="qr-idle-desc">QR 세션을 시작하면 학생들이<br>QR 코드를 스캔하여 출석할 수 있습니다</div>
+                <button class="btn btn-primary btn-lg" id="btn-qr-start">QR 출석 시작</button>
+            </div>
+        `;
+        document.getElementById('btn-qr-start').onclick = createQRSession;
+    }
+
+    async function createQRSession() {
+        App.showLoading();
+        const r = await App.post(QR_API + 'create_session');
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            loadQR();
+        }
+    }
+
+    function renderQRActive(container, data) {
+        const expiresAt = new Date(data.expires_at.replace(' ', 'T'));
+        const attendeeCount = data.attendees ? data.attendees.length : 0;
+
+        container.innerHTML = `
+            <div class="qr-active">
+                <div class="qr-active-header">
+                    <div class="qr-timer" id="qr-timer"></div>
+                    <button class="btn btn-secondary btn-sm" id="btn-qr-close">세션 종료</button>
+                </div>
+                <div class="qr-code-wrap">
+                    <div id="qr-code-canvas"></div>
+                </div>
+                <div class="qr-url-wrap">
+                    <input type="text" class="form-input" id="qr-url-input" value="${App.esc(data.scan_url)}" readonly>
+                    <button class="btn btn-secondary btn-sm" id="btn-qr-copy">복사</button>
+                </div>
+                <div class="qr-attendees-header">
+                    <span class="qr-attendees-title">출석 현황</span>
+                    <span class="qr-attendees-count"><strong>${attendeeCount}</strong> / ${data.total_members}명</span>
+                </div>
+                <div id="qr-attendee-list"></div>
+            </div>
+        `;
+
+        // QR 코드 생성 (qrcode.js CDN)
+        renderQRCode(data.scan_url);
+
+        // 출석자 목록 렌더
+        renderAttendeeList(data.attendees);
+
+        // 타이머
+        updateQRTimer(expiresAt);
+        qrRefreshTimer = setInterval(() => {
+            updateQRTimer(expiresAt);
+            refreshAttendees();
+        }, 5000);
+
+        // 이벤트
+        document.getElementById('btn-qr-close').onclick = closeQRSession;
+        document.getElementById('btn-qr-copy').onclick = () => {
+            const input = document.getElementById('qr-url-input');
+            input.select();
+            navigator.clipboard.writeText(input.value).then(() => Toast.success('링크가 복사되었습니다'));
+        };
+    }
+
+    function renderQRCode(url) {
+        const canvas = document.getElementById('qr-code-canvas');
+        if (!canvas) return;
+
+        // qrcode.js가 로드되었는지 확인
+        if (typeof QRCode !== 'undefined') {
+            new QRCode(canvas, {
+                text: url,
+                width: 240,
+                height: 240,
+                colorDark: '#1D4ED8',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M,
+            });
+        } else {
+            // fallback: 라이브러리 없으면 URL만 표시
+            canvas.innerHTML = `<div style="padding:20px;text-align:center;color:#999;">QR 라이브러리 로딩 중...</div>`;
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+            script.onload = () => {
+                canvas.innerHTML = '';
+                new QRCode(canvas, {
+                    text: url,
+                    width: 240,
+                    height: 240,
+                    colorDark: '#1D4ED8',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M,
+                });
+            };
+            document.head.appendChild(script);
+        }
+    }
+
+    function renderAttendeeList(attendees) {
+        const list = document.getElementById('qr-attendee-list');
+        if (!list) return;
+
+        if (!attendees || attendees.length === 0) {
+            list.innerHTML = '<div class="empty-state mt-sm">아직 출석한 학생이 없습니다</div>';
+            return;
+        }
+
+        list.innerHTML = attendees.map((a, i) => {
+            const time = a.scanned_at ? a.scanned_at.substring(11, 16) : '';
+            return `
+                <div class="qr-attendee-item">
+                    <span class="qr-attendee-num">${attendees.length - i}</span>
+                    <span class="qr-attendee-name">${App.esc(a.nickname)}</span>
+                    <span class="qr-attendee-group">${App.esc(a.group_name)}</span>
+                    <span class="qr-attendee-time">${time}</span>
+                </div>`;
+        }).join('');
+    }
+
+    function updateQRTimer(expiresAt) {
+        const timerEl = document.getElementById('qr-timer');
+        if (!timerEl) return;
+
+        const now = new Date();
+        const diff = expiresAt - now;
+
+        if (diff <= 0) {
+            timerEl.textContent = '만료됨';
+            timerEl.classList.add('expired');
+            if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
+            // 자동으로 idle 화면으로 전환
+            setTimeout(() => loadQR(), 1000);
+            return;
+        }
+
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        timerEl.textContent = `${mins}분 ${String(secs).padStart(2, '0')}초 남음`;
+    }
+
+    async function refreshAttendees() {
+        const r = await App.api(QR_API + 'session_status', { showError: false });
+        if (!r || !r.success) return;
+
+        if (!r.has_session) {
+            if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
+            loadQR();
+            return;
+        }
+
+        // 출석 수 업데이트
+        const countEl = document.querySelector('.qr-attendees-count');
+        if (countEl) {
+            const cnt = r.attendees ? r.attendees.length : 0;
+            countEl.innerHTML = `<strong>${cnt}</strong> / ${r.total_members}명`;
+        }
+
+        renderAttendeeList(r.attendees);
+    }
+
+    async function closeQRSession() {
+        if (!qrSessionCode) return;
+        if (!await App.confirm('QR 세션을 종료하시겠습니까?')) return;
+
+        App.showLoading();
+        const r = await App.post(QR_API + 'close_session', { session_code: qrSessionCode });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
+            loadQR();
         }
     }
 

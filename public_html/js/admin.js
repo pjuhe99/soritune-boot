@@ -135,6 +135,7 @@ const AdminApp = (() => {
                         <div class="tab_wrap">
                             <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-revival">패자부활전</button>
                             <button class="tab" data-tab="#bc-tab-coins">코인 관리</button>
                             <button class="tab" data-tab="#bc-tab-members">회원 관리</button>
@@ -142,6 +143,7 @@ const AdminApp = (() => {
                         </div>
                         <div class="tab-content active" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
+                        <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-revival"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
