@@ -567,11 +567,20 @@ case 'checklist':
     // 미션 타입
     $missionTypes = $db->query("SELECT id, code, name FROM mission_types WHERE is_active = 1 ORDER BY display_order")->fetchAll();
 
+    // 감점 기간 정보
+    $cohortInfo = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
+    $cohortInfo->execute([$cohortId]);
+    $ci = $cohortInfo->fetch();
+    $scoringStart = $ci ? date('Y-m-d', strtotime($ci['start_date'] . ' + ' . SCORE_ADAPTATION_DAYS . ' days')) : null;
+    $scoringEnd = $ci['end_date'] ?? null;
+
     jsonSuccess([
         'date' => $date,
         'members' => $members,
         'checks' => $checks,
         'mission_types' => $missionTypes,
+        'scoring_start' => $scoringStart,
+        'scoring_end' => $scoringEnd,
     ]);
     break;
 

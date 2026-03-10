@@ -318,10 +318,20 @@ const BootcampApp = (() => {
         const r = await App.get(API + 'checklist', params);
         if (!r.success) return;
 
-        const { members, checks, mission_types: mt } = r;
+        const { members, checks, mission_types: mt, scoring_start, scoring_end } = r;
         if (!members.length) {
             body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
             return;
+        }
+
+        // 감점 기간 안내
+        const isOutOfScoring = (scoring_start && selectedDate < scoring_start) || (scoring_end && selectedDate > scoring_end);
+        let scoringNotice = '';
+        if (isOutOfScoring) {
+            const reason = selectedDate < scoring_start
+                ? `적응기간(~${scoring_start} 전)에 해당합니다.`
+                : `기수 종료일(${scoring_end}) 이후입니다.`;
+            scoringNotice = `<div class="bc-scoring-notice">이 날짜는 점수에 반영되지 않습니다. ${reason}</div>`;
         }
 
         // 초기 체크 상태 저장 (변경 감지용)
@@ -335,6 +345,7 @@ const BootcampApp = (() => {
         });
 
         body.innerHTML = `
+            ${scoringNotice}
             <div style="overflow-x:auto">
                 <table class="bc-checklist-table">
                     <thead>

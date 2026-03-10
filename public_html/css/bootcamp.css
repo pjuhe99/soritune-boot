@@ -297,6 +297,18 @@
 }
 .bc-back:hover { color: var(--main-color); }
 
+/* ── Scoring Notice ────────────────────────────────────────── */
+.bc-scoring-notice {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: var(--sm-font-size);
+    font-weight: 600;
+    color: #92400e;
+    margin-bottom: 12px;
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .bc-filters { gap: 6px; }
