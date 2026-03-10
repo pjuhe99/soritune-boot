@@ -582,13 +582,14 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>이름</th><th>아이디</th><th>역할</th><th>기수</th><th>팀/시간</th><th></th></tr></thead>
+                    <thead><tr><th>이름</th><th>아이디</th><th>역할</th><th>연결 회원</th><th>기수</th><th>팀/시간</th><th></th></tr></thead>
                     <tbody>
                         ${r.admins.map(a => `
                             <tr>
                                 <td>${App.esc(a.name)}</td>
                                 <td>${App.esc(a.login_id)}</td>
                                 <td>${(a.roles || []).map(r => `<span class="badge badge-primary" style="margin:1px">${App.esc(ROLE_LABELS[r] || r)}</span>`).join(' ')}</td>
+                                <td>${a.member_nickname ? App.esc(a.member_nickname) + (a.member_score != null ? ` <span style="color:var(--color-777);font-size:11px">(${a.member_score}점)</span>` : '') : '<span style="color:var(--color-gray)">-</span>'}</td>
                                 <td>${App.esc(a.cohort || '-')}</td>
                                 <td>${App.esc(a.team || a.class_time || '-')}</td>
                                 <td class="actions">
@@ -622,6 +623,19 @@ const AdminApp = (() => {
         const selectedRoles = data.roles || [];
         const body = `
             <div class="form-group">
+                <label class="form-label">역할 * (복수 선택 가능)</label>
+                <div id="af-roles-wrap" style="display:flex;flex-wrap:wrap;padding:8px 0">
+                    ${renderRoleCheckboxes(selectedRoles, 'af')}
+                </div>
+            </div>
+            <div class="form-group" id="af-member-group" style="display:none">
+                <label class="form-label">연결 회원 (조장/부조장)</label>
+                <select class="form-input" id="af-member">
+                    <option value="">선택 안 함</option>
+                </select>
+                <div id="af-member-info" style="font-size:12px;color:var(--color-777);margin-top:4px"></div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">이름 *</label>
                 <input type="text" class="form-input" id="af-name" value="${App.esc(data.name || '')}">
             </div>
@@ -632,12 +646,6 @@ const AdminApp = (() => {
             <div class="form-group">
                 <label class="form-label">${isEdit ? '비밀번호 (변경 시만 입력)' : '비밀번호 *'}</label>
                 <input type="password" class="form-input" id="af-pw" autocomplete="new-password">
-            </div>
-            <div class="form-group">
-                <label class="form-label">역할 * (복수 선택 가능)</label>
-                <div id="af-roles-wrap" style="display:flex;flex-wrap:wrap;padding:8px 0">
-                    ${renderRoleCheckboxes(selectedRoles, 'af')}
-                </div>
             </div>
             <div class="form-group" id="af-cohort-group">
                 <label class="form-label">기수</label>
@@ -658,6 +666,51 @@ const AdminApp = (() => {
         `;
         App.openModal(isEdit ? '관리자 수정' : '관리자 추가', body, footer);
 
+        // Toggle member selector based on role checkboxes
+        const leaderRoles = ['leader', 'subleader'];
+        let memberCandidates = [];
+
+        async function toggleMemberField() {
+            const roles = getCheckedRoles('af');
+            const needsMember = roles.some(r => leaderRoles.includes(r));
+            const memberGroup = document.getElementById('af-member-group');
+            memberGroup.style.display = needsMember ? '' : 'none';
+            if (needsMember && !memberCandidates.length) {
+                const res = await App.get('/api/admin.php?action=member_candidates');
+                if (res.success) {
+                    memberCandidates = res.members;
+                    const sel = document.getElementById('af-member');
+                    sel.innerHTML = '<option value="">선택 안 함</option>' +
+                        memberCandidates.map(m => {
+                            const linked = m.linked_admin_id && (!isEdit || m.linked_admin_id != data.id)
+                                ? ` (이미 연결: ${App.esc(m.linked_admin_name)})` : '';
+                            const disabled = m.linked_admin_id && (!isEdit || m.linked_admin_id != data.id) ? ' disabled' : '';
+                            return `<option value="${m.id}"${disabled}>${App.esc(m.nickname || m.real_name)}${m.group_name ? ' [' + App.esc(m.group_name) + ']' : ''}${linked}</option>`;
+                        }).join('');
+                    if (data.member_id) sel.value = data.member_id;
+                }
+            }
+        }
+
+        document.querySelectorAll('.af-role-cb').forEach(cb => {
+            cb.addEventListener('change', toggleMemberField);
+        });
+        toggleMemberField();
+
+        // Auto-fill name when member is selected
+        document.getElementById('af-member').addEventListener('change', () => {
+            const sel = document.getElementById('af-member');
+            const mid = parseInt(sel.value);
+            const m = memberCandidates.find(x => x.id === mid);
+            const info = document.getElementById('af-member-info');
+            if (m) {
+                document.getElementById('af-name').value = m.real_name || m.nickname;
+                info.textContent = m.group_name ? `조: ${m.group_name} (자동 설정됨)` : '';
+            } else {
+                info.textContent = '';
+            }
+        });
+
         document.getElementById('af-save').onclick = async () => {
             const roles = getCheckedRoles('af');
             const payload = {
@@ -668,6 +721,11 @@ const AdminApp = (() => {
                 team: document.getElementById('af-team').value.trim(),
                 class_time: document.getElementById('af-classtime').value.trim(),
             };
+            // Include member_id if leader/subleader role
+            if (roles.some(r => leaderRoles.includes(r))) {
+                const memberVal = document.getElementById('af-member').value;
+                payload.member_id = memberVal ? parseInt(memberVal) : null;
+            }
             const pw = document.getElementById('af-pw').value;
             if (pw) payload.password = pw;
             if (isEdit) payload.id = data.id;

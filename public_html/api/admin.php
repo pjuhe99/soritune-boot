@@ -439,12 +439,16 @@ case 'admin_list':
     $db = getDB();
     $stmt = $db->query('
         SELECT a.id, a.name, a.login_id, a.cohort, a.team, a.class_time, a.bootcamp_group_id,
-               a.is_active, a.last_login_at,
+               a.member_id, a.is_active, a.last_login_at,
                GROUP_CONCAT(ar.role ORDER BY ar.role) AS roles_csv,
-               bg.name AS bootcamp_group_name
+               bg.name AS bootcamp_group_name,
+               bm.nickname AS member_nickname,
+               ms.current_score AS member_score
         FROM admins a
         LEFT JOIN admin_roles ar ON a.id = ar.admin_id
         LEFT JOIN bootcamp_groups bg ON a.bootcamp_group_id = bg.id
+        LEFT JOIN bootcamp_members bm ON a.member_id = bm.id
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
         GROUP BY a.id
         ORDER BY a.name
     ');
@@ -479,7 +483,20 @@ case 'admin_create':
 
     if (in_array('operation', $roles)) $cohort = null;
 
+    $memberId = !empty($input['member_id']) ? (int)$input['member_id'] : null;
+    $bcGroupId = null;
+
     $db = getDB();
+
+    // member_id → auto-set bootcamp_group_id
+    if ($memberId) {
+        $mStmt = $db->prepare('SELECT group_id FROM bootcamp_members WHERE id = ?');
+        $mStmt->execute([$memberId]);
+        $mRow = $mStmt->fetch();
+        if (!$mRow) jsonError('해당 회원을 찾을 수 없습니다.');
+        $bcGroupId = $mRow['group_id'] ? (int)$mRow['group_id'] : null;
+    }
+
     // Check duplicate login_id
     $stmt = $db->prepare('SELECT id FROM admins WHERE login_id = ?');
     $stmt->execute([$loginId]);
@@ -487,8 +504,8 @@ case 'admin_create':
 
     // Insert admin (role column = first role for backward compat)
     $primaryRole = $roles[0];
-    $stmt = $db->prepare('INSERT INTO admins (name, login_id, password_hash, role, cohort, team, class_time) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$name, $loginId, password_hash($password, PASSWORD_DEFAULT), $primaryRole, $cohort, $team, $classTime]);
+    $stmt = $db->prepare('INSERT INTO admins (name, login_id, password_hash, role, cohort, team, class_time, bootcamp_group_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$name, $loginId, password_hash($password, PASSWORD_DEFAULT), $primaryRole, $cohort, $team, $classTime, $bcGroupId, $memberId]);
     $newId = (int)$db->lastInsertId();
 
     // Insert roles
@@ -517,7 +534,24 @@ case 'admin_update':
             $params[] = $val ?: null;
         }
     }
-    if (array_key_exists('bootcamp_group_id', $input)) {
+    if (array_key_exists('member_id', $input)) {
+        $memberId = !empty($input['member_id']) ? (int)$input['member_id'] : null;
+        $fields[] = 'member_id = ?';
+        $params[] = $memberId;
+        // Auto-sync bootcamp_group_id from member
+        if ($memberId) {
+            $mStmt = $db->prepare('SELECT group_id FROM bootcamp_members WHERE id = ?');
+            $mStmt->execute([$memberId]);
+            $mRow = $mStmt->fetch();
+            if ($mRow) {
+                $fields[] = 'bootcamp_group_id = ?';
+                $params[] = $mRow['group_id'] ? (int)$mRow['group_id'] : null;
+            }
+        } else {
+            $fields[] = 'bootcamp_group_id = ?';
+            $params[] = null;
+        }
+    } elseif (array_key_exists('bootcamp_group_id', $input)) {
         $fields[] = 'bootcamp_group_id = ?';
         $params[] = $input['bootcamp_group_id'] ? (int)$input['bootcamp_group_id'] : null;
     }
@@ -561,6 +595,27 @@ case 'admin_update':
     }
 
     jsonSuccess([], '관리자 정보가 수정되었습니다.');
+    break;
+
+case 'member_candidates':
+    $admin = requireAdmin(['operation']);
+    $db = getDB();
+    $cohortId = $_GET['cohort_id'] ?? null;
+    if (!$cohortId) {
+        $cohortId = getSetting('current_cohort');
+    }
+    $stmt = $db->prepare('
+        SELECT bm.id, bm.nickname, bm.real_name, bm.group_id,
+               bg.name AS group_name,
+               a_linked.id AS linked_admin_id, a_linked.name AS linked_admin_name
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        LEFT JOIN admins a_linked ON a_linked.member_id = bm.id AND a_linked.is_active = 1
+        WHERE bm.cohort_id = ? AND bm.is_active = 1
+        ORDER BY bg.name, bm.nickname
+    ');
+    $stmt->execute([$cohortId]);
+    jsonSuccess(['members' => $stmt->fetchAll()]);
     break;
 
 case 'admin_delete':
