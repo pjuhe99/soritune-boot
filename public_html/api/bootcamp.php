@@ -93,13 +93,14 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
     $member = $member->fetch();
     if (!$member) return null;
 
-    // 기수 시작일 조회 → 적응기간 계산
-    $cohort = $db->prepare("SELECT start_date FROM cohorts WHERE id = ?");
+    // 기수 시작일/종료일 조회 → 적응기간 계산
+    $cohort = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
     $cohort->execute([$member['cohort_id']]);
     $cohortRow = $cohort->fetch();
     $adaptationEnd = $cohortRow
         ? date('Y-m-d', strtotime($cohortRow['start_date'] . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'))
         : null;
+    $cohortEndDate = $cohortRow['end_date'] ?? null;
 
     // 미션 타입 코드→ID 매핑
     $codeToId = getMissionCodeToIdMap($db);
@@ -116,14 +117,15 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
         $byDate[$c['check_date']][(int)$c['mission_type_id']] = (int)$c['status'];
     }
 
-    // 감점 대상 날짜: 적응기간 다음날 ~ 어제 (모든 날짜)
+    // 감점 대상 날짜: 적응기간 다음날 ~ min(어제, 기수 종료일)
     $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
     $yesterday = date('Y-m-d', strtotime('-1 day'));
+    $scoringEnd = ($cohortEndDate && $cohortEndDate < $yesterday) ? $cohortEndDate : $yesterday;
     $rules = getPenaltyRules();
     $penaltySum = 0;
 
     $current = $scoringStart;
-    while ($current <= $yesterday) {
+    while ($current <= $scoringEnd) {
         $missions = $byDate[$current] ?? []; // 기록 없으면 전체 미수행
         $dow = (int)date('w', strtotime($current));
 
