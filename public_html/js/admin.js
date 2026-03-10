@@ -122,6 +122,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-guides-mgmt">가이드 관리</button>
                             <button class="tab" data-tab="#tab-calendar-mgmt">캘린더 관리</button>
                             <button class="tab" data-tab="#tab-cohorts-mgmt">기수 관리</button>
+                            <button class="tab" data-tab="#tab-cafe-posts">카페 게시글</button>
                         </div>
                         <div class="tab-content active" id="tab-members"></div>
                         <div class="tab-content" id="tab-admins"></div>
@@ -129,6 +130,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-guides-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
+                        <div class="tab-content" id="tab-cafe-posts"></div>
                     </div>
                     ` : role === 'coach' ? `
                     <div class="admin-tabs" id="sec-tabs">
@@ -201,6 +203,7 @@ const AdminApp = (() => {
             loadGuidesMgmt();
             loadCalendarMgmt();
             loadCohortsMgmt();
+            loadCafePosts();
         }
 
         if ((role === 'coach' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
@@ -1305,6 +1308,118 @@ const AdminApp = (() => {
         if (r.success) { Toast.success(r.message); loadCohortsMgmt(); renderCohortBar(); }
     }
 
+    // ── Cafe Posts ──
+    let cafePostPage = 1;
+    let cafePostFilter = {};
+
+    async function loadCafePosts(page = 1) {
+        const sec = document.getElementById('tab-cafe-posts');
+        if (!sec) return;
+        cafePostPage = page;
+
+        const params = new URLSearchParams({ action: 'cafe_posts', page, limit: 50 });
+        if (cafePostFilter.board_type) params.set('board_type', cafePostFilter.board_type);
+        if (cafePostFilter.date) params.set('date', cafePostFilter.date);
+        if (cafePostFilter.mapped !== undefined && cafePostFilter.mapped !== '') params.set('mapped', cafePostFilter.mapped);
+        if (cafePostFilter.keyword) params.set('keyword', cafePostFilter.keyword);
+
+        if (page === 1) sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
+        const r = await App.get('/api/bootcamp.php?' + params.toString());
+        if (!r.success) { sec.innerHTML = '<div class="empty-state">불러오기 실패</div>'; return; }
+
+        const BOARD_LABELS = {
+            speak_mission: '스피크 미션',
+            inner33: '이너써티쓰리',
+            daily_mission: '데일리 미션',
+        };
+        const totalPages = Math.ceil(r.total / r.limit) || 1;
+
+        // 통계 배지
+        const statsHtml = (r.stats || []).map(s => {
+            const label = BOARD_LABELS[s.board_type] || s.board_type || '기타';
+            return `<span class="badge badge-secondary" style="margin-right:4px">${App.esc(label)}: ${s.cnt}건 (매핑 ${s.mapped_cnt})</span>`;
+        }).join('');
+
+        sec.innerHTML = `
+            <div class="mgmt-toolbar mt-md" style="flex-wrap:wrap;gap:8px">
+                <span style="font-weight:600">카페 게시글 (${r.total}건)</span>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                    <select class="form-select form-select-sm" id="cafe-filter-board" style="width:auto">
+                        <option value="">전체 게시판</option>
+                        <option value="speak_mission" ${cafePostFilter.board_type === 'speak_mission' ? 'selected' : ''}>스피크 미션</option>
+                        <option value="inner33" ${cafePostFilter.board_type === 'inner33' ? 'selected' : ''}>이너써티쓰리</option>
+                        <option value="daily_mission" ${cafePostFilter.board_type === 'daily_mission' ? 'selected' : ''}>데일리 미션</option>
+                    </select>
+                    <input type="date" class="form-input form-input-sm" id="cafe-filter-date" value="${cafePostFilter.date || ''}" style="width:auto">
+                    <select class="form-select form-select-sm" id="cafe-filter-mapped" style="width:auto">
+                        <option value="">전체</option>
+                        <option value="1" ${cafePostFilter.mapped === '1' ? 'selected' : ''}>매핑됨</option>
+                        <option value="0" ${cafePostFilter.mapped === '0' ? 'selected' : ''}>미매핑</option>
+                    </select>
+                    <input type="text" class="form-input form-input-sm" id="cafe-filter-keyword" placeholder="제목/닉네임 검색" value="${App.esc(cafePostFilter.keyword || '')}" style="width:140px">
+                    <button class="btn btn-primary btn-sm" id="cafe-filter-btn">검색</button>
+                    <button class="btn btn-secondary btn-sm" id="cafe-filter-reset">초기화</button>
+                </div>
+            </div>
+            ${statsHtml ? `<div class="mt-sm">${statsHtml}</div>` : ''}
+            <div style="overflow-x:auto">
+                <table class="data-table mt-sm">
+                    <thead><tr>
+                        <th>게시판</th>
+                        <th>제목</th>
+                        <th>카페 닉네임</th>
+                        <th>매핑 회원</th>
+                        <th>업로드일</th>
+                        <th>체크</th>
+                    </tr></thead>
+                    <tbody>
+                        ${r.posts.length ? r.posts.map(p => {
+                            const boardLabel = BOARD_LABELS[p.board_type] || p.board_type || '-';
+                            const postedDate = p.posted_at ? p.posted_at.substring(0, 16) : '-';
+                            const memberName = p.member_real_name ? `${App.esc(p.member_real_name)} (${App.esc(p.member_nickname || '')})` : '<span class="text-danger">미매핑</span>';
+                            const checkBadge = p.mission_checked == 1 ? '<span class="badge badge-success">완료</span>' : '<span class="badge badge-secondary">-</span>';
+                            return `<tr>
+                                <td><span class="badge badge-primary">${App.esc(boardLabel)}</span></td>
+                                <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${App.esc(p.title)}">${App.esc(p.title)}</td>
+                                <td>${App.esc(p.nickname || '-')}</td>
+                                <td>${memberName}</td>
+                                <td>${postedDate}</td>
+                                <td>${checkBadge}</td>
+                            </tr>`;
+                        }).join('') : '<tr><td colspan="6" class="empty-state">게시글이 없습니다.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+            ${totalPages > 1 ? `
+            <div class="pagination mt-md" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+                ${page > 1 ? `<button class="btn btn-sm btn-secondary" onclick="AdminApp._cafePostPage(${page - 1})">이전</button>` : ''}
+                <span class="badge" style="padding:6px 10px">${page} / ${totalPages}</span>
+                ${page < totalPages ? `<button class="btn btn-sm btn-secondary" onclick="AdminApp._cafePostPage(${page + 1})">다음</button>` : ''}
+            </div>` : ''}
+        `;
+
+        // 필터 이벤트
+        const applyFilter = () => {
+            cafePostFilter = {
+                board_type: document.getElementById('cafe-filter-board').value,
+                date: document.getElementById('cafe-filter-date').value,
+                mapped: document.getElementById('cafe-filter-mapped').value,
+                keyword: document.getElementById('cafe-filter-keyword').value.trim(),
+            };
+            loadCafePosts(1);
+        };
+        document.getElementById('cafe-filter-btn').onclick = applyFilter;
+        document.getElementById('cafe-filter-keyword').onkeydown = (e) => { if (e.key === 'Enter') applyFilter(); };
+        document.getElementById('cafe-filter-reset').onclick = () => {
+            cafePostFilter = {};
+            loadCafePosts(1);
+        };
+    }
+
+    function _cafePostPage(page) {
+        loadCafePosts(page);
+    }
+
     // ── Public API ──
     return {
         init,
@@ -1314,5 +1429,6 @@ const AdminApp = (() => {
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
         _editCohort, _deleteCohort,
+        _cafePostPage,
     };
 })();
