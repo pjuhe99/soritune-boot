@@ -2,14 +2,14 @@
 /* V2: multi-role support, auto-assign tasks */
 const AdminApp = (() => {
     const ROLE_LABELS = {
-        leader: '조장', coach: '코치', head: '총괄코치',
+        leader: '조장', subleader: '부조장', coach: '코치', head: '총괄코치',
         subhead1: '부총괄1', subhead2: '부총괄2', operation: '운영팀'
     };
-    const ALL_ROLES = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    const ALL_ROLES = ['leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
     const PAGE_ROLES = {
         head: ['head', 'subhead1', 'subhead2'],
         coach: ['coach'],
-        leader: ['leader'],
+        leader: ['leader', 'subleader'],
         operation: ['operation'],
     };
 
@@ -149,7 +149,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
                     </div>
-                    ` : role === 'leader' ? `
+                    ` : (role === 'leader' || role === 'subleader') ? `
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab_wrap">
                             <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
@@ -203,8 +203,8 @@ const AdminApp = (() => {
             loadCohortsMgmt();
         }
 
-        if ((role === 'coach' || role === 'leader') && typeof BootcampApp !== 'undefined') {
-            if (role === 'leader') {
+        if ((role === 'coach' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
+            if (role === 'leader' || role === 'subleader') {
                 BootcampApp.initForLeader(admin);
             } else {
                 BootcampApp.initForCoach(admin);

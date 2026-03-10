@@ -22,7 +22,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="/js/bootcamp.js?v=20260310f"></script>
-    <script src="/js/admin.js?v=20260310"></script>
+    <script src="/js/admin.js?v=20260310f"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>

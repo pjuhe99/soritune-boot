@@ -338,7 +338,7 @@ case 'checklist':
 
 case 'check_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'leader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
     $input = getJsonInput();
 
     $memberId = (int)($input['member_id'] ?? 0);
@@ -366,7 +366,7 @@ case 'check_save':
 
 case 'check_bulk_save':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'leader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
     $input = getJsonInput();
     $checkDate = $input['check_date'] ?? '';
     $items = $input['items'] ?? [];
@@ -954,7 +954,7 @@ case 'warning_notes':
 
 case 'warning_note_create':
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'leader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $note = trim($input['note'] ?? '');

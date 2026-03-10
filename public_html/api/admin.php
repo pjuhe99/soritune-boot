@@ -472,7 +472,7 @@ case 'admin_create':
 
     if (!$name || !$loginId || !$password || empty($roles)) jsonError('필수 항목을 모두 입력해주세요.');
 
-    $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    $validRoles = ['leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
     foreach ($roles as $r) {
         if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
     }
@@ -530,7 +530,7 @@ case 'admin_update':
     // Handle roles update
     if (isset($input['roles']) && is_array($input['roles'])) {
         $roles = $input['roles'];
-        $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+        $validRoles = ['leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
         foreach ($roles as $r) {
             if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
         }
@@ -591,7 +591,7 @@ case 'task_create':
 
     if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
 
-    $validRoles = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    $validRoles = ['leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
     foreach ($roles as $r) {
         if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
     }

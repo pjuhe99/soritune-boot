@@ -21,7 +21,7 @@
     <script src="/js/common.js?v=20260227"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="/js/bootcamp.js?v=20260310e"></script>
-    <script src="/js/admin.js?v=20260309"></script>
+    <script src="/js/admin.js?v=20260310f"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>
