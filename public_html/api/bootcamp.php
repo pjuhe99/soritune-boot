@@ -116,35 +116,35 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
         $byDate[$c['check_date']][(int)$c['mission_type_id']] = (int)$c['status'];
     }
 
-    // 감점 계산: 해당 회원에게 체크 기록이 있는 날짜만 대상
-    // 명시적으로 status=0인 기록만 감점 (레코드 없음 = 미확인 = 감점 없음)
+    // 감점 대상 날짜: 적응기간 다음날 ~ 어제 (모든 날짜)
+    $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
     $rules = getPenaltyRules();
     $penaltySum = 0;
-    foreach ($byDate as $date => $missions) {
-        $dow = (int)date('w', strtotime($date)); // 0=일, 1=월, ..., 3=수, 6=토
+
+    $current = $scoringStart;
+    while ($current <= $yesterday) {
+        $missions = $byDate[$current] ?? []; // 기록 없으면 전체 미수행
+        $dow = (int)date('w', strtotime($current));
 
         foreach ($rules as $rule) {
             // 특정 요일 제한이 있으면 해당 요일만 감점 적용
             if ($rule['weekday'] !== null && $dow !== $rule['weekday']) continue;
 
-            // 이 규칙에 해당하는 미션 중 하나라도 기록이 있는지 확인
-            $hasRecord = false;
             $passed = false;
             foreach ($rule['codes'] as $code) {
                 $typeId = $codeToId[$code] ?? null;
-                if ($typeId && isset($missions[$typeId])) {
-                    $hasRecord = true;
-                    if ($missions[$typeId] === 1) {
-                        $passed = true;
-                        break;
-                    }
+                if ($typeId && ($missions[$typeId] ?? 0) === 1) {
+                    $passed = true;
+                    break;
                 }
             }
-            // 기록이 있고 하나도 통과 못한 경우에만 감점
-            if ($hasRecord && !$passed) {
+            if (!$passed) {
                 $penaltySum += $rule['penalty'];
             }
         }
+
+        $current = date('Y-m-d', strtotime($current . ' +1 day'));
     }
 
     // revival_adjustment 반영
