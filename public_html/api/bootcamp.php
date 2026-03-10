@@ -964,6 +964,13 @@ case 'integration_cafe_posts':
     $results = ['inserted' => 0, 'skipped' => 0, 'error' => 0, 'unmapped' => 0];
     $unmappedKeys = [];
 
+    // menu_id → board_type 매핑 로드
+    $boardMapStmt = $db->query("SELECT menu_id, board_type FROM cafe_board_map WHERE is_active = 1");
+    $boardMap = [];
+    foreach ($boardMapStmt->fetchAll() as $bm) {
+        $boardMap[$bm['menu_id']] = $bm['board_type'];
+    }
+
     $insertStmt = $db->prepare("
         INSERT INTO cafe_posts (cafe_article_id, title, member_key, nickname, board_type, posted_at, member_id, mission_checked, raw_data)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -982,9 +989,14 @@ case 'integration_cafe_posts':
         $title = $post['title'] ?? '';
         $memberKey = $post['member_key'] ?? null;
         $nickname = $post['nickname'] ?? null;
-        $boardType = $post['board_type'] ?? null;
         $postedAt = $post['posted_at'] ?? null;
         $missionChecked = (int)($post['mission_checked'] ?? 0);
+
+        // board_type 결정: 직접 지정 > menu_id 자동 변환
+        $boardType = $post['board_type'] ?? null;
+        if (!$boardType && isset($post['menu_id'])) {
+            $boardType = $boardMap[(string)$post['menu_id']] ?? null;
+        }
 
         if (!$articleId) {
             $results['error']++;
