@@ -473,7 +473,7 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>상태</th><th></th></tr></thead>
+                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>참여</th><th>상태</th><th></th></tr></thead>
                     <tbody>
                         ${r.members.map(m => `
                             <tr>
@@ -482,6 +482,7 @@ const AdminApp = (() => {
                                 <td>${App.esc(m.user_id || '')}</td>
                                 <td>${App.esc(m.phone || '')}</td>
                                 <td>${App.esc(m.group_name || '-')}</td>
+                                <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '첫 참여'}</td>
                                 <td>${m.is_active == 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge badge-danger">비활성</span>'}</td>
                                 <td class="actions">
                                     <button class="btn-icon" onclick="AdminApp._editMember(${m.id})">수정</button>
@@ -493,7 +494,7 @@ const AdminApp = (() => {
                 </table>
             </div>
         `;
-        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="7" class="empty-state">등록된 회원이 없습니다.</td></tr>';
+        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="8" class="empty-state">등록된 회원이 없습니다.</td></tr>';
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-    <link rel="stylesheet" href="/css/common.css?v=20260227">
+    <link rel="stylesheet" href="/css/common.css?v=20260310">
     <link rel="stylesheet" href="/css/toast.css?v=20260227">
     <link rel="stylesheet" href="/css/admin.css?v=20260227">
     <link rel="stylesheet" href="/css/bootcamp.css?v=20260310c">
@@ -20,8 +20,8 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260227"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-    <script src="/js/bootcamp.js?v=20260310e"></script>
-    <script src="/js/admin.js?v=20260310h"></script>
+    <script src="/js/bootcamp.js?v=20260310f"></script>
+    <script src="/js/admin.js?v=20260310i"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>

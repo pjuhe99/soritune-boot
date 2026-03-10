@@ -345,7 +345,8 @@ case 'member_list':
     $stmt = $db->prepare('
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
-               bm.member_role, bm.stage_no, bm.is_active, bm.created_at
+               bm.member_role, bm.stage_no, bm.is_active, bm.created_at,
+               bm.participation_count
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
@@ -377,8 +378,21 @@ case 'member_create':
     if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
     $cohortId = (int)$cohortRow['id'];
 
-    $stmt = $db->prepare('INSERT INTO bootcamp_members (real_name, nickname, phone, user_id, cohort_id, group_id) VALUES (?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$realName, $nickname, $phone ?: null, $userId, $cohortId, $groupId]);
+    // Calculate participation_count
+    $participationCount = 1;
+    if (($phone && $phone !== '') || ($userId && $userId !== '')) {
+        $conds = [];
+        $cParams = [];
+        if ($phone && $phone !== '') { $conds[] = "(bm.phone = ? AND bm.phone != '')"; $cParams[] = $phone; }
+        if ($userId && $userId !== '') { $conds[] = "(bm.user_id = ? AND bm.user_id != '')"; $cParams[] = $userId; }
+        $cParams[] = $cohortId;
+        $pcStmt = $db->prepare("SELECT COUNT(DISTINCT bm.cohort_id) AS cnt FROM bootcamp_members bm WHERE (" . implode(' OR ', $conds) . ") AND bm.cohort_id != ?");
+        $pcStmt->execute($cParams);
+        $participationCount = (int)$pcStmt->fetchColumn() + 1;
+    }
+
+    $stmt = $db->prepare('INSERT INTO bootcamp_members (real_name, nickname, phone, user_id, cohort_id, group_id, participation_count) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$realName, $nickname, $phone ?: null, $userId, $cohortId, $groupId, $participationCount]);
     jsonSuccess(['id' => (int)$db->lastInsertId()], '회원이 추가되었습니다.');
     break;
 

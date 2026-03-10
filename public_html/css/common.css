@@ -158,6 +158,7 @@ h3 { font-size: var(--md-font-size); font-weight: 700; }
 .badge-success { background: #38a169; color: #fff; }
 .badge-warning { background: var(--warning-color); color: #fff; }
 .badge-light { background: var(--main-color-rgba10); color: var(--main-color); }
+.badge-info { background: #3182ce; color: #fff; }
 
 /* ── Tab (LMS 패턴) ────────────────────────────────────────── */
 .tab_wrap {

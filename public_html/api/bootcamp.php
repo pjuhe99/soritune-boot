@@ -174,7 +174,8 @@ case 'members':
         SELECT bm.*, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin,
-               CASE WHEN bm.cafe_member_key IS NOT NULL THEN 1 ELSE 0 END AS is_cafe_mapped
+               CASE WHEN bm.cafe_member_key IS NOT NULL THEN 1 ELSE 0 END AS is_cafe_mapped,
+               bm.participation_count
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
@@ -195,20 +196,38 @@ case 'member_create':
     if (!$cohortId || !$nickname) jsonError('cohort_id, nickname 필요');
 
     $db = getDB();
+
+    // Calculate participation_count (how many different cohorts this person has been in)
+    $phone = trim($input['phone'] ?? '') ?: null;
+    $userId = $input['user_id'] ?? null;
+    $participationCount = 1;
+    if ($phone || $userId) {
+        $conds = [];
+        $cParams = [];
+        if ($phone) { $conds[] = "(bm.phone = ? AND bm.phone != '')"; $cParams[] = $phone; }
+        if ($userId) { $conds[] = "(bm.user_id = ? AND bm.user_id != '')"; $cParams[] = $userId; }
+        $cParams[] = $cohortId;
+        $pcStmt = $db->prepare("SELECT COUNT(DISTINCT bm.cohort_id) AS cnt FROM bootcamp_members bm WHERE (" . implode(' OR ', $conds) . ") AND bm.cohort_id != ?");
+        $pcStmt->execute($cParams);
+        $participationCount = (int)$pcStmt->fetchColumn() + 1;
+    }
+
     $stmt = $db->prepare("
-        INSERT INTO bootcamp_members (user_id, cohort_id, group_id, nickname, real_name, cafe_member_key, member_role, stage_no, joined_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO bootcamp_members (user_id, cohort_id, group_id, nickname, real_name, phone, cafe_member_key, member_role, stage_no, joined_at, participation_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
-        $input['user_id'] ?? null,
+        $userId,
         $cohortId,
         $input['group_id'] ?? null,
         $nickname,
         trim($input['real_name'] ?? '') ?: null,
+        $phone,
         trim($input['cafe_member_key'] ?? '') ?: null,
         $input['member_role'] ?? 'member',
         (int)($input['stage_no'] ?? 1),
         $input['joined_at'] ?? date('Y-m-d'),
+        $participationCount,
     ]);
     $newId = (int)$db->lastInsertId();
 

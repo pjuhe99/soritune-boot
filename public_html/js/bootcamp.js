@@ -363,7 +363,7 @@ const BootcampApp = (() => {
                             return `
                             <tr>
                                 <td>
-                                    <div class="member-name">${App.esc(m.nickname)}</div>
+                                    <div class="member-name">${App.esc(m.nickname)}${parseInt(m.participation_count) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
                                     <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
                                 </td>
                                 <td class="score-cell ${sc}">${m.current_score}</td>
@@ -481,6 +481,7 @@ const BootcampApp = (() => {
                     <div class="bc-status-info">
                         <div class="bc-status-name">
                             ${App.esc(m.nickname)}
+                            ${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}
                             ${warningBadge}
                         </div>
                         <div class="bc-status-meta">
@@ -923,7 +924,7 @@ const BootcampApp = (() => {
         body.innerHTML = `
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>닉네임</th><th>이름</th><th>조</th><th>단계</th><th>역할</th><th>점수</th><th>코인</th><th></th></tr></thead>
+                    <thead><tr><th>닉네임</th><th>이름</th><th>조</th><th>단계</th><th>역할</th><th>참여</th><th>점수</th><th>코인</th><th></th></tr></thead>
                     <tbody>
                         ${members.map(m => {
                             const sc = scoreClass(parseInt(m.current_score));
@@ -934,6 +935,7 @@ const BootcampApp = (() => {
                                 <td>${App.esc(m.group_name || '-')}</td>
                                 <td>${m.stage_no}단계</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span></td>
+                                <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '<span style="color:#999">첫 참여</span>'}</td>
                                 <td class="score-cell ${sc}" style="font-weight:700">${m.current_score}</td>
                                 <td>${m.current_coin || 0}</td>
                                 <td class="actions">
