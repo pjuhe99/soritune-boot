@@ -1,6 +1,7 @@
 <?php
 /**
  * boot.soritune.com - Member API
+ * Uses bootcamp_members table with cohorts FK
  */
 
 require_once __DIR__ . '/../auth.php';
@@ -21,21 +22,33 @@ case 'login':
     if (strlen($phoneLast) !== 4 || !ctype_digit($phoneLast)) jsonError('전화번호 뒷자리 4자리를 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('SELECT * FROM members WHERE name = ? AND RIGHT(phone, 4) = ? AND is_active = 1 LIMIT 1');
+    $stmt = $db->prepare('
+        SELECT bm.*, c.cohort
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE bm.real_name = ? AND RIGHT(bm.phone, 4) = ? AND bm.is_active = 1
+        LIMIT 1
+    ');
     $stmt->execute([$name, $phoneLast]);
     $member = $stmt->fetch();
 
     if (!$member) jsonError('일치하는 회원 정보가 없습니다.');
 
-    $db->prepare('UPDATE members SET last_login_at = NOW() WHERE id = ?')->execute([$member['id']]);
-    loginMember($member['id'], $member['name'], $member['cohort']);
+    loginMember($member['id'], $member['real_name'], $member['cohort']);
+
+    // Get current score
+    $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
+    $scoreStmt->execute([$member['id']]);
+    $scoreRow = $scoreStmt->fetch();
+    $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
     jsonSuccess([
         'member' => [
             'member_id'   => $member['id'],
-            'member_name' => $member['name'],
+            'member_name' => $member['real_name'],
+            'nickname'    => $member['nickname'],
             'cohort'      => $member['cohort'],
-            'point'       => (int)$member['point'],
+            'score'       => $score,
         ],
     ], '로그인 성공');
     break;
@@ -43,19 +56,29 @@ case 'login':
 case 'check_session':
     $s = getMemberSession();
     if ($s) {
-        // Fetch fresh member data
         $db = getDB();
-        $stmt = $db->prepare('SELECT id, name, cohort, point FROM members WHERE id = ? AND is_active = 1');
+        $stmt = $db->prepare('
+            SELECT bm.id, bm.real_name, bm.nickname, c.cohort
+            FROM bootcamp_members bm
+            JOIN cohorts c ON bm.cohort_id = c.id
+            WHERE bm.id = ? AND bm.is_active = 1
+        ');
         $stmt->execute([$s['member_id']]);
         $member = $stmt->fetch();
         if ($member) {
+            $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
+            $scoreStmt->execute([$member['id']]);
+            $scoreRow = $scoreStmt->fetch();
+            $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
+
             jsonSuccess([
                 'logged_in' => true,
                 'member' => [
                     'member_id'   => (int)$member['id'],
-                    'member_name' => $member['name'],
+                    'member_name' => $member['real_name'],
+                    'nickname'    => $member['nickname'],
                     'cohort'      => $member['cohort'],
-                    'point'       => (int)$member['point'],
+                    'score'       => $score,
                 ],
             ]);
         }
@@ -71,9 +94,21 @@ case 'logout':
 case 'dashboard':
     $s = requireMember();
     $db = getDB();
-    $stmt = $db->prepare('SELECT id, name, cohort, point FROM members WHERE id = ?');
+    $stmt = $db->prepare('
+        SELECT bm.id, bm.real_name, bm.nickname, c.cohort
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE bm.id = ?
+    ');
     $stmt->execute([$s['member_id']]);
     $member = $stmt->fetch();
+
+    $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
+    $scoreStmt->execute([$s['member_id']]);
+    $scoreRow = $scoreStmt->fetch();
+    $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
+
+    $member['score'] = $score;
     jsonSuccess(['member' => $member]);
     break;
 

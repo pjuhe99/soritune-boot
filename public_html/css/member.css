@@ -74,10 +74,16 @@
     margin-bottom: 20px;
 }
 
-.member-name {
-    font-size: var(--lg-font-size);
+.member-nickname {
+    font-size: 28px;
     font-weight: 800;
     color: var(--color-semi-black);
+}
+
+.member-realname {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    margin-top: 4px;
 }
 
 .member-point {

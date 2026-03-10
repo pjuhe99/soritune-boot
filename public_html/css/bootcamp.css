@@ -111,6 +111,23 @@
     border-left: 4px solid var(--warning-color);
     background: rgba(229, 62, 62, 0.03);
 }
+.bc-status-card.warning-yellow {
+    border-left: 4px solid #eab308;
+    background: rgba(234, 179, 8, 0.05);
+}
+.bc-status-card.warning-red {
+    border-left: 4px solid #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+}
+.bc-status-card.warning-black {
+    border-left: 4px solid #1a1a1a;
+    background: rgba(0, 0, 0, 0.04);
+}
+.bc-status-card.warning-out {
+    border-left: 4px solid #1a1a1a;
+    background: rgba(0, 0, 0, 0.06);
+    opacity: 0.7;
+}
 .bc-status-info { flex: 1; min-width: 0; }
 .bc-status-name {
     font-weight: 700;
@@ -216,6 +233,45 @@
 }
 .bc-log-table .log-positive { color: #38a169; font-weight: 700; }
 .bc-log-table .log-negative { color: var(--warning-color); font-weight: 700; }
+
+/* ── Warning Badges ───────────────────────────────────────── */
+.badge-yellow {
+    background: #eab308; color: #fff;
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; margin-left: 4px; white-space: nowrap;
+}
+.badge-red {
+    background: #dc2626; color: #fff;
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; margin-left: 4px; white-space: nowrap;
+}
+.badge-black {
+    background: #1a1a1a; color: #fff;
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; margin-left: 4px; white-space: nowrap;
+}
+.badge-out {
+    background: #1a1a1a; color: #fff;
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; margin-left: 4px; white-space: nowrap;
+    text-decoration: line-through;
+}
+.btn-warning {
+    background: #eab308; color: #fff;
+    border: none; font-size: 11px; padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-weight: 600;
+}
+.btn-warning:hover { background: #ca8a04; }
+
+/* ── Score Classes (extended) ─────────────────────────────── */
+.score-cell.out,
+.bc-status-score.out {
+    color: #fff; background: #1a1a1a; border-radius: 4px;
+}
+.score-cell.revival-warning,
+.bc-status-score.revival-warning {
+    color: #1a1a1a; font-weight: 800;
+}
 
 /* ── Toolbar ───────────────────────────────────────────────── */
 .bc-toolbar {

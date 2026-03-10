@@ -66,6 +66,15 @@ case 'logout':
 case 'check_session':
     $s = getAdminSession();
     if ($s) {
+        // DB에서 최신 bootcamp_group_id 반영
+        $db = getDB();
+        $stmt = $db->prepare('SELECT bootcamp_group_id FROM admins WHERE id = ? AND is_active = 1');
+        $stmt->execute([$s['admin_id']]);
+        $row = $stmt->fetch();
+        if ($row) {
+            $s['bootcamp_group_id'] = $row['bootcamp_group_id'] ? (int)$row['bootcamp_group_id'] : null;
+            $_SESSION['bootcamp_group_id'] = $s['bootcamp_group_id'];
+        }
         jsonSuccess(['logged_in' => true, 'admin' => $s]);
     } else {
         jsonSuccess(['logged_in' => false]);
@@ -259,12 +268,10 @@ case 'change_cohort':
 case 'cohort_list':
     requireAdmin(['operation']);
     $db = getDB();
-    // Get distinct cohorts from admins + members + cohorts table
+    // Get distinct cohorts from admins + tasks + cohorts table
     $stmt = $db->query("
         SELECT DISTINCT cohort FROM (
             SELECT cohort FROM admins WHERE cohort IS NOT NULL
-            UNION
-            SELECT cohort FROM members
             UNION
             SELECT cohort FROM tasks
             UNION
@@ -329,13 +336,22 @@ case 'cohort_delete':
     jsonSuccess([], '기수가 삭제되었습니다.');
     break;
 
-// ── Member CRUD (operation only) ────────────────────────────
+// ── Member CRUD (operation only) — uses bootcamp_members ────
 
 case 'member_list':
     $admin = requireAdmin(['operation']);
     $cohort = getEffectiveCohort($admin);
     $db = getDB();
-    $stmt = $db->prepare('SELECT id, name, phone, cohort, point, is_active, last_login_at, created_at FROM members WHERE cohort = ? ORDER BY name');
+    $stmt = $db->prepare('
+        SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
+               bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
+               bm.member_role, bm.stage_no, bm.is_active, bm.created_at
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        WHERE c.cohort = ?
+        ORDER BY bm.real_name
+    ');
     $stmt->execute([$cohort]);
     jsonSuccess(['members' => $stmt->fetchAll()]);
     break;
@@ -344,14 +360,25 @@ case 'member_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation']);
     $input = getJsonInput();
-    $name   = trim($input['name'] ?? '');
-    $phone  = trim($input['phone'] ?? '');
-    $cohort = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
-    if (!$name || !$phone) jsonError('이름과 전화번호를 입력해주세요.');
+    $realName = trim($input['name'] ?? $input['real_name'] ?? '');
+    $nickname = trim($input['nickname'] ?? '');
+    $phone    = trim($input['phone'] ?? '');
+    $userId   = trim($input['user_id'] ?? '') ?: null;
+    $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $groupId  = !empty($input['group_id']) ? (int)$input['group_id'] : null;
+
+    if (!$realName || !$nickname) jsonError('이름과 닉네임을 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('INSERT INTO members (name, phone, cohort) VALUES (?, ?, ?)');
-    $stmt->execute([$name, $phone, $cohort]);
+    // Resolve cohort name to cohort_id
+    $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+    $stmt->execute([$cohort]);
+    $cohortRow = $stmt->fetch();
+    if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+    $cohortId = (int)$cohortRow['id'];
+
+    $stmt = $db->prepare('INSERT INTO bootcamp_members (real_name, nickname, phone, user_id, cohort_id, group_id) VALUES (?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$realName, $nickname, $phone ?: null, $userId, $cohortId, $groupId]);
     jsonSuccess(['id' => (int)$db->lastInsertId()], '회원이 추가되었습니다.');
     break;
 
@@ -362,18 +389,34 @@ case 'member_update':
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('회원 ID가 필요합니다.');
 
+    $db = getDB();
     $fields = [];
     $params = [];
-    foreach (['name', 'phone', 'cohort'] as $f) {
+    // Map 'name' input to 'real_name' column
+    if (isset($input['name'])) { $fields[] = 'real_name = ?'; $params[] = trim($input['name']); }
+    if (isset($input['real_name'])) { $fields[] = 'real_name = ?'; $params[] = trim($input['real_name']); }
+    foreach (['nickname', 'phone', 'user_id', 'member_role'] as $f) {
         if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]); }
     }
-    if (isset($input['point'])) { $fields[] = 'point = ?'; $params[] = (int)$input['point']; }
+    if (isset($input['stage_no'])) { $fields[] = 'stage_no = ?'; $params[] = (int)$input['stage_no']; }
     if (isset($input['is_active'])) { $fields[] = 'is_active = ?'; $params[] = $input['is_active'] ? 1 : 0; }
+    if (isset($input['cohort'])) {
+        // Resolve cohort name to cohort_id
+        $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+        $stmt->execute([trim($input['cohort'])]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+        $fields[] = 'cohort_id = ?';
+        $params[] = (int)$cohortRow['id'];
+    }
+    if (array_key_exists('group_id', $input)) {
+        $fields[] = 'group_id = ?';
+        $params[] = $input['group_id'] ? (int)$input['group_id'] : null;
+    }
     if (!$fields) jsonError('수정할 내용이 없습니다.');
 
     $params[] = $id;
-    $db = getDB();
-    $db->prepare('UPDATE members SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+    $db->prepare('UPDATE bootcamp_members SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
     jsonSuccess([], '회원 정보가 수정되었습니다.');
     break;
 
@@ -385,7 +428,7 @@ case 'member_delete':
     if (!$id) jsonError('회원 ID가 필요합니다.');
 
     $db = getDB();
-    $db->prepare('DELETE FROM members WHERE id = ?')->execute([$id]);
+    $db->prepare('DELETE FROM bootcamp_members WHERE id = ?')->execute([$id]);
     jsonSuccess([], '회원이 삭제되었습니다.');
     break;
 

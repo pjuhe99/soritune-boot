@@ -2,7 +2,7 @@
 /* V2: multi-role support, auto-assign tasks */
 const AdminApp = (() => {
     const ROLE_LABELS = {
-        leader: '팀장', coach: '코치', head: '총괄코치',
+        leader: '조장', coach: '코치', head: '총괄코치',
         subhead1: '부총괄1', subhead2: '부총괄2', operation: '운영팀'
     };
     const ALL_ROLES = ['leader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
@@ -258,7 +258,6 @@ const AdminApp = (() => {
         const sec = document.getElementById('sec-guide-btn');
         sec.innerHTML = `
             <button class="btn guide-btn btn-block" id="btn-guide">업무 가이드</button>
-            ${isOperation() ? '<a href="/bootcamp/" class="btn btn-block mt-sm" style="border:1px solid var(--inp-border-color);font-weight:700;text-decoration:none;color:var(--color-semi-black)">부트캠프 관리</a>' : ''}
         `;
         document.getElementById('btn-guide').onclick = showGuidePopup;
     }
@@ -320,7 +319,7 @@ const AdminApp = (() => {
             { key: 'all', label: '전체' },
             { key: 'coach', label: '코치' },
             { key: 'head', label: '총괄' },
-            { key: 'leader', label: '팀장' },
+            { key: 'leader', label: '조장' },
             { key: 'operation', label: '운영팀' },
         ];
         sec.innerHTML = `
@@ -469,17 +468,19 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>이름</th><th>전화번호</th><th>포인트</th><th>상태</th><th></th></tr></thead>
+                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>상태</th><th></th></tr></thead>
                     <tbody>
                         ${r.members.map(m => `
                             <tr>
-                                <td>${App.esc(m.name)}</td>
-                                <td>${App.esc(m.phone)}</td>
-                                <td>${m.point}</td>
+                                <td><strong>${App.esc(m.nickname)}</strong></td>
+                                <td>${App.esc(m.real_name || '')}</td>
+                                <td>${App.esc(m.user_id || '')}</td>
+                                <td>${App.esc(m.phone || '')}</td>
+                                <td>${App.esc(m.group_name || '-')}</td>
                                 <td>${m.is_active == 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge badge-danger">비활성</span>'}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editMember(${m.id}, '${App.esc(m.name)}', '${App.esc(m.phone)}', ${m.point}, ${m.is_active})">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteMember(${m.id}, '${App.esc(m.name)}')">삭제</button>
+                                    <button class="btn-icon" onclick="AdminApp._editMember(${m.id})">수정</button>
+                                    <button class="btn-icon danger" onclick="AdminApp._deleteMember(${m.id}, '${App.esc(m.nickname)}')">삭제</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -487,7 +488,7 @@ const AdminApp = (() => {
                 </table>
             </div>
         `;
-        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty-state">등록된 회원이 없습니다.</td></tr>';
+        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="7" class="empty-state">등록된 회원이 없습니다.</td></tr>';
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 
@@ -495,16 +496,20 @@ const AdminApp = (() => {
         const isEdit = !!data.id;
         const body = `
             <div class="form-group">
-                <label class="form-label">이름 *</label>
-                <input type="text" class="form-input" id="mf-name" value="${App.esc(data.name || '')}">
+                <label class="form-label">닉네임 *</label>
+                <input type="text" class="form-input" id="mf-nickname" value="${App.esc(data.nickname || '')}">
             </div>
             <div class="form-group">
-                <label class="form-label">전화번호 *</label>
+                <label class="form-label">이름</label>
+                <input type="text" class="form-input" id="mf-name" value="${App.esc(data.real_name || '')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">아이디</label>
+                <input type="text" class="form-input" id="mf-userid" value="${App.esc(data.user_id || '')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">전화번호</label>
                 <input type="tel" class="form-input" id="mf-phone" value="${App.esc(data.phone || '')}" placeholder="01012345678">
-            </div>
-            <div class="form-group">
-                <label class="form-label">포인트</label>
-                <input type="number" class="form-input" id="mf-point" value="${data.point ?? 0}">
             </div>
             ${isEdit ? `
             <div class="form-group">
@@ -522,15 +527,16 @@ const AdminApp = (() => {
         App.openModal(isEdit ? '회원 수정' : '회원 추가', body, footer);
         document.getElementById('mf-save').onclick = async () => {
             const payload = {
-                name: document.getElementById('mf-name').value.trim(),
+                nickname: document.getElementById('mf-nickname').value.trim(),
+                real_name: document.getElementById('mf-name').value.trim(),
+                user_id: document.getElementById('mf-userid').value.trim(),
                 phone: document.getElementById('mf-phone').value.trim(),
-                point: parseInt(document.getElementById('mf-point').value) || 0,
             };
             if (isEdit) {
                 payload.id = data.id;
                 payload.is_active = parseInt(document.getElementById('mf-active').value);
             }
-            if (!payload.name || !payload.phone) return Toast.warning('이름과 전화번호를 입력해주세요.');
+            if (!payload.nickname) return Toast.warning('닉네임을 입력해주세요.');
 
             App.showLoading();
             const r = await App.post(`/api/admin.php?action=${isEdit ? 'member_update' : 'member_create'}`, payload);
@@ -543,8 +549,13 @@ const AdminApp = (() => {
         };
     }
 
-    async function _editMember(id, name, phone, point, active) {
-        showMemberForm({ id, name, phone, point, is_active: active });
+    async function _editMember(id) {
+        // Fetch current member list and find the member
+        const r = await App.get('/api/admin.php?action=member_list');
+        if (!r.success) return;
+        const m = r.members.find(x => x.id == id);
+        if (!m) return Toast.error('회원을 찾을 수 없습니다.');
+        showMemberForm({ id: m.id, nickname: m.nickname, real_name: m.real_name, user_id: m.user_id, phone: m.phone, is_active: m.is_active });
     }
 
     async function _deleteMember(id, name) {
@@ -631,7 +642,7 @@ const AdminApp = (() => {
                 <input type="text" class="form-input" id="af-cohort" value="${App.esc(data.cohort || '')}" placeholder="예: 1기">
             </div>
             <div class="form-group">
-                <label class="form-label">팀 (팀장용)</label>
+                <label class="form-label">팀 (조장용)</label>
                 <input type="text" class="form-input" id="af-team" value="${App.esc(data.team || '')}">
             </div>
             <div class="form-group">

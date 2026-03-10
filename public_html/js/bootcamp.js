@@ -19,6 +19,7 @@ const BootcampApp = (() => {
     let selectedGroupId = 0;
     let selectedStageNo = 0;
     let selectedDate = App.today();
+    let checklistInitialState = {};
 
     // ── Init ──
     async function init() {
@@ -277,7 +278,9 @@ const BootcampApp = (() => {
     }
 
     function scoreClass(score) {
-        if (score <= -10) return 'danger';
+        if (score <= -25) return 'out';
+        if (score <= -15) return 'danger';
+        if (score <= -13) return 'revival-warning';
         if (score < 0) return 'negative';
         if (score > 0) return 'positive';
         return '';
@@ -321,6 +324,16 @@ const BootcampApp = (() => {
             return;
         }
 
+        // 초기 체크 상태 저장 (변경 감지용)
+        checklistInitialState = {};
+        members.forEach(m => {
+            const mc = checks[m.id] || {};
+            mt.forEach(mi => {
+                const key = `${m.id}_${mi.code}`;
+                checklistInitialState[key] = !!(mc[mi.id] && mc[mi.id].status);
+            });
+        });
+
         body.innerHTML = `
             <div style="overflow-x:auto">
                 <table class="bc-checklist-table">
@@ -359,14 +372,21 @@ const BootcampApp = (() => {
         const checkboxes = document.querySelectorAll('.bc-check');
         const items = [];
         checkboxes.forEach(cb => {
-            items.push({
-                member_id: parseInt(cb.dataset.member),
-                mission_type_code: cb.dataset.mission,
-                status: cb.checked,
-            });
+            const key = `${cb.dataset.member}_${cb.dataset.mission}`;
+            const initial = checklistInitialState[key] || false;
+            if (cb.checked !== initial) {
+                items.push({
+                    member_id: parseInt(cb.dataset.member),
+                    mission_type_code: cb.dataset.mission,
+                    status: cb.checked,
+                });
+            }
         });
 
-        if (!items.length) return;
+        if (!items.length) {
+            Toast.info('변경된 항목이 없습니다.');
+            return;
+        }
 
         App.showLoading();
         const r = await App.post(API + 'check_bulk_save', {
@@ -410,7 +430,7 @@ const BootcampApp = (() => {
         const r = await App.get(API + 'status_board', params);
         if (!r.success) return;
 
-        const { members, checks, mission_types: mt } = r;
+        const { members, checks, mission_types: mt, miss_days: missDays, warning_notes: warnNotes, thresholds } = r;
         if (!members.length) {
             body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
             return;
@@ -419,15 +439,37 @@ const BootcampApp = (() => {
         body.innerHTML = members.map(m => {
             const mc = checks[m.id] || {};
             const score = parseInt(m.current_score);
-            const isEliminated = score <= -10;
+            const missCount = missDays[m.id] || 0;
+            const hasNote = !!warnNotes[m.id];
+            const isOut = m.member_status === 'out_of_group_management';
+            const isRevivalCandidate = score <= (thresholds?.revival_candidate ?? -13);
+            const isRevivalEligible = score <= (thresholds?.revival_eligible ?? -15);
             const sc = scoreClass(score);
 
+            // 경고 레벨: black > red > yellow
+            let warningClass = '';
+            let warningBadge = '';
+            if (isOut) {
+                warningClass = 'warning-out';
+                warningBadge = '<span class="badge badge-out">OUT</span>';
+            } else if (isRevivalCandidate) {
+                warningClass = 'warning-black';
+                warningBadge = '<span class="badge badge-black">부활대상</span>';
+            }
+            if (missCount >= 5) {
+                warningClass = warningClass || 'warning-red';
+                warningBadge += `<span class="badge badge-red">${missCount}일 미수행</span>`;
+            } else if (missCount >= 3 && !hasNote) {
+                warningClass = warningClass || 'warning-yellow';
+                warningBadge += `<span class="badge badge-yellow">${missCount}일 미수행</span>`;
+            }
+
             return `
-                <div class="bc-status-card ${isEliminated ? 'eliminated' : ''}" data-member-id="${m.id}">
+                <div class="bc-status-card ${warningClass}" data-member-id="${m.id}">
                     <div class="bc-status-info">
                         <div class="bc-status-name">
                             ${App.esc(m.nickname)}
-                            ${isEliminated ? '<span class="badge badge-warning" style="font-size:10px;margin-left:4px">탈락</span>' : ''}
+                            ${warningBadge}
                         </div>
                         <div class="bc-status-meta">
                             <span>${App.esc(m.group_name || '-')}</span>
@@ -443,17 +485,55 @@ const BootcampApp = (() => {
                                 return `<span class="bc-check-dot ${cls}" title="${App.esc(mi.name)}">${label}</span>`;
                             }).join('')}
                         </div>
+                        ${(missCount >= 3 && !hasNote && (leaderMode || !leaderMode)) ? `
+                        <button class="btn btn-sm btn-warning mt-sm bc-warn-note" data-member-id="${m.id}" data-nickname="${App.esc(m.nickname)}" onclick="event.stopPropagation()">비고 입력</button>` : ''}
                     </div>
                     <div class="bc-status-score ${sc}">${score}</div>
                 </div>
             `;
         }).join('');
 
+        // 비고 입력 버튼
+        body.querySelectorAll('.bc-warn-note').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                showWarningNoteForm(parseInt(btn.dataset.memberId), btn.dataset.nickname);
+            };
+        });
+
         // 카드 클릭 시 상세(점수로그/코인로그) 모달
         body.querySelectorAll('.bc-status-card').forEach(card => {
             card.style.cursor = 'pointer';
             card.onclick = () => showMemberDetail(parseInt(card.dataset.memberId));
         });
+    }
+
+    function showWarningNoteForm(memberId, nickname) {
+        const body = `
+            <div class="form-group">
+                <label class="form-label">${App.esc(nickname)}에게 개별 카톡 후 비고를 입력하세요</label>
+                <textarea class="form-input" id="warn-note" rows="3" placeholder="카톡 내용 요약 등"></textarea>
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="warn-save">저장</button>
+        `;
+        App.openModal('비고 입력', body, footer);
+
+        document.getElementById('warn-save').onclick = async () => {
+            const note = document.getElementById('warn-note').value.trim();
+            if (!note) return Toast.warning('비고를 입력해주세요.');
+
+            App.showLoading();
+            const r = await App.post(API + 'warning_note_create', { member_id: memberId, note });
+            App.hideLoading();
+            if (r.success) {
+                App.closeModal();
+                Toast.success(r.message);
+                renderStatusBoard();
+            }
+        };
     }
 
     async function showMemberDetail(memberId) {
@@ -601,7 +681,7 @@ const BootcampApp = (() => {
         if (!checked.length) return Toast.warning('부활 대상을 선택해주세요.');
 
         const note = document.getElementById('revival-note').value.trim() || null;
-        if (!await App.confirm(`${checked.length}명을 부활 처리하시겠습니까?\n점수가 -7로 보정됩니다.`)) return;
+        if (!await App.confirm(`${checked.length}명을 부활 처리하시겠습니까?\n점수가 -10으로 보정됩니다.`)) return;
 
         App.showLoading();
         let success = 0;
@@ -1064,5 +1144,6 @@ const BootcampApp = (() => {
         _editMember, _deleteMember,
         _coinAction, _coinLogs,
         _editGroup, _deleteGroup,
+        showWarningNoteForm,
     };
 })();

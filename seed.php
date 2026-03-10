@@ -30,7 +30,7 @@ $admins = [
     ['운영팀', 'operation', $defaultPassword, 'operation', null, null, null],
     ['총괄코치', 'head1', $defaultPassword, 'head', '1기', null, null],
     ['코치A', 'coach1', $defaultPassword, 'coach', '1기', null, '월수금 10:00'],
-    ['팀장A', 'leader1', $defaultPassword, 'leader', '1기', 'A조', null],
+    ['조장A', 'leader1', $defaultPassword, 'leader', '1기', 'A조', null],
 ];
 
 $stmt = $db->prepare('INSERT IGNORE INTO admins (name, login_id, password_hash, role, cohort, team, class_time) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -56,7 +56,7 @@ echo "[OK] Tasks seeded\n";
 
 // ── Sample Guides ──
 $stmt = $db->prepare('INSERT INTO guides (title, url, role, note, cohort, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
-$stmt->execute(['팀장 업무 매뉴얼', 'https://docs.google.com/document/d/example1', 'leader', '팀장 기본 업무 프로세스', '1기', 1]);
+$stmt->execute(['조장 업무 매뉴얼', 'https://docs.google.com/document/d/example1', 'leader', '조장 기본 업무 프로세스', '1기', 1]);
 $stmt->execute(['코치 수업 가이드', 'https://docs.google.com/document/d/example2', 'coach', '수업 운영 가이드라인', '1기', 1]);
 $stmt->execute(['총괄 운영 가이드', 'https://docs.google.com/document/d/example3', 'head', '총괄 업무 매뉴얼', '1기', 1]);
 $stmt->execute(['운영팀 매뉴얼', 'https://docs.google.com/document/d/example4', 'operation', '전체 운영 매뉴얼', '1기', 1]);
