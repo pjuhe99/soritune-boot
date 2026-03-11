@@ -281,18 +281,34 @@ case 'record':
             VALUES (?, ?, ?, ?)
         ")->execute([$session['id'], $memberId, $member['group_id'], getClientIP()]);
 
-        // zoom_daily 미션 pass 처리
-        $zoomTypeId = getMissionTypeId($db, 'zoom_daily');
-        if ($zoomTypeId) {
+        // 복습클래스 연결 여부 확인
+        $studyLink = $db->prepare("SELECT id, study_date FROM study_sessions WHERE qr_session_id = ?");
+        $studyLink->execute([$session['id']]);
+        $studyRow = $studyLink->fetch();
+
+        if ($studyRow) {
+            // 복습클래스 출석 → bookclub_join 체크
+            $missionCode = 'bookclub_join';
+            $checkDate = $studyRow['study_date'];
+            $sourceRef = 'study_qr:' . $studyRow['id'];
+        } else {
+            // 일반 줌 출석 → zoom_daily 체크
+            $missionCode = 'zoom_daily';
+            $checkDate = date('Y-m-d');
+            $sourceRef = 'qr_session:' . $code;
+        }
+
+        $missionTypeId = getMissionTypeId($db, $missionCode);
+        if ($missionTypeId) {
             saveCheck(
                 $db,
                 $memberId,
-                date('Y-m-d'),
-                $zoomTypeId,
+                $checkDate,
+                $missionTypeId,
                 1,                              // status = pass
                 'manual',                       // source (QR은 manual 취급, automation보다 우선)
-                'qr_session:' . $code,          // source_ref
-                (int)$session['admin_id']       // 코치 admin_id
+                $sourceRef,
+                $session['admin_id'] ? (int)$session['admin_id'] : null
             );
         }
     }

@@ -14,6 +14,7 @@ require_once __DIR__ . '/services/score.php';
 require_once __DIR__ . '/services/revival.php';
 require_once __DIR__ . '/services/coin.php';
 require_once __DIR__ . '/services/integration.php';
+require_once __DIR__ . '/services/study.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -218,6 +219,15 @@ case 'integration_member_map': handleIntegrationMemberMap(); break;
 case 'integration_logs':       handleIntegrationLogs(); break;
 case 'integration_cafe_posts': handleIntegrationCafePosts($method); break;
 case 'cafe_posts':             handleCafePosts(); break;
+
+// ── Study (복습클래스) ──────────────────────────────────────
+
+case 'study_sessions':          handleStudySessions(); break;
+case 'study_session_detail':    handleStudySessionDetail(); break;
+case 'study_session_create':    handleStudySessionCreate($method); break;
+case 'study_session_cancel':    handleStudySessionCancel($method); break;
+case 'study_session_qr':        handleStudySessionQr($method); break;
+case 'study_session_retry_zoom': handleStudySessionRetryZoom($method); break;
 
 // ──────────────────────────────────────────────────────────────
 

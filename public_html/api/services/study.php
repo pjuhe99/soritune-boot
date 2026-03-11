@@ -1,0 +1,489 @@
+<?php
+/**
+ * Study Service
+ * 복습클래스(스터디) 생성/조회/상세/취소/QR출석
+ */
+
+/**
+ * 월별 스터디 목록 (달력용)
+ */
+function handleStudySessions() {
+    $member = requireMember();
+    $month = $_GET['month'] ?? date('Y-m');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) jsonError('month 형식: YYYY-MM');
+
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-t', strtotime($startDate));
+
+    $db = getDB();
+
+    // 회원의 cohort_id 조회
+    $cohortId = getMemberCohortId($db, $member['member_id']);
+    if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
+
+    $stmt = $db->prepare("
+        SELECT ss.id, ss.title, ss.study_date, ss.start_time, ss.end_time,
+               ss.status, ss.zoom_status, ss.host_member_id,
+               bm.nickname AS host_nickname,
+               (SELECT COUNT(*) FROM qr_attendance qa WHERE qa.qr_session_id = ss.qr_session_id) AS participant_count
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.cohort_id = ?
+          AND ss.study_date BETWEEN ? AND ?
+          AND ss.status != 'cancelled'
+        ORDER BY ss.study_date, ss.start_time
+    ");
+    $stmt->execute([$cohortId, $startDate, $endDate]);
+    $sessions = $stmt->fetchAll();
+
+    jsonSuccess([
+        'month' => $month,
+        'sessions' => $sessions,
+    ]);
+}
+
+/**
+ * 스터디 상세
+ */
+function handleStudySessionDetail() {
+    $member = requireMember();
+    $sessionId = (int)($_GET['session_id'] ?? 0);
+    if (!$sessionId) jsonError('session_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT ss.*, bm.nickname AS host_nickname
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.id = ? AND ss.status != 'cancelled'
+    ");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('스터디를 찾을 수 없습니다.', 404);
+
+    // 참여자 목록 (QR 출석 기록)
+    $participants = [];
+    if ($session['qr_session_id']) {
+        $pStmt = $db->prepare("
+            SELECT qa.member_id, qa.scanned_at, bm.nickname, bg.name AS group_name
+            FROM qr_attendance qa
+            JOIN bootcamp_members bm ON qa.member_id = bm.id
+            LEFT JOIN bootcamp_groups bg ON qa.group_id = bg.id
+            WHERE qa.qr_session_id = ?
+            ORDER BY qa.scanned_at
+        ");
+        $pStmt->execute([$session['qr_session_id']]);
+        $participants = $pStmt->fetchAll();
+    }
+
+    $isHost = ((int)$session['host_member_id'] === (int)$member['member_id']);
+
+    // zoom_start_url은 개설자에게만 노출
+    if (!$isHost) {
+        unset($session['zoom_start_url']);
+    }
+    // 비밀번호 미노출
+    unset($session['password']);
+
+    // 시간 기반 상태 계산
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    $startAt = new DateTime($session['study_date'] . ' ' . $session['start_time'], new DateTimeZone('Asia/Seoul'));
+    $endAt = new DateTime($session['study_date'] . ' ' . $session['end_time'], new DateTimeZone('Asia/Seoul'));
+
+    $canCancel = $isHost && $now < $startAt && $session['status'] === 'active';
+    $canStartQr = $isHost && $now >= $startAt && $now <= $endAt && $session['status'] === 'active';
+    $hasQrSession = !empty($session['qr_session_id']);
+
+    jsonSuccess([
+        'session' => $session,
+        'participants' => $participants,
+        'is_host' => $isHost,
+        'can_cancel' => $canCancel,
+        'can_start_qr' => $canStartQr,
+        'has_qr_session' => $hasQrSession,
+    ]);
+}
+
+/**
+ * 스터디 생성
+ */
+function handleStudySessionCreate($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $member = requireMember();
+    $input = getJsonInput();
+
+    $studyDate = $input['study_date'] ?? '';
+    $startTime = $input['start_time'] ?? '';
+    $password = $input['password'] ?? '';
+
+    // 기본 검증
+    if (!$studyDate || !$startTime || !$password) {
+        jsonError('study_date, start_time, password 필요');
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) {
+        jsonError('study_date 형식: YYYY-MM-DD');
+    }
+    if (!preg_match('/^\d{2}:(00|30)$/', $startTime)) {
+        jsonError('start_time은 00분 또는 30분 단위만 허용됩니다.');
+    }
+    if (!preg_match('/^\d{4}$/', $password)) {
+        jsonError('비밀번호는 4자리 숫자여야 합니다.');
+    }
+
+    // 과거 날짜 검증
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    $startAt = new DateTime("{$studyDate} {$startTime}", new DateTimeZone('Asia/Seoul'));
+    if ($startAt <= $now) {
+        jsonError('과거 시간에는 복습클래스를 생성할 수 없습니다.');
+    }
+
+    // end_time = start_time + 1시간
+    $endAt = clone $startAt;
+    $endAt->modify('+1 hour');
+    $endTime = $endAt->format('H:i:s');
+    $startTimeFull = $startAt->format('H:i:s');
+
+    $db = getDB();
+
+    // 회원 정보
+    $memberRow = $db->prepare("SELECT id, nickname, cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $memberRow->execute([$member['member_id']]);
+    $memberData = $memberRow->fetch();
+    if (!$memberData) jsonError('회원 정보를 찾을 수 없습니다.');
+
+    $cohortId = (int)$memberData['cohort_id'];
+    $nickname = $memberData['nickname'];
+
+    // 시간 겹침 검증
+    $overlap = checkTimeOverlap($db, $cohortId, $studyDate, $startTimeFull, $endTime);
+    if ($overlap) {
+        jsonError("해당 시간에 이미 복습클래스가 있습니다: {$overlap['title']}");
+    }
+
+    // 제목 자동 생성
+    $timeLabel = substr($startTime, 0, 5); // "HH:MM"
+    $title = "[{$timeLabel}] {$nickname}님의 복습 클래스";
+
+    // DB 저장 (status=pending, zoom_status=pending)
+    $db->prepare("
+        INSERT INTO study_sessions
+            (cohort_id, host_member_id, title, study_date, start_time, end_time, password, status, zoom_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
+    ")->execute([$cohortId, $member['member_id'], $title, $studyDate, $startTimeFull, $endTime, $password]);
+
+    $sessionId = (int)$db->lastInsertId();
+
+    // 개설자 bookclub_open 미션 체크
+    $openTypeId = getMissionTypeId($db, 'bookclub_open');
+    if ($openTypeId) {
+        saveCheck($db, $member['member_id'], $studyDate, $openTypeId, 1, 'automation', "study:{$sessionId}", null);
+    }
+
+    // n8n webhook 호출하여 Zoom 생성
+    $zoomResult = callZoomWebhook($db, $sessionId, [
+        'study_session_id' => $sessionId,
+        'title' => $title,
+        'study_date' => $studyDate,
+        'start_time' => $timeLabel,
+        'end_time' => $endAt->format('H:i'),
+        'host_nickname' => $nickname,
+        'password' => $password,
+    ]);
+
+    if ($zoomResult['success']) {
+        jsonSuccess([
+            'session_id' => $sessionId,
+            'title' => $title,
+            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+        ], '복습클래스가 생성되었습니다.');
+    } else {
+        // Zoom 실패해도 세션은 pending으로 유지
+        jsonSuccess([
+            'session_id' => $sessionId,
+            'title' => $title,
+            'zoom_status' => 'failed',
+            'zoom_error' => $zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다.',
+        ], '복습클래스가 생성되었지만 Zoom 회의실 생성에 실패했습니다. 상세에서 다시 시도할 수 있습니다.');
+    }
+}
+
+/**
+ * Zoom 재시도
+ */
+function handleStudySessionRetryZoom($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $member = requireMember();
+    $input = getJsonInput();
+    $sessionId = (int)($input['session_id'] ?? 0);
+    if (!$sessionId) jsonError('session_id 필요');
+
+    $db = getDB();
+    $session = $db->prepare("
+        SELECT ss.*, bm.nickname AS host_nickname
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.id = ? AND ss.host_member_id = ?
+    ");
+    $session->execute([$sessionId, $member['member_id']]);
+    $row = $session->fetch();
+    if (!$row) jsonError('본인이 개설한 스터디만 재시도할 수 있습니다.', 403);
+    if ($row['zoom_status'] === 'ready') jsonError('이미 Zoom이 생성되어 있습니다.');
+    if ($row['status'] === 'cancelled') jsonError('취소된 스터디입니다.');
+
+    $startAt = new DateTime("{$row['study_date']} {$row['start_time']}", new DateTimeZone('Asia/Seoul'));
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    if ($now > $startAt) jsonError('시작 시각이 지난 스터디는 재시도할 수 없습니다.');
+
+    $timeLabel = substr($row['start_time'], 0, 5);
+    $endLabel = substr($row['end_time'], 0, 5);
+
+    $zoomResult = callZoomWebhook($db, $sessionId, [
+        'study_session_id' => $sessionId,
+        'title' => $row['title'],
+        'study_date' => $row['study_date'],
+        'start_time' => $timeLabel,
+        'end_time' => $endLabel,
+        'host_nickname' => $row['host_nickname'],
+        'password' => $row['password'],
+    ]);
+
+    if ($zoomResult['success']) {
+        jsonSuccess([
+            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+        ], 'Zoom 회의실이 생성되었습니다.');
+    } else {
+        jsonError($zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
+}
+
+/**
+ * 스터디 취소
+ */
+function handleStudySessionCancel($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $member = requireMember();
+    $input = getJsonInput();
+
+    $sessionId = (int)($input['session_id'] ?? 0);
+    $password = $input['password'] ?? '';
+    if (!$sessionId || !$password) jsonError('session_id, password 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM study_sessions WHERE id = ? AND status IN ('pending','active')");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('스터디를 찾을 수 없습니다.', 404);
+
+    // 개설자 확인
+    if ((int)$session['host_member_id'] !== (int)$member['member_id']) {
+        jsonError('본인이 개설한 복습클래스만 취소할 수 있습니다.', 403);
+    }
+
+    // 비밀번호 확인
+    if ($session['password'] !== $password) {
+        jsonError('비밀번호가 일치하지 않습니다.');
+    }
+
+    // 시작 시각 이후 취소 불가
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    $startAt = new DateTime($session['study_date'] . ' ' . $session['start_time'], new DateTimeZone('Asia/Seoul'));
+    if ($now >= $startAt) {
+        jsonError('시작 시각 이후에는 취소할 수 없습니다.');
+    }
+
+    // cancelled 처리 (hard delete 아님)
+    $db->prepare("UPDATE study_sessions SET status = 'cancelled' WHERE id = ?")->execute([$sessionId]);
+
+    // QR 세션도 종료
+    if ($session['qr_session_id']) {
+        $db->prepare("UPDATE qr_sessions SET status = 'closed', closed_at = NOW() WHERE id = ? AND status = 'active'")
+           ->execute([$session['qr_session_id']]);
+    }
+
+    // bookclub_open 미션 체크 해제
+    $openTypeId = getMissionTypeId($db, 'bookclub_open');
+    if ($openTypeId) {
+        saveCheck($db, $member['member_id'], $session['study_date'], $openTypeId, 0, 'automation', "study_cancel:{$sessionId}", null);
+    }
+
+    jsonSuccess([], '복습클래스가 취소되었습니다.');
+}
+
+/**
+ * 출석용 QR 세션 생성 (개설자 전용)
+ */
+function handleStudySessionQr($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $member = requireMember();
+    $input = getJsonInput();
+
+    $sessionId = (int)($input['session_id'] ?? 0);
+    if (!$sessionId) jsonError('session_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM study_sessions WHERE id = ? AND status = 'active'");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('활성 상태의 스터디를 찾을 수 없습니다.', 404);
+
+    // 개설자 확인
+    if ((int)$session['host_member_id'] !== (int)$member['member_id']) {
+        jsonError('본인이 개설한 복습클래스만 출석체크를 시작할 수 있습니다.', 403);
+    }
+
+    // 시작시각~+1시간 확인
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    $startAt = new DateTime($session['study_date'] . ' ' . $session['start_time'], new DateTimeZone('Asia/Seoul'));
+    $endAt = new DateTime($session['study_date'] . ' ' . $session['end_time'], new DateTimeZone('Asia/Seoul'));
+    if ($now < $startAt || $now > $endAt) {
+        jsonError('출석체크는 시작 시각부터 1시간 동안만 가능합니다.');
+    }
+
+    // 이미 QR 세션이 있으면 재사용
+    if ($session['qr_session_id']) {
+        $existingQr = $db->prepare("SELECT session_code, status, expires_at FROM qr_sessions WHERE id = ?");
+        $existingQr->execute([$session['qr_session_id']]);
+        $qr = $existingQr->fetch();
+        if ($qr && $qr['status'] === 'active' && $qr['expires_at'] > $now->format('Y-m-d H:i:s')) {
+            $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $qr['session_code'];
+            jsonSuccess([
+                'session_code' => $qr['session_code'],
+                'scan_url' => $scanUrl,
+                'expires_at' => $qr['expires_at'],
+            ], '기존 QR 세션이 활성 상태입니다.');
+        }
+    }
+
+    // 새 QR 세션 생성 (study용)
+    $sessionCode = bin2hex(random_bytes(6));
+    $expiresAt = $endAt->format('Y-m-d H:i:s');
+
+    // admin_id는 NULL (회원이 생성), cohort_id는 study_session의 것
+    $db->prepare("
+        INSERT INTO qr_sessions (session_code, admin_id, cohort_id, expires_at, status)
+        VALUES (?, NULL, ?, ?, 'active')
+    ")->execute([$sessionCode, $session['cohort_id'], $expiresAt]);
+
+    $qrSessionId = (int)$db->lastInsertId();
+
+    // study_sessions에 qr_session_id 연결
+    $db->prepare("UPDATE study_sessions SET qr_session_id = ? WHERE id = ?")->execute([$qrSessionId, $sessionId]);
+
+    $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $sessionCode;
+
+    jsonSuccess([
+        'session_code' => $sessionCode,
+        'scan_url' => $scanUrl,
+        'expires_at' => $expiresAt,
+    ], 'QR 출석체크가 시작되었습니다.');
+}
+
+// ══════════════════════════════════════════════════════════════
+// Internal Helpers
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 시간 겹침 검증
+ * existing.start_time < new_end_time AND existing.end_time > new_start_time
+ */
+function checkTimeOverlap($db, $cohortId, $studyDate, $startTime, $endTime, $excludeId = null) {
+    $sql = "
+        SELECT id, title, start_time, end_time
+        FROM study_sessions
+        WHERE cohort_id = ?
+          AND study_date = ?
+          AND start_time < ?
+          AND end_time > ?
+          AND status IN ('pending', 'active')
+    ";
+    $params = [$cohortId, $studyDate, $endTime, $startTime];
+
+    if ($excludeId) {
+        $sql .= " AND id != ?";
+        $params[] = $excludeId;
+    }
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch(); // false if no overlap
+}
+
+/**
+ * 회원의 cohort_id 조회
+ */
+function getMemberCohortId($db, $memberId) {
+    $stmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $stmt->execute([$memberId]);
+    $row = $stmt->fetch();
+    return $row ? (int)$row['cohort_id'] : null;
+}
+
+/**
+ * n8n webhook 호출하여 Zoom meeting 생성
+ */
+function callZoomWebhook($db, $sessionId, $payload) {
+    $webhookUrl = getSetting('study_zoom_webhook_url');
+    if (!$webhookUrl) {
+        // webhook URL 미설정 시 pending 유지
+        $db->prepare("
+            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = 'webhook URL 미설정'
+            WHERE id = ?
+        ")->execute([$sessionId]);
+        return ['success' => false, 'error' => 'Zoom webhook URL이 설정되지 않았습니다.'];
+    }
+
+    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init($webhookUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $jsonPayload,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
+        $errorMsg = $curlError ?: "HTTP {$httpCode}";
+        $db->prepare("
+            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = ?
+            WHERE id = ?
+        ")->execute([mb_substr($errorMsg, 0, 500), $sessionId]);
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    $data = json_decode($response, true);
+    if (!$data || empty($data['success'])) {
+        $errorMsg = $data['error'] ?? $data['message'] ?? 'n8n 응답 파싱 실패';
+        $db->prepare("
+            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = ?
+            WHERE id = ?
+        ")->execute([mb_substr($errorMsg, 0, 500), $sessionId]);
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    // Zoom 정보 저장 + status를 active로 전환
+    $db->prepare("
+        UPDATE study_sessions
+        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
+            zoom_status = 'ready', zoom_error_message = NULL, status = 'active'
+        WHERE id = ?
+    ")->execute([
+        $data['zoom_meeting_id'] ?? null,
+        $data['zoom_join_url'] ?? null,
+        $data['zoom_start_url'] ?? null,
+        $data['zoom_password'] ?? null,
+        $sessionId,
+    ]);
+
+    return [
+        'success' => true,
+        'zoom_join_url' => $data['zoom_join_url'] ?? null,
+    ];
+}
