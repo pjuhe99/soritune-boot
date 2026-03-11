@@ -440,10 +440,10 @@ function handleStudySessionQr($method) {
     $sessionCode = bin2hex(random_bytes(6));
     $expiresAt = $endAt->format('Y-m-d H:i:s');
 
-    // admin_id는 NULL (회원이 생성), cohort_id는 study_session의 것
+    // admin_id=0 (회원이 생성, NOT NULL 제약), cohort_id는 study_session의 것
     $db->prepare("
         INSERT INTO qr_sessions (session_code, admin_id, cohort_id, expires_at, status)
-        VALUES (?, NULL, ?, ?, 'active')
+        VALUES (?, 0, ?, ?, 'active')
     ")->execute([$sessionCode, $session['cohort_id'], $expiresAt]);
 
     $qrSessionId = (int)$db->lastInsertId();
