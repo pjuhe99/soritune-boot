@@ -419,8 +419,20 @@
 .btn-icon:hover { background: var(--bg-tint); color: var(--color-semi-black); }
 .btn-icon.danger:hover { color: var(--warning-color); border-color: var(--warning-color); background: rgba(229,62,62,0.05); }
 
+/* ── Coin Cycle Tab ─────────────────────────────────────────── */
+.coin-cycles-container .data-table .actions {
+    justify-content: flex-end;
+}
+
+.badge-secondary {
+    background: var(--color-gray);
+    color: #fff;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .admin-content { padding: 14px; }
     .admin-header { padding: 8px 14px; padding-top: calc(var(--safe-top) + 8px); }
+    .member-stats { gap: 20px; }
+    .member-point, .member-coin { font-size: 28px; }
 }

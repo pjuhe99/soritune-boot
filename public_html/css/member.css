@@ -86,14 +86,36 @@
     margin-top: 4px;
 }
 
+.member-stats {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 20px;
+}
+
+.member-stat {
+    text-align: center;
+}
+
 .member-point {
-    margin-top: 16px;
     font-size: 36px;
     font-weight: 800;
     color: var(--main-color);
 }
 
 .member-point-label {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    margin-top: 4px;
+}
+
+.member-coin {
+    font-size: 36px;
+    font-weight: 800;
+    color: #eab308;
+}
+
+.member-coin-label {
     font-size: var(--sm-font-size);
     color: var(--color-777);
     margin-top: 4px;
