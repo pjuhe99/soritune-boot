@@ -1,0 +1,554 @@
+/* ══════════════════════════════════════════════════════════════
+   StudyApp — 복습클래스 달력 & 예약
+   ══════════════════════════════════════════════════════════════ */
+const StudyApp = (() => {
+    const API = '/api/bootcamp.php?action=';
+    const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+    let root = null;
+    let member = null;
+    let currentYear = 0;
+    let currentMonth = 0; // 0-indexed
+    let sessions = [];
+
+    // ── Init ──
+    async function init() {
+        root = document.getElementById('study-root');
+
+        App.showLoading();
+        const r = await App.get('/api/member.php?action=check_session');
+        App.hideLoading();
+
+        if (r.logged_in) {
+            member = r.member;
+            const now = new Date();
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth();
+            showMain();
+            loadSessions();
+        } else {
+            showLogin();
+        }
+    }
+
+    // ── Login ──
+    function showLogin() {
+        root.innerHTML = `
+            <div class="study-login">
+                <div class="login-box">
+                    <div class="login-title">소리튠 부트캠프</div>
+                    <p class="login-subtitle">복습클래스</p>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label class="form-label">이름</label>
+                            <input type="text" class="form-input" id="login-name" placeholder="홍길동" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">전화번호 뒤 4자리</label>
+                            <input type="tel" class="form-input" id="login-phone" placeholder="5678" maxlength="4" pattern="[0-9]{4}" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.getElementById('login-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('login-name').value.trim();
+            const phoneLast4 = document.getElementById('login-phone').value.trim();
+            if (!name || !phoneLast4) return;
+
+            App.showLoading();
+            const r = await App.post('/api/member.php?action=login', { name, phone_last4: phoneLast4 });
+            App.hideLoading();
+
+            if (r.success) {
+                member = r.member;
+                Toast.success(r.message);
+                const now = new Date();
+                currentYear = now.getFullYear();
+                currentMonth = now.getMonth();
+                showMain();
+                loadSessions();
+            }
+        };
+    }
+
+    // ── Main Layout ──
+    function showMain() {
+        root.innerHTML = `
+            <div class="study-app">
+                <div class="study-header">
+                    <div class="study-header-left">
+                        <div class="study-header-title">복습클래스</div>
+                        <span class="study-header-user">${App.esc(member.nickname)}</span>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="btn-create-study">복습클래스 예약</button>
+                </div>
+                <div class="study-calendar">
+                    <div class="study-cal-nav">
+                        <button class="page-btn" id="cal-prev">&lt;</button>
+                        <span class="cal-month-label" id="cal-month-label"></span>
+                        <button class="page-btn" id="cal-next">&gt;</button>
+                        <button class="page-today" id="cal-today">오늘</button>
+                    </div>
+                    <div class="study-cal-grid" id="cal-grid"></div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('cal-prev').onclick = () => changeMonth(-1);
+        document.getElementById('cal-next').onclick = () => changeMonth(1);
+        document.getElementById('cal-today').onclick = goToday;
+        document.getElementById('btn-create-study').onclick = openCreateModal;
+    }
+
+    // ── Data Loading ──
+    async function loadSessions() {
+        const monthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+        const r = await App.get(API + 'study_sessions', { month: monthStr });
+        if (r.success) {
+            sessions = r.sessions || [];
+        } else {
+            sessions = [];
+        }
+        renderCalendar();
+    }
+
+    // ── Calendar Navigation ──
+    function changeMonth(delta) {
+        currentMonth += delta;
+        if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+        if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+        updateMonthLabel();
+        loadSessions();
+    }
+
+    function goToday() {
+        const now = new Date();
+        currentYear = now.getFullYear();
+        currentMonth = now.getMonth();
+        updateMonthLabel();
+        loadSessions();
+    }
+
+    function updateMonthLabel() {
+        const label = document.getElementById('cal-month-label');
+        if (label) label.textContent = `${currentYear}년 ${currentMonth + 1}월`;
+    }
+
+    // ── Calendar Rendering ──
+    function renderCalendar() {
+        updateMonthLabel();
+
+        const grid = document.getElementById('cal-grid');
+        if (!grid) return;
+
+        // Build session lookup by date
+        const byDate = {};
+        sessions.forEach(s => {
+            if (!byDate[s.study_date]) byDate[s.study_date] = [];
+            byDate[s.study_date].push(s);
+        });
+
+        const todayStr = App.today();
+        const firstDay = new Date(currentYear, currentMonth, 1);
+        const lastDay = new Date(currentYear, currentMonth + 1, 0);
+        const startDow = firstDay.getDay(); // 0=Sun
+
+        // Previous month fill
+        const prevMonthLast = new Date(currentYear, currentMonth, 0);
+        const cells = [];
+
+        // Header
+        WEEKDAYS.forEach(w => {
+            cells.push(`<div class="study-cal-head">${w}</div>`);
+        });
+
+        // Previous month days
+        for (let i = startDow - 1; i >= 0; i--) {
+            const d = prevMonthLast.getDate() - i;
+            const dateStr = App.formatDate(new Date(currentYear, currentMonth - 1, d));
+            cells.push(buildCell(d, dateStr, true, todayStr, byDate));
+        }
+
+        // Current month days
+        for (let d = 1; d <= lastDay.getDate(); d++) {
+            const dateStr = App.formatDate(new Date(currentYear, currentMonth, d));
+            cells.push(buildCell(d, dateStr, false, todayStr, byDate));
+        }
+
+        // Next month fill
+        const remaining = 7 - (cells.length - 7) % 7;
+        if (remaining < 7) {
+            for (let d = 1; d <= remaining; d++) {
+                const dateStr = App.formatDate(new Date(currentYear, currentMonth + 1, d));
+                cells.push(buildCell(d, dateStr, true, todayStr, byDate));
+            }
+        }
+
+        grid.innerHTML = cells.join('');
+
+        // Bind click events for chips
+        grid.querySelectorAll('.study-chip').forEach(chip => {
+            chip.onclick = () => openDetail(parseInt(chip.dataset.id));
+        });
+    }
+
+    function buildCell(day, dateStr, isOther, todayStr, byDate) {
+        const isToday = dateStr === todayStr;
+        const classes = ['study-cal-cell'];
+        if (isOther) classes.push('other-month');
+        if (isToday) classes.push('today');
+
+        const daySessions = byDate[dateStr] || [];
+        let chipsHtml = '';
+        daySessions.forEach(s => {
+            const statusClass = `status-${s.status}`;
+            const timeLabel = (s.start_time || '').substring(0, 5);
+            const chipLabel = timeLabel + ' ' + hostName(s.title);
+            chipsHtml += `<div class="study-chip ${statusClass}" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(chipLabel)}</div>`;
+        });
+
+        return `<div class="${classes.join(' ')}">
+            <span class="cal-day">${day}</span>
+            ${chipsHtml}
+        </div>`;
+    }
+
+    function hostName(title) {
+        // "[HH:MM] 닉네임님의 복습 클래스" → "닉네임"
+        const m = title.match(/\]\s*(.+?)님의/);
+        return m ? m[1] : '';
+    }
+
+    // ── Detail Modal ──
+    async function openDetail(sessionId) {
+        App.showLoading();
+        const r = await App.get(API + 'study_session_detail', { session_id: sessionId });
+        App.hideLoading();
+        if (!r.success) return;
+
+        const s = r.session;
+        const isHost = r.is_host;
+        const participants = r.participants || [];
+
+        const startTime = (s.start_time || '').substring(0, 5);
+        const endTime = (s.end_time || '').substring(0, 5);
+        const dateKo = App.formatDateKo(s.study_date);
+
+        // Zoom status
+        let zoomHtml = '';
+        if (s.zoom_status === 'ready' && s.zoom_join_url) {
+            zoomHtml = `<a href="${App.esc(s.zoom_join_url)}" target="_blank" class="study-zoom-link">Zoom 입장하기</a>`;
+            if (isHost && s.zoom_start_url) {
+                zoomHtml += `<br><a href="${App.esc(s.zoom_start_url)}" target="_blank" class="study-zoom-link" style="background:var(--main-color);margin-top:4px;">호스트로 시작하기</a>`;
+            }
+        } else if (s.zoom_status === 'pending') {
+            zoomHtml = `<span class="study-zoom-status pending">Zoom 생성 중</span>`;
+        } else if (s.zoom_status === 'failed') {
+            zoomHtml = `<span class="study-zoom-status failed">Zoom 생성 실패</span>`;
+            if (isHost) {
+                zoomHtml += `<button class="btn btn-sm btn-secondary mt-sm" id="btn-retry-zoom" style="margin-left:8px">다시 시도</button>`;
+            }
+        }
+
+        // Participants
+        let partHtml = '';
+        if (participants.length) {
+            partHtml = `<div class="study-participants">
+                <div class="study-detail-label mb-sm">참여자 (${participants.length}명)</div>
+                ${participants.map(p => `
+                    <div class="study-participant-item">
+                        <span>${App.esc(p.nickname)} <span class="text-muted">${App.esc(p.group_name || '')}</span></span>
+                        <span class="text-sub">${formatTime(p.scanned_at)}</span>
+                    </div>
+                `).join('')}
+            </div>`;
+        }
+
+        const body = `
+            <div class="study-detail-row">
+                <span class="study-detail-label">날짜</span>
+                <span class="study-detail-value">${dateKo}</span>
+            </div>
+            <div class="study-detail-row">
+                <span class="study-detail-label">시간</span>
+                <span class="study-detail-value">${startTime} ~ ${endTime}</span>
+            </div>
+            <div class="study-detail-row">
+                <span class="study-detail-label">개설자</span>
+                <span class="study-detail-value">${App.esc(s.host_nickname)}</span>
+            </div>
+            <div class="study-detail-row">
+                <span class="study-detail-label">상태</span>
+                <span class="study-detail-value"><span class="badge badge-${statusBadge(s.status)}">${statusLabel(s.status)}</span></span>
+            </div>
+            <div class="study-detail-row">
+                <span class="study-detail-label">Zoom</span>
+                <span class="study-detail-value">${zoomHtml}</span>
+            </div>
+            ${partHtml}
+        `;
+
+        // Footer buttons
+        let footerHtml = '';
+        if (r.can_start_qr) {
+            footerHtml += `<button class="btn btn-primary btn-sm" id="btn-start-qr">출석체크 시작</button>`;
+        }
+        if (r.can_cancel) {
+            footerHtml += `<button class="btn btn-danger btn-sm" id="btn-cancel-study">취소</button>`;
+        }
+
+        App.openModal(s.title, body, footerHtml);
+
+        // Bind detail actions
+        const retryBtn = document.getElementById('btn-retry-zoom');
+        if (retryBtn) {
+            retryBtn.onclick = () => retryZoom(s.id);
+        }
+
+        const qrBtn = document.getElementById('btn-start-qr');
+        if (qrBtn) {
+            qrBtn.onclick = () => startQr(s.id);
+        }
+
+        const cancelBtn = document.getElementById('btn-cancel-study');
+        if (cancelBtn) {
+            cancelBtn.onclick = () => openCancelFlow(s.id);
+        }
+    }
+
+    function statusLabel(status) {
+        const map = { pending: '생성 중', active: '예약됨', closed: '종료', cancelled: '취소됨' };
+        return map[status] || status;
+    }
+
+    function statusBadge(status) {
+        const map = { pending: 'info', active: 'success', closed: 'chapter', cancelled: 'warning' };
+        return map[status] || 'light';
+    }
+
+    function formatTime(datetimeStr) {
+        if (!datetimeStr) return '';
+        const d = new Date(datetimeStr);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    // ── Retry Zoom ──
+    async function retryZoom(sessionId) {
+        App.showLoading();
+        const r = await App.post(API + 'study_session_retry_zoom', { session_id: sessionId });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message || 'Zoom이 생성되었습니다.');
+            App.closeModal();
+            loadSessions();
+        }
+    }
+
+    // ── Start QR ──
+    async function startQr(sessionId) {
+        App.showLoading();
+        const r = await App.post(API + 'study_session_qr', { session_id: sessionId });
+        App.hideLoading();
+        if (!r.success) return;
+
+        Toast.success(r.message || 'QR 출석체크가 시작되었습니다.');
+        App.closeModal();
+
+        // Show QR code modal
+        const qrBody = `
+            <div class="text-center">
+                <p class="mb-sm" style="font-size:var(--sm-font-size);color:var(--color-777)">참여자에게 아래 QR을 보여주세요</p>
+                <div id="qr-code-area" style="display:inline-block;margin:16px 0;"></div>
+                <p class="mt-sm" style="font-size:var(--sm-font-size);word-break:break-all;color:var(--color-777)">${App.esc(r.scan_url)}</p>
+            </div>
+        `;
+        App.openModal('출석체크 QR', qrBody,
+            `<button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>`
+        );
+
+        // Load QR code library dynamically
+        if (typeof QRCode === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+            script.onload = () => generateQR(r.scan_url);
+            document.head.appendChild(script);
+        } else {
+            generateQR(r.scan_url);
+        }
+    }
+
+    function generateQR(url) {
+        const el = document.getElementById('qr-code-area');
+        if (!el) return;
+        new QRCode(el, {
+            text: url,
+            width: 200,
+            height: 200,
+        });
+    }
+
+    // ── Cancel Flow ──
+    async function openCancelFlow(sessionId) {
+        App.closeModal();
+        const body = `
+            <div class="form-group">
+                <label class="form-label">비밀번호 4자리를 입력하세요</label>
+                <input type="tel" class="form-input" id="cancel-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:24px;letter-spacing:8px;">
+            </div>
+            <p class="text-sub" style="font-size:var(--sm-font-size);margin-top:4px;">복습클래스 생성 시 설정한 비밀번호를 입력해주세요.</p>
+        `;
+        const footer = `
+            <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>
+            <button class="btn btn-danger btn-sm" id="btn-confirm-cancel">취소하기</button>
+        `;
+        App.openModal('복습클래스 취소', body, footer);
+
+        document.getElementById('cancel-pw').focus();
+        document.getElementById('btn-confirm-cancel').onclick = async () => {
+            const pw = document.getElementById('cancel-pw').value.trim();
+            if (pw.length !== 4) {
+                Toast.warning('4자리 비밀번호를 입력해주세요.');
+                return;
+            }
+
+            App.showLoading();
+            const r = await App.post(API + 'study_session_cancel', { session_id: sessionId, password: pw });
+            App.hideLoading();
+            if (r.success) {
+                Toast.success(r.message || '복습클래스가 취소되었습니다.');
+                App.closeModal();
+                loadSessions();
+            }
+        };
+    }
+
+    // ── Create Modal ──
+    function openCreateModal() {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const defaultDate = App.formatDate(tomorrow);
+
+        const hours = [];
+        for (let h = 6; h <= 23; h++) {
+            hours.push(`${String(h).padStart(2, '0')}:00`);
+            hours.push(`${String(h).padStart(2, '0')}:30`);
+        }
+
+        const timeButtons = hours.map(t =>
+            `<button class="study-time-btn" data-time="${t}">${t}</button>`
+        ).join('');
+
+        const body = `
+            <div class="form-group">
+                <label class="form-label">날짜</label>
+                <input type="date" class="form-input" id="create-date" value="${defaultDate}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">시작 시간</label>
+                <div class="study-time-grid" id="time-grid">
+                    ${timeButtons}
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">취소용 비밀번호 (4자리 숫자)</label>
+                <input type="tel" class="form-input" id="create-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:20px;letter-spacing:6px;">
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">닫기</button>
+            <button class="btn btn-primary" id="btn-submit-create">예약하기</button>
+        `;
+        App.openModal('복습클래스 예약', body, footer);
+
+        // Time button selection
+        const state = { selectedTime: null };
+        const grid = document.getElementById('time-grid');
+        bindTimeButtons(grid, state);
+
+        // Date change → check existing sessions and disable occupied times
+        const dateInput = document.getElementById('create-date');
+        dateInput.onchange = () => { state.selectedTime = null; updateTimeSlots(dateInput.value, grid, state); };
+        updateTimeSlots(dateInput.value, grid, state);
+
+        // Submit
+        document.getElementById('btn-submit-create').onclick = async () => {
+            const studyDate = dateInput.value;
+            const password = document.getElementById('create-pw').value.trim();
+
+            if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
+            if (!state.selectedTime) return Toast.warning('시간을 선택해주세요.');
+            if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
+
+            App.showLoading();
+            const r = await App.post(API + 'study_session_create', {
+                study_date: studyDate,
+                start_time: state.selectedTime,
+                password: password,
+            });
+            App.hideLoading();
+
+            if (r.success) {
+                Toast.success(r.message || '복습클래스가 생성되었습니다.');
+                App.closeModal();
+
+                // Navigate to the created session's month
+                const [y, m] = studyDate.split('-');
+                currentYear = parseInt(y);
+                currentMonth = parseInt(m) - 1;
+                loadSessions();
+            }
+        };
+    }
+
+    function bindTimeButtons(grid, state) {
+        grid.querySelectorAll('.study-time-btn:not(.disabled)').forEach(btn => {
+            btn.onclick = () => {
+                grid.querySelectorAll('.study-time-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                state.selectedTime = btn.dataset.time;
+            };
+        });
+    }
+
+    async function updateTimeSlots(dateStr, grid, state) {
+        if (!dateStr || !grid) return;
+        const [y, m] = dateStr.split('-');
+        const monthStr = `${y}-${m}`;
+
+        // Fetch sessions for that month
+        const r = await App.get(API + 'study_sessions', { month: monthStr });
+        const daySessions = (r.sessions || []).filter(s => s.study_date === dateStr);
+
+        grid.querySelectorAll('.study-time-btn').forEach(btn => {
+            btn.classList.remove('disabled', 'selected');
+            const time = btn.dataset.time;
+            // Check overlap: this slot is [time, time+1h)
+            const slotStart = timeToMinutes(time);
+            const slotEnd = slotStart + 60;
+
+            const overlaps = daySessions.some(s => {
+                const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
+                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
+                return exStart < slotEnd && exEnd > slotStart;
+            });
+
+            if (overlaps) {
+                btn.classList.add('disabled');
+                btn.onclick = (e) => { e.stopPropagation(); Toast.warning('해당 시간에 이미 복습클래스가 있습니다.'); };
+            }
+        });
+
+        // Rebind non-disabled buttons
+        bindTimeButtons(grid, state);
+    }
+
+    function timeToMinutes(timeStr) {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    return { init };
+})();

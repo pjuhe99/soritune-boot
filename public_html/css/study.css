@@ -1,0 +1,329 @@
+/* ══════════════════════════════════════════════════════════════
+   Study (복습클래스) Styles
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Layout ────────────────────────────────────────────────── */
+.study-app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 16px 40px;
+    min-height: 100vh;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.study-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--bg-tint);
+}
+
+.study-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.study-header-title {
+    font-size: var(--lg-font-size);
+    font-weight: 800;
+    color: var(--color-semi-black);
+}
+
+.study-header-user {
+    font-size: var(--sm-font-size);
+    color: var(--color-777);
+    font-weight: 600;
+}
+
+/* ── Calendar ──────────────────────────────────────────────── */
+.study-calendar {
+    margin-top: 16px;
+}
+
+.study-cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.study-cal-nav .page-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--inp-border-color);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    cursor: pointer;
+    font-size: var(--md-font-size);
+    color: var(--color-777);
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.study-cal-nav .page-btn:hover {
+    background: var(--bg-tint);
+}
+
+.study-cal-nav .cal-month-label {
+    font-size: var(--lg-font-size);
+    font-weight: 800;
+    min-width: 120px;
+    text-align: center;
+}
+
+.study-cal-nav .page-today {
+    font-size: var(--sm-font-size);
+    color: var(--main-color);
+    font-weight: 700;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+}
+.study-cal-nav .page-today:hover { text-decoration: underline; }
+
+/* ── Calendar Grid ─────────────────────────────────────────── */
+.study-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 2px solid var(--color-semi-black);
+}
+
+.study-cal-head {
+    padding: 8px 4px;
+    text-align: center;
+    font-size: var(--sm-font-size);
+    font-weight: 700;
+    color: var(--color-777);
+    border-bottom: 1px solid var(--inp-border-color);
+}
+
+.study-cal-head:first-child { color: var(--warning-color); }
+.study-cal-head:last-child { color: #3182ce; }
+
+.study-cal-cell {
+    min-height: 80px;
+    border-bottom: 1px solid var(--inp-border-color);
+    border-right: 1px solid var(--inp-border-color);
+    padding: 4px;
+    position: relative;
+}
+
+.study-cal-cell:nth-child(7n) {
+    border-right: none;
+}
+
+.study-cal-cell.other-month {
+    background: var(--bg-tint);
+}
+
+.study-cal-cell.other-month .cal-day {
+    color: var(--color-gray);
+}
+
+.study-cal-cell.today .cal-day {
+    background: var(--main-color);
+    color: #fff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cal-day {
+    font-size: var(--sm-font-size);
+    font-weight: 700;
+    margin-bottom: 2px;
+    display: inline-block;
+}
+
+.study-cal-cell:nth-child(7n+1) .cal-day { color: var(--warning-color); }
+.study-cal-cell:nth-child(7n) .cal-day { color: #3182ce; }
+.study-cal-cell.today .cal-day { color: #fff !important; }
+.study-cal-cell.other-month .cal-day { color: var(--color-gray) !important; }
+
+/* ── Session Chip (달력 내 항목) ────────────────────────────── */
+.study-chip {
+    display: block;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.study-chip:hover {
+    opacity: 0.75;
+}
+
+.study-chip.status-active {
+    background: var(--main-color-rgba15);
+    color: var(--main-color);
+}
+
+.study-chip.status-pending {
+    background: rgba(49,130,206,0.12);
+    color: #3182ce;
+}
+
+.study-chip.status-closed {
+    background: var(--bg-tint);
+    color: var(--color-gray);
+}
+
+/* ── Detail Modal ──────────────────────────────────────────── */
+.study-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--bg-tint);
+    font-size: var(--md-font-size);
+}
+
+.study-detail-row:last-child { border-bottom: none; }
+
+.study-detail-label {
+    font-weight: 700;
+    color: var(--color-777);
+    font-size: var(--sm-font-size);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.study-detail-value {
+    text-align: right;
+    word-break: break-all;
+}
+
+.study-zoom-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    background: #3182ce;
+    color: #fff;
+    border-radius: var(--radius-sm);
+    font-size: var(--sm-font-size);
+    font-weight: 700;
+    text-decoration: none;
+    margin-top: 8px;
+}
+.study-zoom-link:hover { opacity: 0.85; text-decoration: none; }
+
+.study-zoom-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-badge);
+    font-size: var(--sm-font-size);
+    font-weight: 700;
+}
+
+.study-zoom-status.ready { background: #c6f6d5; color: #276749; }
+.study-zoom-status.pending { background: #bee3f8; color: #2a4365; }
+.study-zoom-status.failed { background: #fed7d7; color: #9b2c2c; }
+
+.study-participants {
+    margin-top: 12px;
+}
+
+.study-participant-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: var(--sm-font-size);
+    border-bottom: 1px solid var(--bg-tint);
+}
+
+.study-participant-item:last-child { border-bottom: none; }
+
+/* ── Create Form ───────────────────────────────────────────── */
+.study-time-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.study-time-btn {
+    padding: 10px;
+    border: 1px solid var(--inp-border-color);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--md-font-size);
+    font-weight: 600;
+    color: var(--color-semi-black);
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.study-time-btn:hover { border-color: var(--main-color); color: var(--main-color); }
+.study-time-btn.selected { background: var(--main-color); color: #fff; border-color: var(--main-color); }
+.study-time-btn.disabled { background: var(--disabled-color); color: var(--color-gray); cursor: no-drop; border-color: var(--disabled-color); }
+
+/* ── Login ─────────────────────────────────────────────────── */
+.study-login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.study-login .login-box {
+    width: 100%;
+    max-width: 360px;
+    padding: 40px 24px;
+    text-align: center;
+}
+
+.study-login .login-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--main-color);
+    margin-bottom: 4px;
+}
+
+.study-login .login-subtitle {
+    font-size: var(--md-font-size);
+    color: var(--color-777);
+    margin-bottom: 28px;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .study-cal-cell {
+        min-height: 60px;
+        padding: 2px;
+    }
+
+    .study-chip {
+        font-size: 10px;
+        padding: 1px 3px;
+    }
+
+    .cal-day {
+        font-size: 11px;
+    }
+
+    .study-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
