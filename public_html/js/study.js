@@ -425,12 +425,23 @@ const StudyApp = (() => {
             <div class="text-center">
                 <p class="mb-sm" style="font-size:var(--sm-font-size);color:var(--color-777)">참여자에게 아래 QR을 보여주세요</p>
                 <div id="qr-code-area" style="display:inline-block;margin:16px 0;"></div>
-                <p class="mt-sm" style="font-size:var(--sm-font-size);word-break:break-all;color:var(--color-777)">${App.esc(r.scan_url)}</p>
+                <button class="btn btn-secondary btn-sm mt-sm" id="btn-copy-qr-url">링크 복사</button>
             </div>
         `;
         App.openModal('출석체크 QR', qrBody,
             `<button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>`
         );
+
+        document.getElementById('btn-copy-qr-url').onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(r.scan_url);
+            } catch {
+                const ta = document.createElement('textarea');
+                ta.value = r.scan_url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+            }
+            Toast.success('링크가 복사되었습니다');
+        };
 
         // Load QR code library dynamically
         if (typeof QRCode === 'undefined') {
