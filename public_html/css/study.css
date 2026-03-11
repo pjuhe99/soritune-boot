@@ -210,37 +210,94 @@
     word-break: break-all;
 }
 
-.study-zoom-link {
-    display: inline-flex;
+/* ── Detail: Info Section ──────────────────────────────────── */
+.study-detail-info {
+    margin-bottom: 16px;
+}
+
+/* ── Detail: Action Buttons ───────────────────────────────── */
+.study-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.study-action-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.study-btn-zoom {
+    display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 14px;
+    justify-content: center;
+    padding: 12px 20px;
     background: #3182ce;
+    color: #fff;
+    border-radius: var(--radius-sm);
+    font-size: var(--md-font-size);
+    font-weight: 700;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.study-btn-zoom:hover { opacity: 0.85; text-decoration: none; color: #fff; }
+
+.study-btn-zoom-host {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    background: var(--main-color);
     color: #fff;
     border-radius: var(--radius-sm);
     font-size: var(--sm-font-size);
     font-weight: 700;
     text-decoration: none;
-    margin-top: 8px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
 }
-.study-zoom-link:hover { opacity: 0.85; text-decoration: none; }
+.study-btn-zoom-host:hover { opacity: 0.85; text-decoration: none; color: #fff; }
 
-.study-zoom-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: var(--radius-badge);
+/* ── Detail: Notice ───────────────────────────────────────── */
+.study-notice {
     font-size: var(--sm-font-size);
-    font-weight: 700;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    line-height: 1.5;
 }
 
-.study-zoom-status.ready { background: #c6f6d5; color: #276749; }
-.study-zoom-status.pending { background: #bee3f8; color: #2a4365; }
-.study-zoom-status.failed { background: #fed7d7; color: #9b2c2c; }
+.study-notice.info {
+    background: #bee3f8;
+    color: #2a4365;
+}
 
+.study-notice.warning {
+    background: #fed7d7;
+    color: #9b2c2c;
+}
+
+.study-notice.muted {
+    background: none;
+    color: var(--color-gray);
+    padding: 4px 0;
+    text-align: center;
+}
+
+/* ── Detail: Cancel Area ──────────────────────────────────── */
+.study-detail-cancel-area {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--bg-tint);
+}
+
+/* ── Detail: Participants ─────────────────────────────────── */
 .study-participants {
-    margin-top: 12px;
+    margin-top: 4px;
+    padding: 10px 0;
 }
 
 .study-participant-item {

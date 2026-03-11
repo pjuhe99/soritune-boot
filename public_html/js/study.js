@@ -232,32 +232,72 @@ const StudyApp = (() => {
         const s = r.session;
         const isHost = r.is_host;
         const participants = r.participants || [];
+        const canCancel = r.can_cancel;
+        const canStartQr = r.can_start_qr;
 
         const startTime = (s.start_time || '').substring(0, 5);
         const endTime = (s.end_time || '').substring(0, 5);
         const dateKo = App.formatDateKo(s.study_date);
+        const hasZoomUrl = s.zoom_status === 'ready' && s.zoom_join_url;
 
-        // Zoom status
-        let zoomHtml = '';
+        // ── Zoom section ──
+        let zoomSection = '';
         if (s.zoom_status === 'ready' && s.zoom_join_url) {
-            zoomHtml = `<a href="${App.esc(s.zoom_join_url)}" target="_blank" class="study-zoom-link">Zoom 입장하기</a>`;
-            if (isHost && s.zoom_start_url) {
-                zoomHtml += `<br><a href="${App.esc(s.zoom_start_url)}" target="_blank" class="study-zoom-link" style="background:var(--main-color);margin-top:4px;">호스트로 시작하기</a>`;
-            }
+            zoomSection = `
+                <div class="study-action-group">
+                    <a href="${App.esc(s.zoom_join_url)}" target="_blank" class="btn btn-block study-btn-zoom" id="btn-zoom-join">Zoom 입장하기</a>
+                    <button class="btn btn-secondary btn-block" id="btn-zoom-copy">Zoom 링크 복사하기</button>
+                    ${isHost && s.zoom_start_url ? `<a href="${App.esc(s.zoom_start_url)}" target="_blank" class="btn btn-block study-btn-zoom-host">호스트로 시작하기</a>` : ''}
+                </div>
+            `;
         } else if (s.zoom_status === 'pending') {
-            zoomHtml = `<span class="study-zoom-status pending">Zoom 생성 중</span>`;
+            zoomSection = `
+                <div class="study-action-group">
+                    <div class="study-notice info">Zoom 링크를 생성 중입니다. 잠시만 기다려주세요.</div>
+                    <button class="btn btn-secondary btn-block" disabled>Zoom 입장하기</button>
+                    <button class="btn btn-secondary btn-block" disabled>Zoom 링크 복사하기</button>
+                </div>
+            `;
         } else if (s.zoom_status === 'failed') {
-            zoomHtml = `<span class="study-zoom-status failed">Zoom 생성 실패</span>`;
-            if (isHost) {
-                zoomHtml += `<button class="btn btn-sm btn-secondary mt-sm" id="btn-retry-zoom" style="margin-left:8px">다시 시도</button>`;
+            zoomSection = `
+                <div class="study-action-group">
+                    <div class="study-notice warning">Zoom 링크 생성에 실패했습니다.${isHost ? '' : ' 개설자에게 문의해주세요.'}</div>
+                    <button class="btn btn-secondary btn-block" disabled>Zoom 입장하기</button>
+                    <button class="btn btn-secondary btn-block" disabled>Zoom 링크 복사하기</button>
+                    ${isHost ? `<button class="btn btn-primary btn-block btn-sm mt-sm" id="btn-retry-zoom">Zoom 다시 생성하기</button>` : ''}
+                </div>
+            `;
+        }
+
+        // ── QR attendance section ──
+        let qrSection = '';
+        if (isHost && s.status === 'active') {
+            if (canStartQr) {
+                qrSection = `<button class="btn btn-primary btn-block" id="btn-start-qr">출석체크 진행하기</button>`;
+            } else {
+                qrSection = `
+                    <button class="btn btn-secondary btn-block" disabled>출석체크 진행하기</button>
+                    <p class="study-notice muted">복습클래스 시간에만 출석체크를 진행할 수 있습니다</p>
+                `;
             }
         }
 
-        // Participants
+        // ── Cancel section ──
+        let cancelSection = '';
+        if (isHost && s.status !== 'cancelled') {
+            if (canCancel) {
+                cancelSection = `<button class="btn btn-danger btn-block btn-sm" id="btn-cancel-study">복습클래스 취소하기</button>`;
+            } else {
+                cancelSection = `<button class="btn btn-secondary btn-block btn-sm" disabled>복습클래스 취소하기</button>
+                    <p class="study-notice muted">시작된 복습클래스는 취소할 수 없습니다</p>`;
+            }
+        }
+
+        // ── Participants ──
         let partHtml = '';
         if (participants.length) {
             partHtml = `<div class="study-participants">
-                <div class="study-detail-label mb-sm">참여자 (${participants.length}명)</div>
+                <div class="study-detail-label mb-sm">출석 현황 (${participants.length}명)</div>
                 ${participants.map(p => `
                     <div class="study-participant-item">
                         <span>${App.esc(p.nickname)} <span class="text-muted">${App.esc(p.group_name || '')}</span></span>
@@ -268,44 +308,69 @@ const StudyApp = (() => {
         }
 
         const body = `
-            <div class="study-detail-row">
-                <span class="study-detail-label">날짜</span>
-                <span class="study-detail-value">${dateKo}</span>
+            <div class="study-detail-info">
+                <div class="study-detail-row">
+                    <span class="study-detail-label">날짜</span>
+                    <span class="study-detail-value">${dateKo}</span>
+                </div>
+                <div class="study-detail-row">
+                    <span class="study-detail-label">시간</span>
+                    <span class="study-detail-value">${startTime} ~ ${endTime}</span>
+                </div>
+                <div class="study-detail-row">
+                    <span class="study-detail-label">개설자</span>
+                    <span class="study-detail-value">${App.esc(s.host_nickname)}</span>
+                </div>
+                <div class="study-detail-row">
+                    <span class="study-detail-label">상태</span>
+                    <span class="study-detail-value"><span class="badge badge-${statusBadge(s.status)}">${statusLabel(s.status)}</span></span>
+                </div>
             </div>
-            <div class="study-detail-row">
-                <span class="study-detail-label">시간</span>
-                <span class="study-detail-value">${startTime} ~ ${endTime}</span>
+            <div class="study-detail-actions">
+                ${zoomSection}
+                ${qrSection}
+                ${partHtml}
+                ${cancelSection ? `<div class="study-detail-cancel-area">${cancelSection}</div>` : ''}
             </div>
-            <div class="study-detail-row">
-                <span class="study-detail-label">개설자</span>
-                <span class="study-detail-value">${App.esc(s.host_nickname)}</span>
-            </div>
-            <div class="study-detail-row">
-                <span class="study-detail-label">상태</span>
-                <span class="study-detail-value"><span class="badge badge-${statusBadge(s.status)}">${statusLabel(s.status)}</span></span>
-            </div>
-            <div class="study-detail-row">
-                <span class="study-detail-label">Zoom</span>
-                <span class="study-detail-value">${zoomHtml}</span>
-            </div>
-            ${partHtml}
         `;
 
-        // Footer buttons
-        let footerHtml = '';
-        if (r.can_start_qr) {
-            footerHtml += `<button class="btn btn-primary btn-sm" id="btn-start-qr">출석체크 시작</button>`;
-        }
-        if (r.can_cancel) {
-            footerHtml += `<button class="btn btn-danger btn-sm" id="btn-cancel-study">취소</button>`;
+        App.openModal(s.title, body, '');
+
+        // ── Bind events ──
+        const copyBtn = document.getElementById('btn-zoom-copy');
+        if (copyBtn && hasZoomUrl) {
+            copyBtn.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(s.zoom_join_url);
+                    Toast.success('링크가 복사되었습니다');
+                } catch {
+                    // Fallback
+                    const ta = document.createElement('textarea');
+                    ta.value = s.zoom_join_url;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    ta.remove();
+                    Toast.success('링크가 복사되었습니다');
+                }
+            };
         }
 
-        App.openModal(s.title, body, footerHtml);
-
-        // Bind detail actions
         const retryBtn = document.getElementById('btn-retry-zoom');
         if (retryBtn) {
-            retryBtn.onclick = () => retryZoom(s.id);
+            retryBtn.onclick = async () => {
+                App.showLoading();
+                const res = await App.post(API + 'study_session_retry_zoom', { session_id: s.id });
+                App.hideLoading();
+                if (res.success) {
+                    Toast.success(res.message || 'Zoom이 생성되었습니다.');
+                    App.closeModal();
+                    loadSessions();
+                    openDetail(s.id);
+                }
+            };
         }
 
         const qrBtn = document.getElementById('btn-start-qr');
@@ -315,7 +380,7 @@ const StudyApp = (() => {
 
         const cancelBtn = document.getElementById('btn-cancel-study');
         if (cancelBtn) {
-            cancelBtn.onclick = () => openCancelFlow(s.id);
+            cancelBtn.onclick = () => openCancelFlow(s.id, s.title);
         }
     }
 
@@ -333,18 +398,6 @@ const StudyApp = (() => {
         if (!datetimeStr) return '';
         const d = new Date(datetimeStr);
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
-
-    // ── Retry Zoom ──
-    async function retryZoom(sessionId) {
-        App.showLoading();
-        const r = await App.post(API + 'study_session_retry_zoom', { session_id: sessionId });
-        App.hideLoading();
-        if (r.success) {
-            Toast.success(r.message || 'Zoom이 생성되었습니다.');
-            App.closeModal();
-            loadSessions();
-        }
     }
 
     // ── Start QR ──
@@ -391,14 +444,16 @@ const StudyApp = (() => {
     }
 
     // ── Cancel Flow ──
-    async function openCancelFlow(sessionId) {
+    async function openCancelFlow(sessionId, title) {
         App.closeModal();
         const body = `
+            <p style="font-size:var(--md-font-size);line-height:1.6;margin-bottom:16px;">
+                <strong>${App.esc(title)}</strong>을(를) 취소하시겠습니까?<br>
+                취소하려면 복습클래스를 예약할 때 입력한 비밀번호 4자리를 입력해주세요.
+            </p>
             <div class="form-group">
-                <label class="form-label">비밀번호 4자리를 입력하세요</label>
-                <input type="tel" class="form-input" id="cancel-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:24px;letter-spacing:8px;">
+                <input type="tel" class="form-input" id="cancel-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" inputmode="numeric" style="text-align:center;font-size:24px;letter-spacing:8px;">
             </div>
-            <p class="text-sub" style="font-size:var(--sm-font-size);margin-top:4px;">복습클래스 생성 시 설정한 비밀번호를 입력해주세요.</p>
         `;
         const footer = `
             <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>
@@ -418,7 +473,7 @@ const StudyApp = (() => {
             const r = await App.post(API + 'study_session_cancel', { session_id: sessionId, password: pw });
             App.hideLoading();
             if (r.success) {
-                Toast.success(r.message || '복습클래스가 취소되었습니다.');
+                Toast.success('복습클래스가 취소되었습니다.');
                 App.closeModal();
                 loadSessions();
             }
