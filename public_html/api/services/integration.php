@@ -219,6 +219,14 @@ function handleIntegrationCafePosts($method) {
                 !empty($post) ? json_encode($post, JSON_UNESCAPED_UNICODE) : null,
             ]);
             $results['inserted']++;
+
+            // 매핑된 회원 + board_type이 미션코드와 일치 + assignment_date가 있으면 자동 체크
+            if ($memberId && $boardType && $assignmentDate) {
+                $missionTypeId = getMissionTypeId($db, $boardType);
+                if ($missionTypeId) {
+                    saveCheck($db, $memberId, $assignmentDate, $missionTypeId, true, 'automation', "cafe:{$articleId}", null);
+                }
+            }
         } catch (PDOException $e) {
             $results['error']++;
         }
