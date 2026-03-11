@@ -96,9 +96,25 @@ function handleMemberUpdate($method) {
     if (isset($input['is_active'])) { $fields[] = "is_active = ?"; $params[] = $input['is_active'] ? 1 : 0; }
     if (!$fields) jsonError('수정할 내용 없음');
 
-    $params[] = $id;
     $db = getDB();
+
+    // role 변경 감지 (코인 처리용)
+    $beforeRole = null;
+    if (isset($input['member_role'])) {
+        $brStmt = $db->prepare("SELECT member_role FROM bootcamp_members WHERE id = ?");
+        $brStmt->execute([$id]);
+        $brRow = $brStmt->fetch();
+        $beforeRole = $brRow ? $brRow['member_role'] : null;
+    }
+
+    $params[] = $id;
     $db->prepare("UPDATE bootcamp_members SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
+
+    // role이 실제로 변경되었으면 코인 처리
+    if ($beforeRole !== null && $beforeRole !== $input['member_role'] && function_exists('handleRoleChangeCoin')) {
+        handleRoleChangeCoin($db, $id, $beforeRole, $input['member_role'], $admin['admin_id']);
+    }
+
     jsonSuccess([], '회원 정보가 수정되었습니다.');
 }
 

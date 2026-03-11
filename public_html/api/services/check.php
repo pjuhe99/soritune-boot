@@ -20,10 +20,12 @@ function handleChecklist() {
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
                bm.group_id, bg.name AS group_name,
-               COALESCE(ms.current_score, 0) AS current_score
+               COALESCE(ms.current_score, 0) AS current_score,
+               COALESCE(mcb.current_coin, 0) AS current_coin
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         WHERE " . implode(' AND ', $where) . "
         ORDER BY bg.name, bm.nickname
     ");

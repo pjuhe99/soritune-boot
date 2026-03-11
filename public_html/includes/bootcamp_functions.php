@@ -201,6 +201,7 @@ function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source,
     if (!$memberRow) return ['action' => 'error', 'reason' => 'member not found'];
 
     $statusVal = $status ? 1 : 0;
+    $prevStatus = $existingRow ? (int)$existingRow['status'] : null;
 
     if ($existingRow) {
         $db->prepare("
@@ -222,7 +223,16 @@ function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source,
         recalculateMemberScore($db, $memberId, $adminId);
     }
 
-    return ['action' => $action];
+    // 코인 처리 (score와 독립, skipRecalc 무관하게 항상 실행)
+    if ($action !== 'unchanged' && function_exists('processCoinForCheck')) {
+        $codeMap = array_flip(getMissionCodeToIdMap($db));
+        $mCode = $codeMap[$missionTypeId] ?? null;
+        if ($mCode) {
+            processCoinForCheck($db, $memberId, $checkDate, $mCode, $statusVal, $prevStatus, $adminId);
+        }
+    }
+
+    return ['action' => $action, 'prev_status' => $prevStatus];
 }
 }
 

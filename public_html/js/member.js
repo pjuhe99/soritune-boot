@@ -68,8 +68,16 @@ const MemberApp = (() => {
                     <div class="member-info-card">
                         <div class="member-nickname">${App.esc(member.nickname)}</div>
                         <div class="member-realname">${App.esc(member.member_name)}</div>
-                        <div class="member-point">${member.score ?? 0}</div>
-                        <div class="member-point-label">점수</div>
+                        <div class="member-stats">
+                            <div class="member-stat">
+                                <div class="member-point">${member.score ?? 0}</div>
+                                <div class="member-point-label">점수</div>
+                            </div>
+                            <div class="member-stat">
+                                <div class="member-coin">${member.coin ?? 0}</div>
+                                <div class="member-coin-label">코인</div>
+                            </div>
+                        </div>
                     </div>
                     <div class="member-placeholder">
                         <p>추가 기능이 곧 업데이트됩니다.</p>

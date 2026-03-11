@@ -355,6 +355,7 @@ const BootcampApp = (() => {
                         <tr>
                             <th>회원</th>
                             <th>점수</th>
+                            <th>코인</th>
                             ${mt.map(m => `<th title="${App.esc(m.name)}">${App.esc(missionShort(m.name))}</th>`).join('')}
                         </tr>
                     </thead>
@@ -369,6 +370,7 @@ const BootcampApp = (() => {
                                     <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
                                 </td>
                                 <td class="score-cell ${sc}">${m.current_score}</td>
+                                <td>${m.current_coin || 0}</td>
                                 ${mt.map(mi => {
                                     const cv = mc[mi.id];
                                     const checked = cv && cv.status ? 'checked' : '';

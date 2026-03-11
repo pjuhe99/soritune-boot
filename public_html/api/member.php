@@ -36,11 +36,15 @@ case 'login':
 
     loginMember($member['id'], $member['real_name'], $member['cohort']);
 
-    // Get current score
+    // Get current score + coin
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
     $scoreStmt->execute([$member['id']]);
     $scoreRow = $scoreStmt->fetch();
     $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
+
+    $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
+    $coinStmt->execute([$member['id']]);
+    $coin = (int)($coinStmt->fetchColumn() ?: 0);
 
     jsonSuccess([
         'member' => [
@@ -49,6 +53,7 @@ case 'login':
             'nickname'    => $member['nickname'],
             'cohort'      => $member['cohort'],
             'score'       => $score,
+            'coin'        => $coin,
         ],
     ], '로그인 성공');
     break;
@@ -71,6 +76,10 @@ case 'check_session':
             $scoreRow = $scoreStmt->fetch();
             $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
+            $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
+            $coinStmt->execute([$member['id']]);
+            $coin = (int)($coinStmt->fetchColumn() ?: 0);
+
             jsonSuccess([
                 'logged_in' => true,
                 'member' => [
@@ -79,6 +88,7 @@ case 'check_session':
                     'nickname'    => $member['nickname'],
                     'cohort'      => $member['cohort'],
                     'score'       => $score,
+                    'coin'        => $coin,
                 ],
             ]);
         }
@@ -108,7 +118,12 @@ case 'dashboard':
     $scoreRow = $scoreStmt->fetch();
     $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
+    $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
+    $coinStmt->execute([$s['member_id']]);
+    $coin = (int)($coinStmt->fetchColumn() ?: 0);
+
     $member['score'] = $score;
+    $member['coin'] = $coin;
     jsonSuccess(['member' => $member]);
     break;
 

@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../includes/coin_functions.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -332,8 +333,8 @@ case 'cohort_delete':
     if (!$id) jsonError('기수 ID가 필요합니다.');
 
     $db = getDB();
-    $db->prepare('DELETE FROM cohorts WHERE id = ?')->execute([$id]);
-    jsonSuccess([], '기수가 삭제되었습니다.');
+    $db->prepare('UPDATE cohorts SET is_active = 0 WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '기수가 비활성화되었습니다.');
     break;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────
@@ -346,10 +347,14 @@ case 'member_list':
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
                bm.member_role, bm.stage_no, bm.is_active, bm.created_at,
-               bm.participation_count
+               bm.participation_count,
+               COALESCE(ms.current_score, 0) AS current_score,
+               COALESCE(mcb.current_coin, 0) AS current_coin
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         WHERE c.cohort = ?
         ORDER BY bm.real_name
     ');
@@ -429,8 +434,23 @@ case 'member_update':
     }
     if (!$fields) jsonError('수정할 내용이 없습니다.');
 
+    // role 변경 감지 (코인 처리용)
+    $beforeRole = null;
+    if (isset($input['member_role'])) {
+        $brStmt = $db->prepare("SELECT member_role FROM bootcamp_members WHERE id = ?");
+        $brStmt->execute([$id]);
+        $brRow = $brStmt->fetch();
+        $beforeRole = $brRow ? $brRow['member_role'] : null;
+    }
+
     $params[] = $id;
     $db->prepare('UPDATE bootcamp_members SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+
+    // role이 실제로 변경되었으면 코인 처리
+    if ($beforeRole !== null && $beforeRole !== $input['member_role'] && function_exists('handleRoleChangeCoin')) {
+        handleRoleChangeCoin($db, $id, $beforeRole, $input['member_role'], $admin['admin_id']);
+    }
+
     jsonSuccess([], '회원 정보가 수정되었습니다.');
     break;
 

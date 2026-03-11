@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
+require_once __DIR__ . '/../includes/coin_functions.php';
 
 // Services
 require_once __DIR__ . '/services/member.php';
@@ -13,6 +14,7 @@ require_once __DIR__ . '/services/check.php';
 require_once __DIR__ . '/services/score.php';
 require_once __DIR__ . '/services/revival.php';
 require_once __DIR__ . '/services/coin.php';
+require_once __DIR__ . '/services/coin_cycle.php';
 require_once __DIR__ . '/services/integration.php';
 require_once __DIR__ . '/services/study.php';
 
@@ -204,6 +206,19 @@ case 'revival_logs':       handleRevivalLogs(); break;
 case 'coin_balance':     handleCoinBalance(); break;
 case 'coin_change':      handleCoinChange($method); break;
 case 'coin_logs':        handleCoinLogs(); break;
+
+// ── Coin Cycles ─────────────────────────────────────────────
+
+case 'coin_cycles':              handleCoinCycles(); break;
+case 'coin_cycle_create':        handleCoinCycleCreate($method); break;
+case 'coin_cycle_update':        handleCoinCycleUpdate($method); break;
+case 'coin_cycle_close':         handleCoinCycleClose($method); break;
+case 'coin_cycle_members':       handleCoinCycleMembers(); break;
+case 'coin_leader_grant':        handleCoinLeaderGrant($method); break;
+case 'coin_settlement_preview':  handleCoinSettlementPreview(); break;
+case 'coin_settlement_execute':  handleCoinSettlementExecute($method); break;
+case 'coin_cheer_award':         handleCoinCheerAward($method); break;
+case 'coin_cheer_status':        handleCoinCheerStatus(); break;
 
 // ── Scores ───────────────────────────────────────────────────
 

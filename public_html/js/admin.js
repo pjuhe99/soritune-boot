@@ -122,6 +122,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-guides-mgmt">가이드 관리</button>
                             <button class="tab" data-tab="#tab-calendar-mgmt">캘린더 관리</button>
                             <button class="tab" data-tab="#tab-cohorts-mgmt">기수 관리</button>
+                            <button class="tab" data-tab="#tab-coin-cycles">코인 Cycle</button>
                             <button class="tab" data-tab="#tab-cafe-posts">카페 게시글</button>
                         </div>
                         <div class="tab-content active" id="tab-members"></div>
@@ -130,6 +131,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-guides-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
+                        <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
                     </div>
                     ` : role === 'coach' ? `
@@ -204,6 +206,19 @@ const AdminApp = (() => {
             loadCalendarMgmt();
             loadCohortsMgmt();
             loadCafePosts();
+            // Coin Cycles 탭 lazy load
+            if (typeof CoinApp !== 'undefined') {
+                const coinTab = document.getElementById('tab-coin-cycles');
+                if (coinTab) {
+                    const observer = new MutationObserver(() => {
+                        if (coinTab.classList.contains('active') && !coinTab.dataset.loaded) {
+                            coinTab.dataset.loaded = '1';
+                            CoinApp.showCycles(coinTab);
+                        }
+                    });
+                    observer.observe(coinTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
         }
 
         if ((role === 'coach' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
@@ -473,7 +488,7 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>참여</th><th>상태</th><th></th></tr></thead>
+                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>참여</th><th>점수</th><th>코인</th><th>상태</th><th></th></tr></thead>
                     <tbody>
                         ${r.members.map(m => `
                             <tr>
@@ -483,6 +498,8 @@ const AdminApp = (() => {
                                 <td>${App.esc(m.phone || '')}</td>
                                 <td>${App.esc(m.group_name || '-')}</td>
                                 <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '첫 참여'}</td>
+                                <td style="font-weight:600">${m.current_score ?? '-'}</td>
+                                <td>${m.current_coin ?? '-'}</td>
                                 <td>${m.is_active == 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge badge-danger">비활성</span>'}</td>
                                 <td class="actions">
                                     <button class="btn-icon" onclick="AdminApp._editMember(${m.id})">수정</button>
@@ -494,7 +511,7 @@ const AdminApp = (() => {
                 </table>
             </div>
         `;
-        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="8" class="empty-state">등록된 회원이 없습니다.</td></tr>';
+        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="10" class="empty-state">등록된 회원이 없습니다.</td></tr>';
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 
