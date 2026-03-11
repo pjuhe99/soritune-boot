@@ -160,13 +160,14 @@ function handleIntegrationCafePosts($method) {
     }
 
     $insertStmt = $db->prepare("
-        INSERT INTO cafe_posts (cafe_article_id, title, member_key, nickname, board_type, posted_at, member_id, mission_checked, raw_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cafe_posts (cafe_article_id, title, member_key, nickname, board_type, posted_at, member_id, mission_checked, assignment_date, raw_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             title = VALUES(title),
             nickname = VALUES(nickname),
             member_id = VALUES(member_id),
-            mission_checked = VALUES(mission_checked)
+            mission_checked = VALUES(mission_checked),
+            assignment_date = VALUES(assignment_date)
     ");
 
     $memberKeyCache = [];
@@ -178,6 +179,7 @@ function handleIntegrationCafePosts($method) {
         $nickname = $post['nickname'] ?? null;
         $postedAt = $post['posted_at'] ?? null;
         $missionChecked = (int)($post['mission_checked'] ?? 0);
+        $assignmentDate = $post['assignment_date'] ?? null;
 
         $boardType = $post['board_type'] ?? null;
         if (!$boardType && isset($post['menu_id'])) {
@@ -213,6 +215,7 @@ function handleIntegrationCafePosts($method) {
                 $postedAt,
                 $memberId,
                 $missionChecked,
+                $assignmentDate,
                 !empty($post) ? json_encode($post, JSON_UNESCAPED_UNICODE) : null,
             ]);
             $results['inserted']++;
