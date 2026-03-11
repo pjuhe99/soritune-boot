@@ -5,6 +5,8 @@
 const BootcampApp = (() => {
     const API = '/api/bootcamp.php?action=';
     const ROLE_LABELS = { member: '회원', leader: '조장', subleader: '부조장' };
+    const MISSION_SHORT = { '데일리미션': '데일리', '복클 참여': '복클참여', '복클 개설': '복클개설' };
+    function missionShort(name) { return MISSION_SHORT[name] || name.substring(0, 4); }
 
     let admin = null;
     let root = null;
@@ -353,7 +355,7 @@ const BootcampApp = (() => {
                         <tr>
                             <th>회원</th>
                             <th>점수</th>
-                            ${mt.map(m => `<th title="${App.esc(m.name)}">${App.esc(m.name.substring(0, 4))}</th>`).join('')}
+                            ${mt.map(m => `<th title="${App.esc(m.name)}">${App.esc(missionShort(m.name))}</th>`).join('')}
                         </tr>
                     </thead>
                     <tbody>
