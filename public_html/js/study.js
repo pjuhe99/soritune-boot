@@ -83,7 +83,10 @@ const StudyApp = (() => {
                         <div class="study-header-title">복습클래스</div>
                         <span class="study-header-user">${App.esc(member.nickname)}</span>
                     </div>
-                    <button class="btn btn-primary btn-sm" id="btn-create-study">복습클래스 예약</button>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-primary btn-sm" id="btn-create-study">복습클래스 예약</button>
+                        <button class="btn btn-secondary btn-sm" id="btn-logout">로그아웃</button>
+                    </div>
                 </div>
                 <div class="study-calendar">
                     <div class="study-cal-nav">
@@ -101,6 +104,14 @@ const StudyApp = (() => {
         document.getElementById('cal-next').onclick = () => changeMonth(1);
         document.getElementById('cal-today').onclick = goToday;
         document.getElementById('btn-create-study').onclick = openCreateModal;
+        document.getElementById('btn-logout').onclick = async () => {
+            await App.post('/api/member.php?action=logout');
+            Toast.info('로그아웃 되었습니다.');
+            member = null;
+            groupsCache = null;
+            allMembersCache = null;
+            showLogin();
+        };
     }
 
     // ── Data Loading ──
