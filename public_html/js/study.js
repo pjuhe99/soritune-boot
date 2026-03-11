@@ -422,10 +422,10 @@ const StudyApp = (() => {
 
         // Show QR code modal
         const qrBody = `
-            <div class="text-center">
+            <div style="display:flex;flex-direction:column;align-items:center;">
                 <p class="mb-sm" style="font-size:var(--sm-font-size);color:var(--color-777)">참여자에게 아래 QR을 보여주세요</p>
-                <div id="qr-code-area" style="display:inline-block;margin:16px 0;"></div>
-                <button class="btn btn-secondary btn-sm mt-sm" id="btn-copy-qr-url">링크 복사</button>
+                <div id="qr-code-area" style="margin:16px 0;"></div>
+                <button class="btn btn-secondary btn-sm" id="btn-copy-qr-url">링크 복사</button>
             </div>
         `;
         App.openModal('출석체크 QR', qrBody,
