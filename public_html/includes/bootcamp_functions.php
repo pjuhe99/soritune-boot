@@ -191,8 +191,8 @@ function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source,
     $existing->execute([$memberId, $checkDate, $missionTypeId]);
     $existingRow = $existing->fetch();
 
-    if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation') {
-        return ['action' => 'skipped', 'reason' => 'manual data exists'];
+    if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation' && (int)$existingRow['status'] === 1) {
+        return ['action' => 'skipped', 'reason' => 'manual check already completed'];
     }
 
     $member = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
