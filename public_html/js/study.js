@@ -426,35 +426,75 @@ const StudyApp = (() => {
     }
 
     // ── Create Modal ──
-    function openCreateModal() {
+    let groupsCache = null;
+    let allMembersCache = null;
+
+    async function loadGroupsAndMembers() {
+        if (groupsCache && allMembersCache) return;
+
+        const [gRes, mRes] = await Promise.all([
+            App.get(API + 'study_groups'),
+            App.get(API + 'study_members'),
+        ]);
+        groupsCache = gRes.success ? gRes.groups : [];
+        allMembersCache = mRes.success ? mRes.members : [];
+    }
+
+    async function openCreateModal() {
+        App.showLoading();
+        await loadGroupsAndMembers();
+        App.hideLoading();
+
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const defaultDate = App.formatDate(tomorrow);
 
-        const hours = [];
-        for (let h = 6; h <= 23; h++) {
-            hours.push(`${String(h).padStart(2, '0')}:00`);
-            hours.push(`${String(h).padStart(2, '0')}:30`);
-        }
-
-        const timeButtons = hours.map(t =>
-            `<button class="study-time-btn" data-time="${t}">${t}</button>`
+        // Build group options
+        const groupOpts = groupsCache.map(g =>
+            `<option value="${g.id}">${App.esc(g.name)}</option>`
         ).join('');
 
+        // Build hour options (06~23)
+        const hourOpts = Array.from({ length: 18 }, (_, i) => {
+            const h = String(i + 6).padStart(2, '0');
+            return `<option value="${h}">${h}시</option>`;
+        }).join('');
+
         const body = `
+            <div class="form-group">
+                <label class="form-label">개설자</label>
+                <div class="study-host-select">
+                    <select class="form-select" id="create-group" style="margin-bottom:6px;">
+                        <option value="">조 선택</option>
+                        ${groupOpts}
+                    </select>
+                    <div class="study-search-wrap" style="position:relative;">
+                        <input type="text" class="form-input" id="create-member-search" placeholder="닉네임 검색..." autocomplete="off">
+                        <div class="study-member-dropdown" id="member-dropdown"></div>
+                    </div>
+                    <div id="selected-host-display" class="study-selected-host"></div>
+                </div>
+            </div>
             <div class="form-group">
                 <label class="form-label">날짜</label>
                 <input type="date" class="form-input" id="create-date" value="${defaultDate}">
             </div>
             <div class="form-group">
                 <label class="form-label">시작 시간</label>
-                <div class="study-time-grid" id="time-grid">
-                    ${timeButtons}
+                <div style="display:flex;gap:8px;">
+                    <select class="form-select" id="create-hour" style="flex:1;">
+                        ${hourOpts}
+                    </select>
+                    <select class="form-select" id="create-minute" style="flex:1;">
+                        <option value="00">00분</option>
+                        <option value="30">30분</option>
+                    </select>
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">취소용 비밀번호 (4자리 숫자)</label>
-                <input type="tel" class="form-input" id="create-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:20px;letter-spacing:6px;">
+                <label class="form-label">비밀번호</label>
+                <input type="tel" class="form-input" id="create-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:20px;letter-spacing:6px;" inputmode="numeric">
+                <p class="text-sub mt-xs" style="font-size:var(--sm-font-size)">스터디를 취소할 때 확인하기 위한 비밀번호입니다. 4자리로 등록해주세요</p>
             </div>
         `;
         const footer = `
@@ -463,35 +503,149 @@ const StudyApp = (() => {
         `;
         App.openModal('복습클래스 예약', body, footer);
 
-        // Time button selection
-        const state = { selectedTime: null };
-        const grid = document.getElementById('time-grid');
-        bindTimeButtons(grid, state);
+        // ── Host member selection logic ──
+        const state = { hostMemberId: null, hostNickname: '' };
+        const groupSelect = document.getElementById('create-group');
+        const searchInput = document.getElementById('create-member-search');
+        const dropdown = document.getElementById('member-dropdown');
+        const hostDisplay = document.getElementById('selected-host-display');
 
-        // Date change → check existing sessions and disable occupied times
+        function getFilteredMembers() {
+            const groupId = groupSelect.value;
+            const keyword = searchInput.value.trim().toLowerCase();
+            return allMembersCache.filter(m => {
+                if (groupId && String(m.group_id) !== groupId) return false;
+                if (keyword) {
+                    const nick = (m.nickname || '').toLowerCase();
+                    const real = (m.real_name || '').toLowerCase();
+                    if (!nick.includes(keyword) && !real.includes(keyword)) return false;
+                }
+                return true;
+            });
+        }
+
+        function showDropdown() {
+            const filtered = getFilteredMembers();
+            if (!filtered.length) {
+                dropdown.innerHTML = '<div class="study-dd-empty">검색 결과가 없습니다</div>';
+            } else {
+                dropdown.innerHTML = filtered.map(m =>
+                    `<div class="study-dd-item" data-id="${m.id}" data-nick="${App.esc(m.nickname)}">
+                        <span class="study-dd-nick">${App.esc(m.nickname)}</span>
+                        <span class="study-dd-group">${App.esc(m.group_name || '')}</span>
+                    </div>`
+                ).join('');
+            }
+            dropdown.classList.add('open');
+        }
+
+        function hideDropdown() {
+            setTimeout(() => dropdown.classList.remove('open'), 150);
+        }
+
+        function selectHost(id, nickname) {
+            state.hostMemberId = id;
+            state.hostNickname = nickname;
+            searchInput.value = '';
+            dropdown.classList.remove('open');
+            hostDisplay.innerHTML = `
+                <span class="badge badge-light">${App.esc(nickname)}</span>
+                <button class="study-host-clear" title="선택 해제">&times;</button>
+            `;
+            hostDisplay.querySelector('.study-host-clear').onclick = () => {
+                state.hostMemberId = null;
+                state.hostNickname = '';
+                hostDisplay.innerHTML = '';
+            };
+        }
+
+        searchInput.onfocus = () => showDropdown();
+        searchInput.oninput = () => showDropdown();
+        searchInput.onblur = hideDropdown;
+        groupSelect.onchange = () => {
+            if (dropdown.classList.contains('open')) showDropdown();
+        };
+
+        dropdown.onmousedown = (e) => {
+            // Prevent blur from firing before click
+            e.preventDefault();
+            const item = e.target.closest('.study-dd-item');
+            if (item) {
+                selectHost(parseInt(item.dataset.id), item.dataset.nick);
+            }
+        };
+
+        // ── Date change → check time overlap ──
         const dateInput = document.getElementById('create-date');
-        dateInput.onchange = () => { state.selectedTime = null; updateTimeSlots(dateInput.value, grid, state); };
-        updateTimeSlots(dateInput.value, grid, state);
+        const hourSelect = document.getElementById('create-hour');
+        const minuteSelect = document.getElementById('create-minute');
 
-        // Submit
+        async function checkOverlapIndicator() {
+            const d = dateInput.value;
+            if (!d) return;
+            const [y, m] = d.split('-');
+            const monthStr = `${y}-${m}`;
+            const r = await App.get(API + 'study_sessions', { month: monthStr });
+            const daySessions = (r.sessions || []).filter(s => s.study_date === d);
+
+            // Mark hour/minute combo if overlap
+            const h = hourSelect.value;
+            const min = minuteSelect.value;
+            const time = `${h}:${min}`;
+            const slotStart = timeToMinutes(time);
+            const slotEnd = slotStart + 60;
+            const overlaps = daySessions.some(s => {
+                const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
+                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
+                return exStart < slotEnd && exEnd > slotStart;
+            });
+            // Store for submit validation
+            state.hasOverlap = overlaps;
+            state.overlapSessions = daySessions;
+        }
+
+        dateInput.onchange = checkOverlapIndicator;
+        hourSelect.onchange = checkOverlapIndicator;
+        minuteSelect.onchange = checkOverlapIndicator;
+        checkOverlapIndicator();
+
+        // ── Submit ──
         document.getElementById('btn-submit-create').onclick = async () => {
             const studyDate = dateInput.value;
+            const startTime = `${hourSelect.value}:${minuteSelect.value}`;
             const password = document.getElementById('create-pw').value.trim();
 
+            if (!state.hostMemberId) return Toast.warning('개설자를 선택해주세요.');
             if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
-            if (!state.selectedTime) return Toast.warning('시간을 선택해주세요.');
             if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
+
+            // Client-side overlap check
+            const slotStart = timeToMinutes(startTime);
+            const slotEnd = slotStart + 60;
+            const overlap = (state.overlapSessions || []).find(s => {
+                const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
+                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
+                return exStart < slotEnd && exEnd > slotStart;
+            });
+            if (overlap) {
+                return Toast.warning(`이미 해당 날짜/시간에 예약된 복습클래스가 있습니다`);
+            }
 
             App.showLoading();
             const r = await App.post(API + 'study_session_create', {
+                host_member_id: state.hostMemberId,
                 study_date: studyDate,
-                start_time: state.selectedTime,
+                start_time: startTime,
                 password: password,
             });
             App.hideLoading();
 
             if (r.success) {
-                Toast.success(r.message || '복습클래스가 생성되었습니다.');
+                if (r.zoom_status === 'failed') {
+                    Toast.warning(r.message || '복습클래스가 생성되었지만 Zoom 생성에 실패했습니다.');
+                } else {
+                    Toast.success(r.message || '복습클래스가 생성되었습니다.');
+                }
                 App.closeModal();
 
                 // Navigate to the created session's month
@@ -501,48 +655,6 @@ const StudyApp = (() => {
                 loadSessions();
             }
         };
-    }
-
-    function bindTimeButtons(grid, state) {
-        grid.querySelectorAll('.study-time-btn:not(.disabled)').forEach(btn => {
-            btn.onclick = () => {
-                grid.querySelectorAll('.study-time-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                state.selectedTime = btn.dataset.time;
-            };
-        });
-    }
-
-    async function updateTimeSlots(dateStr, grid, state) {
-        if (!dateStr || !grid) return;
-        const [y, m] = dateStr.split('-');
-        const monthStr = `${y}-${m}`;
-
-        // Fetch sessions for that month
-        const r = await App.get(API + 'study_sessions', { month: monthStr });
-        const daySessions = (r.sessions || []).filter(s => s.study_date === dateStr);
-
-        grid.querySelectorAll('.study-time-btn').forEach(btn => {
-            btn.classList.remove('disabled', 'selected');
-            const time = btn.dataset.time;
-            // Check overlap: this slot is [time, time+1h)
-            const slotStart = timeToMinutes(time);
-            const slotEnd = slotStart + 60;
-
-            const overlaps = daySessions.some(s => {
-                const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
-                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
-                return exStart < slotEnd && exEnd > slotStart;
-            });
-
-            if (overlaps) {
-                btn.classList.add('disabled');
-                btn.onclick = (e) => { e.stopPropagation(); Toast.warning('해당 시간에 이미 복습클래스가 있습니다.'); };
-            }
-        });
-
-        // Rebind non-disabled buttons
-        bindTimeButtons(grid, state);
     }
 
     function timeToMinutes(timeStr) {

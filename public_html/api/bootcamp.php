@@ -222,6 +222,8 @@ case 'cafe_posts':             handleCafePosts(); break;
 
 // ── Study (복습클래스) ──────────────────────────────────────
 
+case 'study_groups':            handleStudyGroups(); break;
+case 'study_members':           handleStudyMembers(); break;
 case 'study_sessions':          handleStudySessions(); break;
 case 'study_session_detail':    handleStudySessionDetail(); break;
 case 'study_session_create':    handleStudySessionCreate($method); break;

@@ -5,6 +5,54 @@
  */
 
 /**
+ * 스터디용 조 목록 (회원 접근 가능)
+ */
+function handleStudyGroups() {
+    $member = requireMember();
+    $db = getDB();
+    $cohortId = getMemberCohortId($db, $member['member_id']);
+    if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
+
+    $stmt = $db->prepare("SELECT id, name FROM bootcamp_groups WHERE cohort_id = ? ORDER BY name");
+    $stmt->execute([$cohortId]);
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
+}
+
+/**
+ * 스터디용 조원 목록 (회원 접근 가능, 검색 지원)
+ */
+function handleStudyMembers() {
+    $member = requireMember();
+    $db = getDB();
+    $cohortId = getMemberCohortId($db, $member['member_id']);
+    if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
+
+    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'withdrawn'"];
+    $params = [$cohortId];
+
+    if (!empty($_GET['group_id'])) {
+        $where[] = "bm.group_id = ?";
+        $params[] = (int)$_GET['group_id'];
+    }
+    if (!empty($_GET['keyword'])) {
+        $kw = '%' . trim($_GET['keyword']) . '%';
+        $where[] = "(bm.nickname LIKE ? OR bm.real_name LIKE ?)";
+        $params[] = $kw;
+        $params[] = $kw;
+    }
+
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.nickname, bm.real_name, bm.group_id, bg.name AS group_name
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY bg.name, bm.nickname
+    ");
+    $stmt->execute($params);
+    jsonSuccess(['members' => $stmt->fetchAll()]);
+}
+
+/**
  * 월별 스터디 목록 (달력용)
  */
 function handleStudySessions() {
@@ -112,13 +160,14 @@ function handleStudySessionCreate($method) {
     $member = requireMember();
     $input = getJsonInput();
 
+    $hostMemberId = (int)($input['host_member_id'] ?? 0);
     $studyDate = $input['study_date'] ?? '';
     $startTime = $input['start_time'] ?? '';
     $password = $input['password'] ?? '';
 
     // 기본 검증
-    if (!$studyDate || !$startTime || !$password) {
-        jsonError('study_date, start_time, password 필요');
+    if (!$hostMemberId || !$studyDate || !$startTime || !$password) {
+        jsonError('host_member_id, study_date, start_time, password 필요');
     }
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) {
         jsonError('study_date 형식: YYYY-MM-DD');
@@ -145,19 +194,19 @@ function handleStudySessionCreate($method) {
 
     $db = getDB();
 
-    // 회원 정보
-    $memberRow = $db->prepare("SELECT id, nickname, cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
-    $memberRow->execute([$member['member_id']]);
-    $memberData = $memberRow->fetch();
-    if (!$memberData) jsonError('회원 정보를 찾을 수 없습니다.');
+    // 개설자(호스트) 회원 정보 조회
+    $hostRow = $db->prepare("SELECT id, nickname, cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $hostRow->execute([$hostMemberId]);
+    $hostData = $hostRow->fetch();
+    if (!$hostData) jsonError('개설자 회원 정보를 찾을 수 없습니다.');
 
-    $cohortId = (int)$memberData['cohort_id'];
-    $nickname = $memberData['nickname'];
+    $cohortId = (int)$hostData['cohort_id'];
+    $nickname = $hostData['nickname'];
 
     // 시간 겹침 검증
     $overlap = checkTimeOverlap($db, $cohortId, $studyDate, $startTimeFull, $endTime);
     if ($overlap) {
-        jsonError("해당 시간에 이미 복습클래스가 있습니다: {$overlap['title']}");
+        jsonError("이미 해당 날짜/시간에 예약된 복습클래스가 있습니다: {$overlap['title']}");
     }
 
     // 제목 자동 생성
@@ -169,14 +218,14 @@ function handleStudySessionCreate($method) {
         INSERT INTO study_sessions
             (cohort_id, host_member_id, title, study_date, start_time, end_time, password, status, zoom_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
-    ")->execute([$cohortId, $member['member_id'], $title, $studyDate, $startTimeFull, $endTime, $password]);
+    ")->execute([$cohortId, $hostMemberId, $title, $studyDate, $startTimeFull, $endTime, $password]);
 
     $sessionId = (int)$db->lastInsertId();
 
     // 개설자 bookclub_open 미션 체크
     $openTypeId = getMissionTypeId($db, 'bookclub_open');
     if ($openTypeId) {
-        saveCheck($db, $member['member_id'], $studyDate, $openTypeId, 1, 'automation', "study:{$sessionId}", null);
+        saveCheck($db, $hostMemberId, $studyDate, $openTypeId, 1, 'automation', "study:{$sessionId}", null);
     }
 
     // n8n webhook 호출하여 Zoom 생성
@@ -186,8 +235,9 @@ function handleStudySessionCreate($method) {
         'study_date' => $studyDate,
         'start_time' => $timeLabel,
         'end_time' => $endAt->format('H:i'),
+        'duration' => 60,
         'host_nickname' => $nickname,
-        'password' => $password,
+        'scheduled_at' => $startAt->format('c'),
     ]);
 
     if ($zoomResult['success']) {
