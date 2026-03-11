@@ -230,6 +230,7 @@ case 'study_session_create':    handleStudySessionCreate($method); break;
 case 'study_session_cancel':    handleStudySessionCancel($method); break;
 case 'study_session_qr':        handleStudySessionQr($method); break;
 case 'study_session_retry_zoom': handleStudySessionRetryZoom($method); break;
+case 'study_zoom_failed':        handleStudyZoomFailed(); break;
 
 // ──────────────────────────────────────────────────────────────
 

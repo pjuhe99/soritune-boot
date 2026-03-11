@@ -258,44 +258,43 @@ function handleStudySessionCreate($method) {
 }
 
 /**
- * Zoom 재시도
+ * Zoom 재시도 (호스트 본인 또는 관리자/운영자)
  */
 function handleStudySessionRetryZoom($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $member = requireMember();
     $input = getJsonInput();
     $sessionId = (int)($input['session_id'] ?? 0);
     if (!$sessionId) jsonError('session_id 필요');
 
+    // 인증: 관리자(operation/coach) 또는 일반 회원(호스트 본인)
+    $isAdmin = false;
+    $memberId = null;
+
+    $adminHeader = $_SERVER['HTTP_X_ADMIN_AUTH'] ?? '';
+    if ($adminHeader || !empty($_COOKIE['BOOT_ADMIN_SID'])) {
+        // 관리자 인증 시도
+        try {
+            $admin = requireAdmin(['operation', 'coach']);
+            $isAdmin = true;
+        } catch (\Exception $e) {
+            // admin 인증 실패 시 member로 fallback
+        }
+    }
+
+    if (!$isAdmin) {
+        $member = requireMember();
+        $memberId = $member['member_id'];
+    }
+
     $db = getDB();
-    $session = $db->prepare("
-        SELECT ss.*, bm.nickname AS host_nickname
-        FROM study_sessions ss
-        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
-        WHERE ss.id = ? AND ss.host_member_id = ?
-    ");
-    $session->execute([$sessionId, $member['member_id']]);
-    $row = $session->fetch();
-    if (!$row) jsonError('본인이 개설한 스터디만 재시도할 수 있습니다.', 403);
-    if ($row['zoom_status'] === 'ready') jsonError('이미 Zoom이 생성되어 있습니다.');
-    if ($row['status'] === 'cancelled') jsonError('취소된 스터디입니다.');
+    $row = getStudySessionForRetry($db, $sessionId);
 
-    $startAt = new DateTime("{$row['study_date']} {$row['start_time']}", new DateTimeZone('Asia/Seoul'));
-    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
-    if ($now > $startAt) jsonError('시작 시각이 지난 스터디는 재시도할 수 없습니다.');
+    // 권한 검증: 관리자가 아니면 호스트 본인만 가능
+    if (!$isAdmin && (int)$row['host_member_id'] !== (int)$memberId) {
+        jsonError('본인이 개설한 스터디만 재시도할 수 있습니다.', 403);
+    }
 
-    $timeLabel = substr($row['start_time'], 0, 5);
-    $endLabel = substr($row['end_time'], 0, 5);
-
-    $zoomResult = callZoomWebhook($db, $sessionId, [
-        'study_session_id' => $sessionId,
-        'title' => $row['title'],
-        'study_date' => $row['study_date'],
-        'start_time' => $timeLabel,
-        'end_time' => $endLabel,
-        'host_nickname' => $row['host_nickname'],
-        'password' => $row['password'],
-    ]);
+    $zoomResult = retryZoomForSession($db, $row);
 
     if ($zoomResult['success']) {
         jsonSuccess([
@@ -304,6 +303,39 @@ function handleStudySessionRetryZoom($method) {
     } else {
         jsonError($zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
+}
+
+/**
+ * Zoom 실패 세션 목록 (관리자 전용)
+ */
+function handleStudyZoomFailed() {
+    requireAdmin(['operation', 'coach']);
+    $db = getDB();
+
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    $where = ["ss.zoom_status IN ('failed', 'pending')", "ss.status IN ('pending', 'active')"];
+    $params = [];
+
+    if ($cohortId) {
+        $where[] = "ss.cohort_id = ?";
+        $params[] = $cohortId;
+    }
+
+    // 시작 시각이 아직 안 지난 세션만
+    $where[] = "CONCAT(ss.study_date, ' ', ss.start_time) > NOW()";
+
+    $stmt = $db->prepare("
+        SELECT ss.id, ss.title, ss.study_date, ss.start_time, ss.end_time,
+               ss.status, ss.zoom_status, ss.zoom_error_message,
+               ss.host_member_id, bm.nickname AS host_nickname,
+               ss.created_at
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY ss.study_date, ss.start_time
+    ");
+    $stmt->execute($params);
+    jsonSuccess(['sessions' => $stmt->fetchAll()]);
 }
 
 /**
@@ -431,6 +463,51 @@ function handleStudySessionQr($method) {
 // ══════════════════════════════════════════════════════════════
 // Internal Helpers
 // ══════════════════════════════════════════════════════════════
+
+/**
+ * Zoom 재시도 대상 세션 조회 + 유효성 검증
+ * 핸들러가 아닌 서비스 함수로 분리 → 관리자 UI, 배치 재시도 등에서 재사용
+ */
+function getStudySessionForRetry($db, $sessionId) {
+    $stmt = $db->prepare("
+        SELECT ss.*, bm.nickname AS host_nickname
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.id = ?
+    ");
+    $stmt->execute([$sessionId]);
+    $row = $stmt->fetch();
+    if (!$row) jsonError('스터디를 찾을 수 없습니다.', 404);
+    if ($row['zoom_status'] === 'ready') jsonError('이미 Zoom이 생성되어 있습니다.');
+    if ($row['status'] === 'cancelled') jsonError('취소된 스터디입니다.');
+
+    $startAt = new DateTime("{$row['study_date']} {$row['start_time']}", new DateTimeZone('Asia/Seoul'));
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    if ($now > $startAt) jsonError('시작 시각이 지난 스터디는 재시도할 수 없습니다.');
+
+    return $row;
+}
+
+/**
+ * Zoom webhook 재시도 실행 (세션 row 기반)
+ * callZoomWebhook()을 감싸는 편의 함수
+ */
+function retryZoomForSession($db, $sessionRow) {
+    $sessionId = (int)$sessionRow['id'];
+    $timeLabel = substr($sessionRow['start_time'], 0, 5);
+    $endLabel = substr($sessionRow['end_time'], 0, 5);
+
+    return callZoomWebhook($db, $sessionId, [
+        'study_session_id' => $sessionId,
+        'title' => $sessionRow['title'],
+        'study_date' => $sessionRow['study_date'],
+        'start_time' => $timeLabel,
+        'end_time' => $endLabel,
+        'duration' => 60,
+        'host_nickname' => $sessionRow['host_nickname'],
+        'scheduled_at' => (new DateTime("{$sessionRow['study_date']} {$sessionRow['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c'),
+    ]);
+}
 
 /**
  * 동일 시작시간 중복 검증
