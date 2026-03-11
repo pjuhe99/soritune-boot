@@ -433,8 +433,9 @@ function handleStudySessionQr($method) {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 시간 겹침 검증
- * existing.start_time < new_end_time AND existing.end_time > new_start_time
+ * 동일 시작시간 중복 검증
+ * 같은 날짜, 같은 시작 시간에 이미 세션이 있으면 차단
+ * (30분 간격 개설 허용 — 14:00과 14:30 동시 가능)
  */
 function checkTimeOverlap($db, $cohortId, $studyDate, $startTime, $endTime, $excludeId = null) {
     $sql = "
@@ -442,11 +443,10 @@ function checkTimeOverlap($db, $cohortId, $studyDate, $startTime, $endTime, $exc
         FROM study_sessions
         WHERE cohort_id = ?
           AND study_date = ?
-          AND start_time < ?
-          AND end_time > ?
+          AND start_time = ?
           AND status IN ('pending', 'active')
     ";
-    $params = [$cohortId, $studyDate, $endTime, $startTime];
+    $params = [$cohortId, $studyDate, $startTime];
 
     if ($excludeId) {
         $sql .= " AND id != ?";

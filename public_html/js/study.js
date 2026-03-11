@@ -643,16 +643,14 @@ const StudyApp = (() => {
             const r = await App.get(API + 'study_sessions', { month: monthStr });
             const daySessions = (r.sessions || []).filter(s => s.study_date === d);
 
-            // Mark hour/minute combo if overlap
+            // Mark hour/minute combo if same start time exists
             const h = hourSelect.value;
             const min = minuteSelect.value;
             const time = `${h}:${min}`;
             const slotStart = timeToMinutes(time);
-            const slotEnd = slotStart + 60;
             const overlaps = daySessions.some(s => {
                 const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
-                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
-                return exStart < slotEnd && exEnd > slotStart;
+                return exStart === slotStart;
             });
             // Store for submit validation
             state.hasOverlap = overlaps;
@@ -674,13 +672,11 @@ const StudyApp = (() => {
             if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
             if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
 
-            // Client-side overlap check
+            // Client-side overlap check (same start time)
             const slotStart = timeToMinutes(startTime);
-            const slotEnd = slotStart + 60;
             const overlap = (state.overlapSessions || []).find(s => {
                 const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
-                const exEnd = timeToMinutes((s.end_time || '').substring(0, 5));
-                return exStart < slotEnd && exEnd > slotStart;
+                return exStart === slotStart;
             });
             if (overlap) {
                 return Toast.warning(`이미 해당 날짜/시간에 예약된 복습클래스가 있습니다`);
