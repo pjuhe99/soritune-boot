@@ -810,7 +810,7 @@ const BootcampApp = (() => {
         if (typeof QRCode !== 'undefined') {
             new QRCode(canvas, {
                 text: url, width: 240, height: 240,
-                colorDark: '#DC2626', colorLight: '#ffffff',
+                colorDark: '#2563EB', colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M,
             });
         } else {
@@ -821,7 +821,7 @@ const BootcampApp = (() => {
                 canvas.innerHTML = '';
                 new QRCode(canvas, {
                     text: url, width: 240, height: 240,
-                    colorDark: '#DC2626', colorLight: '#ffffff',
+                    colorDark: '#2563EB', colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M,
                 });
             };
