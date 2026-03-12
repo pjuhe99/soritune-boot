@@ -1,5 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
-   Member Dashboard (LMS 기반)
+   Member Dashboard
+   공통 토큰/컴포넌트 기반 — 페이지 고유 스타일만 정의
    ══════════════════════════════════════════════════════════════ */
 
 /* ── Login ──────────────────────────────────────────────────── */
@@ -9,128 +10,136 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: #fff;
+    padding: var(--space-6);
+    background: var(--color-bg);
 }
 
 .member-login .login-box {
     width: 100%;
-    max-width: 360px;
+    max-width: 380px;
 }
 
-.member-login .login-box .login-title {
+.member-login .login-title {
     text-align: center;
-    font-size: var(--lg-font-size);
-    font-weight: 800;
-    color: var(--color-semi-black);
-    margin-bottom: 4px;
+    font-size: var(--text-xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-primary);
+    margin-bottom: var(--space-1);
 }
 
 .member-login .login-subtitle {
     text-align: center;
-    color: var(--color-777);
-    font-size: var(--md-font-size);
-    margin-bottom: 30px;
+    color: var(--color-text-sub);
+    font-size: var(--text-md);
+    margin-bottom: var(--space-8);
 }
 
-/* ── Dashboard ──────────────────────────────────────────────── */
+/* ── Dashboard ─────────────────────────────────────────────── */
 .member-dashboard {
     min-height: 100vh;
     min-height: 100dvh;
-    background: #fff;
+    background: var(--color-bg-page);
 }
 
 .member-header {
-    background: #fff;
-    border-bottom: 1px solid var(--bg-tint);
-    padding: 20px;
-    padding-top: calc(var(--safe-top) + 20px);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-5);
+    padding-top: calc(var(--safe-top) + var(--space-5));
     text-align: center;
 }
 
 .member-header .header-title {
-    font-size: var(--lg-font-size);
-    font-weight: 800;
-    color: var(--color-semi-black);
-    margin-bottom: 4px;
+    font-size: var(--text-lg);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
+    margin-bottom: var(--space-1);
 }
 
 .member-header .member-cohort {
-    font-size: var(--sm-font-size);
-    color: var(--color-777);
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
 }
 
 .member-content {
-    padding: 20px;
+    padding: var(--space-5);
     max-width: 500px;
     margin: 0 auto;
 }
 
+/* ── Info Card ─────────────────────────────────────────────── */
 .member-info-card {
-    background: var(--bg-tint);
-    border-radius: var(--radius);
-    padding: 30px 20px;
+    background: var(--color-bg);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8) var(--space-5);
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: var(--space-5);
+    box-shadow: var(--shadow-sm);
 }
 
 .member-nickname {
-    font-size: 28px;
-    font-weight: 800;
-    color: var(--color-semi-black);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
 }
 
 .member-realname {
-    font-size: var(--sm-font-size);
-    color: var(--color-777);
-    margin-top: 4px;
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
 }
 
+/* ── Stats ─────────────────────────────────────────────────── */
 .member-stats {
     display: flex;
     justify-content: center;
-    gap: 32px;
-    margin-top: 20px;
+    gap: var(--space-8);
+    margin-top: var(--space-5);
 }
 
-.member-stat {
-    text-align: center;
-}
+.member-stat { text-align: center; }
 
 .member-point {
-    font-size: 36px;
-    font-weight: 800;
-    color: var(--main-color);
+    font-size: var(--text-3xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-primary);
 }
 
 .member-point-label {
-    font-size: var(--sm-font-size);
-    color: var(--color-777);
-    margin-top: 4px;
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
 }
 
 .member-coin {
-    font-size: 36px;
-    font-weight: 800;
-    color: #eab308;
+    font-size: var(--text-3xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-accent);
 }
 
 .member-coin-label {
-    font-size: var(--sm-font-size);
-    color: var(--color-777);
-    margin-top: 4px;
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
 }
 
+/* ── Placeholder ───────────────────────────────────────────── */
 .member-placeholder {
-    background: var(--bg-tint);
-    border-radius: var(--radius);
-    padding: 30px 20px;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-5);
     text-align: center;
-    color: var(--color-gray);
-    font-size: var(--md-font-size);
+    color: var(--color-text-muted);
+    font-size: var(--text-md);
 }
 
 .member-logout-wrap {
     text-align: center;
-    margin-top: 30px;
+    margin-top: var(--space-8);
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .member-stats { gap: var(--space-5); }
+    .member-point, .member-coin { font-size: var(--text-2xl); }
 }
