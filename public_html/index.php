@@ -16,7 +16,7 @@
 <body>
     <div id="member-root"></div>
     <script src="/js/toast.js?v=20260227"></script>
-    <script src="/js/common.js?v=20260227"></script>
+    <script src="/js/common.js?v=20260312"></script>
     <script src="/js/member.js?v=20260227"></script>
     <script>MemberApp.init();</script>
 </body>

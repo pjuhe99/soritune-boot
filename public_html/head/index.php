@@ -16,7 +16,7 @@
 <body>
     <div id="admin-root" data-role="head"></div>
     <script src="/js/toast.js?v=20260227"></script>
-    <script src="/js/common.js?v=20260227"></script>
+    <script src="/js/common.js?v=20260312"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="/js/admin.js?v=20260311a"></script>
     <script src="/js/coin.js?v=20260311a"></script>

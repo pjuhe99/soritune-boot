@@ -19,8 +19,8 @@ require_once __DIR__ . '/../config.php';
 <body>
     <div id="study-root"></div>
     <script src="/js/toast.js?v=20260227"></script>
-    <script src="/js/common.js?v=20260227"></script>
-    <script src="/js/study.js?v=20260311"></script>
+    <script src="/js/common.js?v=20260312"></script>
+    <script src="/js/study.js?v=20260312"></script>
     <script>StudyApp.init();</script>
 </body>
 </html>
