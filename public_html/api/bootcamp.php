@@ -17,6 +17,7 @@ require_once __DIR__ . '/services/coin.php';
 require_once __DIR__ . '/services/coin_cycle.php';
 require_once __DIR__ . '/services/integration.php';
 require_once __DIR__ . '/services/study.php';
+require_once __DIR__ . '/services/lecture.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -245,6 +246,15 @@ case 'study_session_cancel':    handleStudySessionCancel($method); break;
 case 'study_session_qr':        handleStudySessionQr($method); break;
 case 'study_session_retry_zoom': handleStudySessionRetryZoom($method); break;
 case 'study_zoom_failed':        handleStudyZoomFailed(); break;
+
+// ── Lecture (코치 강의) ────────────────────────────────────
+
+case 'lecture_coaches':           handleLectureCoaches(); break;
+case 'lecture_sessions':          handleLectureSessions(); break;
+case 'lecture_session_detail':    handleLectureSessionDetail(); break;
+case 'lecture_schedule_create':   handleLectureScheduleCreate($method); break;
+case 'lecture_schedule_cancel':   handleLectureScheduleCancel($method); break;
+case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
