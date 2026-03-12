@@ -13,7 +13,7 @@ require_once __DIR__ . '/../config.php';
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <link rel="stylesheet" href="/css/common.css?v=20260312">
-    <link rel="stylesheet" href="/css/study.css?v=20260312">
+    <link rel="stylesheet" href="/css/study.css?v=20260312a">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>

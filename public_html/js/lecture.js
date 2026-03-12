@@ -242,7 +242,7 @@ const LectureApp = (() => {
             .join('');
 
         const cohortOpts = cohorts.map(c => {
-            const label = c.name || `기수 #${c.id}`;
+            const label = c.cohort || c.name || `기수 #${c.id}`;
             const period = c.start_date && c.end_date
                 ? ` (${c.start_date} ~ ${c.end_date})`
                 : '';
