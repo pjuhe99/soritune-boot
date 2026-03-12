@@ -28,57 +28,6 @@ function handleRevivalCandidates() {
     jsonSuccess(['candidates' => $stmt->fetchAll()]);
 }
 
-function handleRevivalProcess($method) {
-    if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
-    $input = getJsonInput();
-    $memberId = (int)($input['member_id'] ?? 0);
-    $note = trim($input['note'] ?? '') ?: null;
-    if (!$memberId) jsonError('member_id 필요');
-
-    $db = getDB();
-
-    $stmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
-    $stmt->execute([$memberId]);
-    $scoreRow = $stmt->fetch();
-    $beforeScore = $scoreRow ? (int)$scoreRow['current_score'] : 0;
-
-    if ($beforeScore > SCORE_REVIVAL_ELIGIBLE) jsonError('패자부활 기준(' . SCORE_REVIVAL_ELIGIBLE . ') 이하가 아닙니다. 현재 점수: ' . $beforeScore);
-
-    $afterScore = SCORE_REVIVAL_AFTER;
-
-    // revival_logs 저장
-    $db->prepare("
-        INSERT INTO revival_logs (member_id, before_score, after_score, note, created_by)
-        VALUES (?, ?, ?, ?, ?)
-    ")->execute([$memberId, $beforeScore, $afterScore, $note, $admin['admin_id']]);
-
-    // score_logs 저장
-    $change = $afterScore - $beforeScore;
-    $db->prepare("
-        INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
-        VALUES (?, ?, ?, ?, 'revival_adjustment', ?, ?)
-    ")->execute([$memberId, $change, $beforeScore, $afterScore, $note, $admin['admin_id']]);
-
-    // member_scores 갱신
-    $db->prepare("
-        INSERT INTO member_scores (member_id, current_score, last_calculated_at)
-        VALUES (?, ?, NOW())
-        ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
-    ")->execute([$memberId, $afterScore]);
-
-    // 조관리 제외 상태 해제
-    if ($afterScore > SCORE_OUT_THRESHOLD) {
-        $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ? AND member_status = 'out_of_group_management'")
-           ->execute([$memberId]);
-    }
-
-    jsonSuccess([
-        'before_score' => $beforeScore,
-        'after_score' => $afterScore,
-    ], '패자부활전 처리가 완료되었습니다.');
-}
-
 function handleRevivalLogs() {
     requireAdmin();
     $db = getDB();

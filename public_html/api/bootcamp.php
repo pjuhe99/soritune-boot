@@ -198,7 +198,6 @@ case 'warning_note_create':
 // ── Revival ──────────────────────────────────────────────────
 
 case 'revival_candidates': handleRevivalCandidates(); break;
-case 'revival_process':    handleRevivalProcess($method); break;
 case 'revival_logs':       handleRevivalLogs(); break;
 
 // ── Coins ────────────────────────────────────────────────────
