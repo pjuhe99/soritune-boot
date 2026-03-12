@@ -27,7 +27,7 @@ function autoExpireSession($db, $sessionId) {
 // ── Helper: 세션 코드로 유효한 세션 조회 ──
 function getActiveSession($db, $code) {
     $stmt = $db->prepare("
-        SELECT id, session_code, admin_id, cohort_id, status, expires_at, created_at
+        SELECT id, session_code, session_type, admin_id, cohort_id, status, expires_at, created_at
         FROM qr_sessions WHERE session_code = ?
     ");
     $stmt->execute([$code]);
@@ -55,6 +55,9 @@ case 'create_session':
     $admin = requireAdmin(['coach', 'operation']);
     $db = getDB();
 
+    $input = getJsonInput();
+    $sessionType = ($input['session_type'] ?? 'attendance') === 'revival' ? 'revival' : 'attendance';
+
     // 코치의 기수 확인
     $cohort = getEffectiveCohort($admin);
     if (!$cohort) jsonError('기수 정보가 없습니다.');
@@ -65,11 +68,11 @@ case 'create_session':
     if (!$cohortData) jsonError('활성 기수를 찾을 수 없습니다.');
     $cohortId = (int)$cohortData['id'];
 
-    // 기존 활성 세션 종료
+    // 같은 타입의 기존 활성 세션 종료
     $db->prepare("
         UPDATE qr_sessions SET status = 'closed', closed_at = NOW()
-        WHERE admin_id = ? AND status = 'active'
-    ")->execute([$admin['admin_id']]);
+        WHERE admin_id = ? AND status = 'active' AND session_type = ?
+    ")->execute([$admin['admin_id'], $sessionType]);
 
     // 새 세션 생성
     $sessionCode = bin2hex(random_bytes(QR_SESSION_CODE_LENGTH / 2));
@@ -77,18 +80,19 @@ case 'create_session':
     $expiresAt = date('Y-m-d H:i:s', time() + $expiryMinutes * 60);
 
     $db->prepare("
-        INSERT INTO qr_sessions (session_code, admin_id, cohort_id, expires_at)
-        VALUES (?, ?, ?, ?)
-    ")->execute([$sessionCode, $admin['admin_id'], $cohortId, $expiresAt]);
+        INSERT INTO qr_sessions (session_code, session_type, admin_id, cohort_id, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+    ")->execute([$sessionCode, $sessionType, $admin['admin_id'], $cohortId, $expiresAt]);
 
     $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $sessionCode;
 
     jsonSuccess([
-        'session_code' => $sessionCode,
-        'scan_url'     => $scanUrl,
-        'expires_at'   => $expiresAt,
+        'session_code'  => $sessionCode,
+        'session_type'  => $sessionType,
+        'scan_url'      => $scanUrl,
+        'expires_at'    => $expiresAt,
         'expiry_minutes' => $expiryMinutes,
-    ], 'QR 세션이 생성되었습니다.');
+    ], $sessionType === 'revival' ? '패자부활 QR 세션이 생성되었습니다.' : 'QR 세션이 생성되었습니다.');
     break;
 
 // ── 세션 종료 (코치 전용) ──
@@ -122,14 +126,16 @@ case 'session_status':
     $admin = requireAdmin(['coach', 'operation']);
     $db = getDB();
 
-    // 코치의 활성 세션 조회
+    $queryType = ($_GET['session_type'] ?? 'attendance') === 'revival' ? 'revival' : 'attendance';
+
+    // 코치의 활성 세션 조회 (타입별)
     $stmt = $db->prepare("
-        SELECT id, session_code, cohort_id, status, expires_at, created_at
+        SELECT id, session_code, session_type, cohort_id, status, expires_at, created_at
         FROM qr_sessions
-        WHERE admin_id = ? AND status = 'active'
+        WHERE admin_id = ? AND status = 'active' AND session_type = ?
         ORDER BY created_at DESC LIMIT 1
     ");
-    $stmt->execute([$admin['admin_id']]);
+    $stmt->execute([$admin['admin_id'], $queryType]);
     $session = $stmt->fetch();
 
     if (!$session) {
@@ -170,6 +176,7 @@ case 'session_status':
     jsonSuccess([
         'has_session'   => true,
         'session_code'  => $session['session_code'],
+        'session_type'  => $session['session_type'] ?? 'attendance',
         'scan_url'      => $scanUrl,
         'expires_at'    => $session['expires_at'],
         'attendees'     => $attendees->fetchAll(),
@@ -196,8 +203,9 @@ case 'verify':
     }
 
     jsonSuccess([
-        'valid'     => true,
-        'cohort_id' => (int)$session['cohort_id'],
+        'valid'        => true,
+        'cohort_id'    => (int)$session['cohort_id'],
+        'session_type' => $session['session_type'] ?? 'attendance',
     ]);
     break;
 

@@ -88,8 +88,15 @@ const BootcampApp = (() => {
         const tabs = document.getElementById('sec-tabs');
         if (tabs) {
             tabs.querySelectorAll('.tab').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', async () => {
                     const tab = btn.dataset.tab;
+                    // 패자부활 QR 세션 활성 중 다른 탭으로 이동 시 종료 확인
+                    if (tab !== '#bc-tab-revival' && revivalQrSessionCode) {
+                        if (!await App.confirm('패자부활 QR 세션이 활성 중입니다.\n탭을 이동하면 세션이 종료됩니다.\n이동하시겠습니까?')) return;
+                        await App.post(QR_API + 'close_session', { session_code: revivalQrSessionCode });
+                        if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
+                        revivalQrSessionCode = null;
+                    }
                     if (tab === '#bc-tab-checklist') loadChecklist();
                     else if (tab === '#bc-tab-status') loadStatusBoard();
                     else if (tab === '#bc-tab-qr') loadQR();
@@ -100,6 +107,14 @@ const BootcampApp = (() => {
                 });
             });
         }
+
+        // 창 닫기/새로고침 시 패자부활 QR 세션 종료
+        window.addEventListener('beforeunload', () => {
+            if (revivalQrSessionCode) {
+                const blob = new Blob([JSON.stringify({ session_code: revivalQrSessionCode })], { type: 'application/json' });
+                navigator.sendBeacon(QR_API + 'close_session', blob);
+            }
+        });
 
         loadChecklist();
     }
@@ -617,10 +632,16 @@ const BootcampApp = (() => {
     // ══════════════════════════════════════════════════════════
     // ── 패자부활전 ──
     // ══════════════════════════════════════════════════════════
+    let revivalQrTimer = null;
+    let revivalQrSessionCode = null;
+
     async function loadRevival() {
         const sec = document.getElementById('bc-tab-revival');
         selectedGroupId = 0;
         await loadGroups();
+
+        // 이전 타이머 정리
+        if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
 
         sec.innerHTML = `
             <div class="bc-toolbar mt-md">
@@ -629,9 +650,11 @@ const BootcampApp = (() => {
             <div class="admin-tabs" id="revival-tabs" style="margin:0">
                 <div class="tab_wrap">
                     <button class="tab active" data-tab="#revival-candidates">대상자</button>
+                    <button class="tab" data-tab="#revival-qr-manage">QR 관리</button>
                     <button class="tab" data-tab="#revival-history">처리 이력</button>
                 </div>
                 <div class="tab-content active" id="revival-candidates"></div>
+                <div class="tab-content" id="revival-qr-manage"></div>
                 <div class="tab-content" id="revival-history"></div>
             </div>
         `;
@@ -639,8 +662,10 @@ const BootcampApp = (() => {
         App.initTabs(document.getElementById('revival-tabs'));
         document.querySelectorAll('#revival-tabs .tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (btn.dataset.tab === '#revival-candidates') renderRevivalCandidates();
-                else renderRevivalHistory();
+                const tab = btn.dataset.tab;
+                if (tab === '#revival-candidates') renderRevivalCandidates();
+                else if (tab === '#revival-qr-manage') loadRevivalQR();
+                else if (tab === '#revival-history') renderRevivalHistory();
             });
         });
 
@@ -669,7 +694,7 @@ const BootcampApp = (() => {
 
         const candidates = r.candidates || [];
         if (!candidates.length) {
-            list.innerHTML = '<div class="empty-state">패자부활 대상자가 없습니다. (기준: ${SCORE_REVIVAL_ELIGIBLE}점 이하)</div>';
+            list.innerHTML = `<div class="empty-state">패자부활 대상자가 없습니다. (기준: -15점 이하)</div>`;
             return;
         }
 
@@ -687,6 +712,196 @@ const BootcampApp = (() => {
                 </div>
             `).join('')}
         `;
+    }
+
+    // ── 패자부활 QR 관리 ──
+    async function loadRevivalQR() {
+        const container = document.getElementById('revival-qr-manage');
+        if (!container) return;
+
+        if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
+        container.innerHTML = '<div class="empty-state mt-lg">로딩 중...</div>';
+
+        const r = await App.get(QR_API + 'session_status', { session_type: 'revival' });
+        if (!r.success) return;
+
+        if (r.has_session) {
+            revivalQrSessionCode = r.session_code;
+            renderRevivalQRActive(container, r);
+        } else {
+            revivalQrSessionCode = null;
+            renderRevivalQRIdle(container);
+        }
+    }
+
+    function renderRevivalQRIdle(container) {
+        container.innerHTML = `
+            <div class="qr-idle">
+                <div class="qr-idle-icon" style="font-size:48px">&#x1F3C6;</div>
+                <div class="qr-idle-title">패자부활전 QR</div>
+                <div class="qr-idle-desc">QR 세션을 시작하면 대상자들이<br>QR 코드를 스캔하여 부활 처리할 수 있습니다</div>
+                <button class="btn btn-primary btn-lg" id="btn-revival-qr-start">패자부활전 체크 QR 생성</button>
+            </div>
+        `;
+        document.getElementById('btn-revival-qr-start').onclick = createRevivalQRSession;
+    }
+
+    async function createRevivalQRSession() {
+        App.showLoading();
+        const r = await App.post(QR_API + 'create_session', { session_type: 'revival' });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            loadRevivalQR();
+        }
+    }
+
+    function renderRevivalQRActive(container, data) {
+        const expiresAt = new Date(data.expires_at.replace(' ', 'T'));
+        const attendeeCount = data.attendees ? data.attendees.length : 0;
+
+        container.innerHTML = `
+            <div class="qr-active">
+                <div class="qr-active-header">
+                    <div class="qr-timer" id="revival-qr-timer"></div>
+                    <button class="btn btn-secondary btn-sm" id="btn-revival-qr-close">세션 종료</button>
+                </div>
+                <div class="qr-code-wrap">
+                    <div id="revival-qr-code-canvas"></div>
+                </div>
+                <div class="qr-url-wrap">
+                    <input type="text" class="form-input" id="revival-qr-url" value="${App.esc(data.scan_url)}" readonly>
+                    <button class="btn btn-secondary btn-sm" id="btn-revival-qr-copy">복사</button>
+                </div>
+                <div class="qr-attendees-header">
+                    <span class="qr-attendees-title">부활 처리 현황</span>
+                    <span class="revival-qr-attendees-count"><strong>${attendeeCount}</strong>명 스캔</span>
+                </div>
+                <div id="revival-qr-attendee-list"></div>
+            </div>
+        `;
+
+        // QR 코드 생성
+        renderRevivalQRCode(data.scan_url);
+
+        // 스캔 목록 렌더
+        renderRevivalAttendeeList(data.attendees);
+
+        // 타이머 + 자동 새로고침
+        updateRevivalQRTimer(expiresAt);
+        revivalQrTimer = setInterval(() => {
+            updateRevivalQRTimer(expiresAt);
+            refreshRevivalAttendees();
+        }, 5000);
+
+        // 이벤트
+        document.getElementById('btn-revival-qr-close').onclick = closeRevivalQRSession;
+        document.getElementById('btn-revival-qr-copy').onclick = () => {
+            const input = document.getElementById('revival-qr-url');
+            input.select();
+            navigator.clipboard.writeText(input.value).then(() => Toast.success('링크가 복사되었습니다'));
+        };
+    }
+
+    function renderRevivalQRCode(url) {
+        const canvas = document.getElementById('revival-qr-code-canvas');
+        if (!canvas) return;
+
+        if (typeof QRCode !== 'undefined') {
+            new QRCode(canvas, {
+                text: url, width: 240, height: 240,
+                colorDark: '#DC2626', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M,
+            });
+        } else {
+            canvas.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">QR 라이브러리 로딩 중...</div>';
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+            script.onload = () => {
+                canvas.innerHTML = '';
+                new QRCode(canvas, {
+                    text: url, width: 240, height: 240,
+                    colorDark: '#DC2626', colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M,
+                });
+            };
+            document.head.appendChild(script);
+        }
+    }
+
+    function renderRevivalAttendeeList(attendees) {
+        const list = document.getElementById('revival-qr-attendee-list');
+        if (!list) return;
+
+        if (!attendees || attendees.length === 0) {
+            list.innerHTML = '<div class="empty-state mt-sm">아직 스캔한 대상자가 없습니다</div>';
+            return;
+        }
+
+        list.innerHTML = attendees.map((a, i) => {
+            const time = a.scanned_at ? a.scanned_at.substring(11, 16) : '';
+            return `
+                <div class="qr-attendee-item">
+                    <span class="qr-attendee-num">${attendees.length - i}</span>
+                    <span class="qr-attendee-name">${App.esc(a.nickname)}</span>
+                    <span class="qr-attendee-group">${App.esc(a.group_name)}</span>
+                    <span class="qr-attendee-time">${time}</span>
+                </div>`;
+        }).join('');
+    }
+
+    function updateRevivalQRTimer(expiresAt) {
+        const timerEl = document.getElementById('revival-qr-timer');
+        if (!timerEl) return;
+
+        const now = new Date();
+        const diff = expiresAt - now;
+
+        if (diff <= 0) {
+            timerEl.textContent = '만료됨';
+            timerEl.classList.add('expired');
+            if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
+            setTimeout(() => loadRevivalQR(), 1000);
+            return;
+        }
+
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        timerEl.textContent = `${mins}분 ${String(secs).padStart(2, '0')}초 남음`;
+    }
+
+    async function refreshRevivalAttendees() {
+        const r = await App.api(QR_API + 'session_status&session_type=revival', { showError: false });
+        if (!r || !r.success) return;
+
+        if (!r.has_session) {
+            if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
+            loadRevivalQR();
+            return;
+        }
+
+        const countEl = document.querySelector('.revival-qr-attendees-count');
+        if (countEl) {
+            const cnt = r.attendees ? r.attendees.length : 0;
+            countEl.innerHTML = `<strong>${cnt}</strong>명 스캔`;
+        }
+
+        renderRevivalAttendeeList(r.attendees);
+    }
+
+    async function closeRevivalQRSession() {
+        if (!revivalQrSessionCode) return;
+        if (!await App.confirm('닫으면 현재 패자부활 QR 세션이 종료됩니다.\n종료하시겠습니까?')) return;
+
+        App.showLoading();
+        const r = await App.post(QR_API + 'close_session', { session_code: revivalQrSessionCode });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
+            revivalQrSessionCode = null;
+            loadRevivalQR();
+        }
     }
 
     async function renderRevivalHistory() {
