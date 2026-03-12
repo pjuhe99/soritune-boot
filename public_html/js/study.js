@@ -1,15 +1,13 @@
 /* ══════════════════════════════════════════════════════════════
    StudyApp — 복습클래스 달력 & 예약
+   CalendarUI 공통 컴포넌트 사용
    ══════════════════════════════════════════════════════════════ */
 const StudyApp = (() => {
     const API = '/api/bootcamp.php?action=';
-    const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
     let root = null;
     let member = null;
-    let currentYear = 0;
-    let currentMonth = 0; // 0-indexed
-    let sessions = [];
+    let cal = null; // CalendarUI instance
 
     // ── Init ──
     async function init() {
@@ -21,9 +19,6 @@ const StudyApp = (() => {
 
         if (r.logged_in) {
             member = r.member;
-            const now = new Date();
-            currentYear = now.getFullYear();
-            currentMonth = now.getMonth();
             showMain();
             loadSessions();
         } else {
@@ -65,9 +60,6 @@ const StudyApp = (() => {
             if (r.success) {
                 member = r.member;
                 Toast.success(r.message);
-                const now = new Date();
-                currentYear = now.getFullYear();
-                currentMonth = now.getMonth();
                 showMain();
                 loadSessions();
             }
@@ -88,21 +80,10 @@ const StudyApp = (() => {
                         <button class="btn btn-secondary btn-sm" id="btn-logout">로그아웃</button>
                     </div>
                 </div>
-                <div class="study-calendar">
-                    <div class="study-cal-nav">
-                        <button class="page-btn" id="cal-prev">&lt;</button>
-                        <span class="cal-month-label" id="cal-month-label"></span>
-                        <button class="page-btn" id="cal-next">&gt;</button>
-                        <button class="page-today" id="cal-today">오늘</button>
-                    </div>
-                    <div class="study-cal-grid" id="cal-grid"></div>
-                </div>
+                <div id="study-cal-container"></div>
             </div>
         `;
 
-        document.getElementById('cal-prev').onclick = () => changeMonth(-1);
-        document.getElementById('cal-next').onclick = () => changeMonth(1);
-        document.getElementById('cal-today').onclick = goToday;
         document.getElementById('btn-create-study').onclick = openCreateModal;
         document.getElementById('btn-logout').onclick = async () => {
             await App.post('/api/member.php?action=logout');
@@ -112,123 +93,34 @@ const StudyApp = (() => {
             allMembersCache = null;
             showLogin();
         };
+
+        // CalendarUI 인스턴스 생성
+        cal = CalendarUI.create(document.getElementById('study-cal-container'), {
+            onMonthChange: () => loadSessions(),
+            chipSelector: '.study-chip',
+            onChipClick: (e, chip) => openDetail(parseInt(chip.dataset.id)),
+            renderChips(events) {
+                return events.map(s => {
+                    const statusClass = `status-${s.status}`;
+                    const timeLabel = (s.start_time || '').substring(0, 5);
+                    const chipLabel = timeLabel + ' ' + hostName(s.title);
+                    return `<div class="study-chip ${statusClass}" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(chipLabel)}</div>`;
+                }).join('');
+            },
+        }).mount();
     }
 
     // ── Data Loading ──
     async function loadSessions() {
-        const monthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+        const { year, month } = cal.getMonth();
+        const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
         const r = await App.get(API + 'study_sessions', { month: monthStr });
-        if (r.success) {
-            sessions = r.sessions || [];
-        } else {
-            sessions = [];
-        }
-        renderCalendar();
-    }
-
-    // ── Calendar Navigation ──
-    function changeMonth(delta) {
-        currentMonth += delta;
-        if (currentMonth < 0) { currentMonth = 11; currentYear--; }
-        if (currentMonth > 11) { currentMonth = 0; currentYear++; }
-        updateMonthLabel();
-        loadSessions();
-    }
-
-    function goToday() {
-        const now = new Date();
-        currentYear = now.getFullYear();
-        currentMonth = now.getMonth();
-        updateMonthLabel();
-        loadSessions();
-    }
-
-    function updateMonthLabel() {
-        const label = document.getElementById('cal-month-label');
-        if (label) label.textContent = `${currentYear}년 ${currentMonth + 1}월`;
-    }
-
-    // ── Calendar Rendering ──
-    function renderCalendar() {
-        updateMonthLabel();
-
-        const grid = document.getElementById('cal-grid');
-        if (!grid) return;
-
-        // Build session lookup by date
-        const byDate = {};
-        sessions.forEach(s => {
-            if (!byDate[s.study_date]) byDate[s.study_date] = [];
-            byDate[s.study_date].push(s);
-        });
-
-        const todayStr = App.today();
-        const firstDay = new Date(currentYear, currentMonth, 1);
-        const lastDay = new Date(currentYear, currentMonth + 1, 0);
-        const startDow = firstDay.getDay(); // 0=Sun
-
-        // Previous month fill
-        const prevMonthLast = new Date(currentYear, currentMonth, 0);
-        const cells = [];
-
-        // Header
-        WEEKDAYS.forEach(w => {
-            cells.push(`<div class="study-cal-head">${w}</div>`);
-        });
-
-        // Previous month days
-        for (let i = startDow - 1; i >= 0; i--) {
-            const d = prevMonthLast.getDate() - i;
-            const dateStr = App.formatDate(new Date(currentYear, currentMonth - 1, d));
-            cells.push(buildCell(d, dateStr, true, todayStr, byDate));
-        }
-
-        // Current month days
-        for (let d = 1; d <= lastDay.getDate(); d++) {
-            const dateStr = App.formatDate(new Date(currentYear, currentMonth, d));
-            cells.push(buildCell(d, dateStr, false, todayStr, byDate));
-        }
-
-        // Next month fill
-        const remaining = 7 - (cells.length - 7) % 7;
-        if (remaining < 7) {
-            for (let d = 1; d <= remaining; d++) {
-                const dateStr = App.formatDate(new Date(currentYear, currentMonth + 1, d));
-                cells.push(buildCell(d, dateStr, true, todayStr, byDate));
-            }
-        }
-
-        grid.innerHTML = cells.join('');
-
-        // Bind click events for chips
-        grid.querySelectorAll('.study-chip').forEach(chip => {
-            chip.onclick = () => openDetail(parseInt(chip.dataset.id));
-        });
-    }
-
-    function buildCell(day, dateStr, isOther, todayStr, byDate) {
-        const isToday = dateStr === todayStr;
-        const classes = ['study-cal-cell'];
-        if (isOther) classes.push('other-month');
-        if (isToday) classes.push('today');
-
-        const daySessions = byDate[dateStr] || [];
-        let chipsHtml = '';
-        daySessions.forEach(s => {
-            const statusClass = `status-${s.status}`;
-            const timeLabel = (s.start_time || '').substring(0, 5);
-            const chipLabel = timeLabel + ' ' + hostName(s.title);
-            chipsHtml += `<div class="study-chip ${statusClass}" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(chipLabel)}</div>`;
-        });
-
-        return `<div class="${classes.join(' ')}">
-            <span class="cal-day">${day}</span>
-            ${chipsHtml}
-        </div>`;
+        const sessions = r.success ? (r.sessions || []) : [];
+        // Map study_date → date for CalendarUI
+        cal.setEvents(sessions.map(s => ({ ...s, date: s.study_date }))).render();
     }
 
     function hostName(title) {
-        // "[HH:MM] 닉네임님의 복습 클래스" → "닉네임"
         const m = title.match(/\]\s*(.+?)님의/);
         return m ? m[1] : '';
     }
@@ -354,7 +246,6 @@ const StudyApp = (() => {
                     await navigator.clipboard.writeText(s.zoom_join_url);
                     Toast.success('링크가 복사되었습니다');
                 } catch {
-                    // Fallback
                     const ta = document.createElement('textarea');
                     ta.value = s.zoom_join_url;
                     ta.style.position = 'fixed';
@@ -420,7 +311,6 @@ const StudyApp = (() => {
         Toast.success(r.message || 'QR 출석체크가 시작되었습니다.');
         App.closeModal();
 
-        // Show QR code modal
         const qrBody = `
             <div style="display:flex;flex-direction:column;align-items:center;">
                 <p class="mb-sm" style="font-size:var(--sm-font-size);color:var(--color-777)">참여자에게 아래 QR을 보여주세요</p>
@@ -443,7 +333,6 @@ const StudyApp = (() => {
             Toast.success('링크가 복사되었습니다');
         };
 
-        // Load QR code library dynamically
         if (typeof QRCode === 'undefined') {
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
@@ -457,11 +346,7 @@ const StudyApp = (() => {
     function generateQR(url) {
         const el = document.getElementById('qr-code-area');
         if (!el) return;
-        new QRCode(el, {
-            text: url,
-            width: 200,
-            height: 200,
-        });
+        new QRCode(el, { text: url, width: 200, height: 200 });
     }
 
     // ── Cancel Flow ──
@@ -507,7 +392,6 @@ const StudyApp = (() => {
 
     async function loadGroupsAndMembers() {
         if (groupsCache && allMembersCache) return;
-
         const [gRes, mRes] = await Promise.all([
             App.get(API + 'study_groups'),
             App.get(API + 'study_members'),
@@ -525,12 +409,10 @@ const StudyApp = (() => {
         tomorrow.setDate(tomorrow.getDate() + 1);
         const defaultDate = App.formatDate(tomorrow);
 
-        // Build group options
         const groupOpts = groupsCache.map(g =>
             `<option value="${g.id}">${App.esc(g.name)}</option>`
         ).join('');
 
-        // Build hour options (06~23)
         const hourOpts = Array.from({ length: 18 }, (_, i) => {
             const h = String(i + 6).padStart(2, '0');
             return `<option value="${h}">${h}시</option>`;
@@ -579,7 +461,6 @@ const StudyApp = (() => {
         `;
         App.openModal('복습클래스 예약', body, footer);
 
-        // ── Host member selection logic ──
         const state = { hostMemberId: null, hostNickname: '' };
         const groupSelect = document.getElementById('create-group');
         const searchInput = document.getElementById('create-member-search');
@@ -643,7 +524,6 @@ const StudyApp = (() => {
         };
 
         dropdown.onmousedown = (e) => {
-            // Prevent blur from firing before click
             e.preventDefault();
             const item = e.target.closest('.study-dd-item');
             if (item) {
@@ -651,7 +531,6 @@ const StudyApp = (() => {
             }
         };
 
-        // ── Date change → check time overlap ──
         const dateInput = document.getElementById('create-date');
         const hourSelect = document.getElementById('create-hour');
         const minuteSelect = document.getElementById('create-minute');
@@ -664,7 +543,6 @@ const StudyApp = (() => {
             const r = await App.get(API + 'study_sessions', { month: monthStr });
             const daySessions = (r.sessions || []).filter(s => s.study_date === d);
 
-            // Mark hour/minute combo if same start time exists
             const h = hourSelect.value;
             const min = minuteSelect.value;
             const time = `${h}:${min}`;
@@ -673,7 +551,6 @@ const StudyApp = (() => {
                 const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
                 return exStart === slotStart;
             });
-            // Store for submit validation
             state.hasOverlap = overlaps;
             state.overlapSessions = daySessions;
         }
@@ -683,7 +560,6 @@ const StudyApp = (() => {
         minuteSelect.onchange = checkOverlapIndicator;
         checkOverlapIndicator();
 
-        // ── Submit ──
         document.getElementById('btn-submit-create').onclick = async () => {
             const studyDate = dateInput.value;
             const startTime = `${hourSelect.value}:${minuteSelect.value}`;
@@ -693,7 +569,6 @@ const StudyApp = (() => {
             if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
             if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
 
-            // Client-side overlap check (same start time)
             const slotStart = timeToMinutes(startTime);
             const overlap = (state.overlapSessions || []).find(s => {
                 const exStart = timeToMinutes((s.start_time || '').substring(0, 5));
@@ -720,10 +595,8 @@ const StudyApp = (() => {
                 }
                 App.closeModal();
 
-                // Navigate to the created session's month
                 const [y, m] = studyDate.split('-');
-                currentYear = parseInt(y);
-                currentMonth = parseInt(m) - 1;
+                cal.setMonth(parseInt(y), parseInt(m) - 1);
                 loadSessions();
             }
         };

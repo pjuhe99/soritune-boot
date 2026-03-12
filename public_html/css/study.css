@@ -39,12 +39,12 @@
     font-weight: var(--font-semibold);
 }
 
-/* ── Calendar ──────────────────────────────────────────────── */
+/* ── Calendar (CalendarUI 공통 컴포넌트) ──────────────────── */
 .study-calendar {
     margin-top: var(--space-4);
 }
 
-.study-cal-nav {
+.cal-nav {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,7 +52,7 @@
     margin-bottom: var(--space-3);
 }
 
-.study-cal-nav .page-btn {
+.cal-nav .page-btn {
     width: 32px;
     height: 32px;
     display: flex;
@@ -67,16 +67,16 @@
     font-family: inherit;
     transition: all var(--transition-fast);
 }
-.study-cal-nav .page-btn:hover { background: var(--color-bg-subtle); }
+.cal-nav .page-btn:hover { background: var(--color-bg-subtle); }
 
-.study-cal-nav .cal-month-label {
+.cal-month-label {
     font-size: var(--text-lg);
     font-weight: var(--font-extrabold);
     min-width: 120px;
     text-align: center;
 }
 
-.study-cal-nav .page-today {
+.cal-nav .page-today {
     font-size: var(--text-sm);
     color: var(--color-primary);
     font-weight: var(--font-bold);
@@ -85,16 +85,16 @@
     border: none;
     font-family: inherit;
 }
-.study-cal-nav .page-today:hover { text-decoration: underline; }
+.cal-nav .page-today:hover { text-decoration: underline; }
 
 /* ── Calendar Grid ─────────────────────────────────────────── */
-.study-cal-grid {
+.cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     border-top: 2px solid var(--color-text);
 }
 
-.study-cal-head {
+.cal-head {
     padding: var(--space-2) var(--space-1);
     text-align: center;
     font-size: var(--text-sm);
@@ -102,22 +102,22 @@
     color: var(--color-text-sub);
     border-bottom: 1px solid var(--color-border);
 }
-.study-cal-head:first-child { color: var(--color-danger); }
-.study-cal-head:last-child  { color: var(--color-primary); }
+.cal-head:first-child { color: var(--color-danger); }
+.cal-head:last-child  { color: var(--color-primary); }
 
-.study-cal-cell {
+.cal-cell {
     min-height: 80px;
     border-bottom: 1px solid var(--color-border);
     border-right: 1px solid var(--color-border);
     padding: var(--space-1);
     position: relative;
 }
-.study-cal-cell:nth-child(7n) { border-right: none; }
+.cal-cell:nth-child(7n) { border-right: none; }
 
-.study-cal-cell.other-month { background: var(--color-gray-50); }
-.study-cal-cell.other-month .cal-day { color: var(--color-text-muted); }
+.cal-cell.other-month { background: var(--color-gray-50); }
+.cal-cell.other-month .cal-day { color: var(--color-text-muted); }
 
-.study-cal-cell.today .cal-day {
+.cal-cell.today .cal-day {
     background: var(--color-primary);
     color: #fff;
     border-radius: 50%;
@@ -134,10 +134,10 @@
     margin-bottom: 2px;
     display: inline-block;
 }
-.study-cal-cell:nth-child(7n+1) .cal-day { color: var(--color-danger); }
-.study-cal-cell:nth-child(7n)   .cal-day { color: var(--color-primary); }
-.study-cal-cell.today .cal-day { color: #fff !important; }
-.study-cal-cell.other-month .cal-day { color: var(--color-text-muted) !important; }
+.cal-cell:nth-child(7n+1) .cal-day { color: var(--color-danger); }
+.cal-cell:nth-child(7n)   .cal-day { color: var(--color-primary); }
+.cal-cell.today .cal-day { color: #fff !important; }
+.cal-cell.other-month .cal-day { color: var(--color-text-muted) !important; }
 
 /* ── Session Chip ──────────────────────────────────────────── */
 .study-chip {
@@ -390,7 +390,7 @@
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .study-cal-cell {
+    .cal-cell {
         min-height: 60px;
         padding: 2px;
     }

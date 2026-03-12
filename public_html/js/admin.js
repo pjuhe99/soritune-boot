@@ -124,6 +124,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-cohorts-mgmt">기수 관리</button>
                             <button class="tab" data-tab="#tab-coin-cycles">코인 Cycle</button>
                             <button class="tab" data-tab="#tab-cafe-posts">카페 게시글</button>
+                            <button class="tab" data-tab="#tab-lectures">강의 관리</button>
                         </div>
                         <div class="tab-content active" id="tab-members"></div>
                         <div class="tab-content" id="tab-admins"></div>
@@ -133,6 +134,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
                         <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
+                        <div class="tab-content" id="tab-lectures"></div>
                     </div>
                     ` : role === 'coach' ? `
                     <div class="admin-tabs" id="sec-tabs">
@@ -144,6 +146,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-coins">코인 관리</button>
                             <button class="tab" data-tab="#bc-tab-members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups">조 관리</button>
+                            <button class="tab" data-tab="#bc-tab-lectures">강의 관리</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
@@ -152,6 +155,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-coins"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
+                        <div class="tab-content" id="bc-tab-lectures"></div>
                     </div>
                     ` : (role === 'leader' || role === 'subleader') ? `
                     <div class="admin-tabs" id="sec-tabs">
@@ -165,11 +169,9 @@ const AdminApp = (() => {
                     ` : `
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab_wrap">
-                            <button class="tab active" data-tab="#tab-placeholder">추가 기능</button>
+                            <button class="tab active" data-tab="#tab-head-lectures">강의 관리</button>
                         </div>
-                        <div class="tab-content active" id="tab-placeholder">
-                            <div class="empty-state mt-lg">추후 확장 예정입니다.</div>
-                        </div>
+                        <div class="tab-content active" id="tab-head-lectures"></div>
                     </div>
                     `}
                 </div>
@@ -219,6 +221,20 @@ const AdminApp = (() => {
                     observer.observe(coinTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
+
+            // Lecture 탭 lazy load
+            if (typeof LectureApp !== 'undefined') {
+                const lecTab = document.getElementById('tab-lectures');
+                if (lecTab) {
+                    const lecObserver = new MutationObserver(() => {
+                        if (lecTab.classList.contains('active') && !lecTab.dataset.loaded) {
+                            lecTab.dataset.loaded = '1';
+                            LectureApp.initForAdmin(admin, role, 'tab-lectures');
+                        }
+                    });
+                    lecObserver.observe(lecTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
         }
 
         if ((role === 'coach' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
@@ -226,6 +242,26 @@ const AdminApp = (() => {
                 BootcampApp.initForLeader(admin);
             } else {
                 BootcampApp.initForCoach(admin);
+            }
+        }
+
+        // Coach/Head: Lecture 탭 lazy load
+        if (!isOperation() && typeof LectureApp !== 'undefined') {
+            const lecTabId = role === 'coach' ? 'bc-tab-lectures' : 'tab-head-lectures';
+            const lecEl = document.getElementById(lecTabId);
+            if (lecEl) {
+                if (lecEl.classList.contains('active')) {
+                    // head의 경우 기본 활성 탭
+                    LectureApp.initForAdmin(admin, role, lecTabId);
+                } else {
+                    const obs = new MutationObserver(() => {
+                        if (lecEl.classList.contains('active') && !lecEl.dataset.loaded) {
+                            lecEl.dataset.loaded = '1';
+                            LectureApp.initForAdmin(admin, role, lecTabId);
+                        }
+                    });
+                    obs.observe(lecEl, { attributes: true, attributeFilter: ['class'] });
+                }
             }
         }
     }
