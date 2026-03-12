@@ -649,7 +649,7 @@ const BootcampApp = (() => {
     async function renderRevivalCandidates() {
         const sec = document.getElementById('revival-candidates');
         sec.innerHTML = `
-            ${filterBarHtml({ date: false })}
+            ${filterBarHtml({ date: false, stage: false })}
             <div id="revival-list"><div class="empty-state">로딩 중...</div></div>
         `;
         bindFilterEvents(fetchRevivalCandidates);
@@ -662,21 +662,22 @@ const BootcampApp = (() => {
 
         const params = { cohort_id: selectedCohortId };
         if (selectedGroupId) params.group_id = selectedGroupId;
-        if (selectedStageNo) params.stage_no = selectedStageNo;
 
         const r = await App.get(API + 'revival_candidates', params);
         if (!r.success) return;
 
         const candidates = r.candidates || [];
         if (!candidates.length) {
-            list.innerHTML = '<div class="empty-state">탈락 대상자가 없습니다.</div>';
+            list.innerHTML = '<div class="empty-state">패자부활 대상자가 없습니다. (기준: ${SCORE_REVIVAL_ELIGIBLE}점 이하)</div>';
             return;
         }
 
         list.innerHTML = `
+            <div class="revival-summary" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-light,#f5f5f5);border-radius:8px;font-size:var(--sm-font-size)">
+                대상자 <strong>${candidates.length}</strong>명 (기준: -15점 이하)
+            </div>
             ${candidates.map(c => `
                 <div class="bc-revival-row">
-                    <input type="checkbox" class="revival-check" value="${c.id}">
                     <div class="revival-info">
                         <div class="revival-name">${App.esc(c.nickname)}</div>
                         <div class="revival-detail">${App.esc(c.group_name || '-')} · ${c.stage_no}단계 · ${App.esc(ROLE_LABELS[c.member_role] || '')}</div>
@@ -684,31 +685,7 @@ const BootcampApp = (() => {
                     <div class="revival-score">${c.current_score}</div>
                 </div>
             `).join('')}
-            <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
-                <input type="text" class="form-input" id="revival-note" placeholder="메모 (선택)" style="flex:1">
-                <button class="btn btn-primary btn-sm" id="revival-process">부활 처리</button>
-            </div>
         `;
-
-        document.getElementById('revival-process').onclick = processRevival;
-    }
-
-    async function processRevival() {
-        const checked = Array.from(document.querySelectorAll('.revival-check:checked')).map(cb => parseInt(cb.value));
-        if (!checked.length) return Toast.warning('부활 대상을 선택해주세요.');
-
-        const note = document.getElementById('revival-note').value.trim() || null;
-        if (!await App.confirm(`${checked.length}명을 부활 처리하시겠습니까?\n점수가 -10으로 보정됩니다.`)) return;
-
-        App.showLoading();
-        let success = 0;
-        for (const memberId of checked) {
-            const r = await App.post(API + 'revival_process', { member_id: memberId, note });
-            if (r.success) success++;
-        }
-        App.hideLoading();
-        Toast.success(`${success}명 부활 처리 완료`);
-        fetchRevivalCandidates();
     }
 
     async function renderRevivalHistory() {
