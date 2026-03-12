@@ -72,16 +72,16 @@ const App = (() => {
     function openModal(title, bodyHtml, footerHtml = '') {
         closeModal();
         const overlay = document.createElement('div');
-        overlay.className = 'layer-overlay';
+        overlay.className = 'modal-overlay';
         overlay.id = 'app-modal';
         overlay.innerHTML = `
-            <div class="layer_wrap">
-                <div class="header">
-                    <h3>${esc(title)}</h3>
-                    <button class="close" onclick="App.closeModal()">&times;</button>
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">${esc(title)}</h3>
+                    <button class="modal-close" onclick="App.closeModal()">&times;</button>
                 </div>
-                <div class="contents">${bodyHtml}</div>
-                ${footerHtml ? `<div class="footer">${footerHtml}</div>` : ''}
+                <div class="modal-body">${bodyHtml}</div>
+                ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}
             </div>
         `;
         overlay.addEventListener('click', (e) => {
@@ -95,21 +95,21 @@ const App = (() => {
         if (m) m.remove();
     }
 
-    // ── Confirm (LMS confirm 패턴) ──
+    // ── Confirm ──
     function confirm(message) {
         return new Promise(resolve => {
             closeModal();
             const overlay = document.createElement('div');
-            overlay.className = 'layer-overlay';
+            overlay.className = 'modal-overlay';
             overlay.id = 'app-modal';
             overlay.innerHTML = `
-                <div class="layer_wrap confirm">
-                    <div class="contents" style="padding:20px 10px;">
-                        <p style="font-size:14px;line-height:1.6;color:var(--color-semi-black)">${esc(message)}</p>
+                <div class="modal modal--confirm">
+                    <div class="modal-body" style="padding:4px 0 12px">
+                        <p style="font-size:14px;line-height:1.6;white-space:pre-line">${esc(message)}</p>
                     </div>
-                    <div class="footer">
+                    <div class="modal-footer">
                         <button class="btn btn-secondary btn-sm" id="confirm-no">취소</button>
-                        <button class="btn-confirm-ok" id="confirm-yes">확인</button>
+                        <button class="btn btn-primary btn-sm" id="confirm-yes">확인</button>
                     </div>
                 </div>
             `;
