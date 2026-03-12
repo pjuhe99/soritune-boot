@@ -48,6 +48,12 @@
     color: var(--color-danger-600);
 }
 
+/* ── 본인 담당 강의 하이라이트 (/head, /coach) ────────────── */
+.lec-chip.lec-chip-mine {
+    box-shadow: inset 3px 0 0 var(--color-primary);
+    font-weight: var(--font-extrabold);
+}
+
 /* ── Host Badge ───────────────────────────────────────────── */
 .host-badge {
     display: inline-flex;

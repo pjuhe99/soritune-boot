@@ -245,19 +245,19 @@ const AdminApp = (() => {
             }
         }
 
-        // Coach/Head: Lecture 탭 lazy load
+        // Coach/Head: Lecture 탭 lazy load (본인 강의 하이라이트 포함)
         if (!isOperation() && typeof LectureApp !== 'undefined') {
             const lecTabId = role === 'coach' ? 'bc-tab-lectures' : 'tab-head-lectures';
             const lecEl = document.getElementById(lecTabId);
+            const lecOpts = { highlightAdminId: admin.admin_id };
             if (lecEl) {
                 if (lecEl.classList.contains('active')) {
-                    // head의 경우 기본 활성 탭
-                    LectureApp.initForAdmin(admin, role, lecTabId);
+                    LectureApp.initForAdmin(admin, role, lecTabId, lecOpts);
                 } else {
                     const obs = new MutationObserver(() => {
                         if (lecEl.classList.contains('active') && !lecEl.dataset.loaded) {
                             lecEl.dataset.loaded = '1';
-                            LectureApp.initForAdmin(admin, role, lecTabId);
+                            LectureApp.initForAdmin(admin, role, lecTabId, lecOpts);
                         }
                     });
                     obs.observe(lecEl, { attributes: true, attributeFilter: ['class'] });

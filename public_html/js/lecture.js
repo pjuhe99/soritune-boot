@@ -11,6 +11,7 @@ const LectureApp = (() => {
     let containerId = null;
     let coachesCache = null;
     let cohortsCache = null;
+    let highlightAdminId = null; // 본인 강의 하이라이트용 admin id
 
     const HOST_LABELS = { coach1: 'C1', coach2: 'C2' };
     const STAGE_LABELS = { 1: '1단계', 2: '2단계' };
@@ -20,10 +21,17 @@ const LectureApp = (() => {
     // Init
     // ══════════════════════════════════════════════════════════
 
-    function initForAdmin(adminData, adminRole, elId) {
+    /**
+     * initForAdmin(adminData, adminRole, elId, options?)
+     *
+     * options.highlightAdminId — 이 admin_id에 해당하는 강의 칩을 하이라이트
+     *   /head, /coach 에서 본인 담당 수업 강조 시 사용
+     */
+    function initForAdmin(adminData, adminRole, elId, options) {
         admin = adminData;
         role = adminRole;
         containerId = elId;
+        highlightAdminId = (options && options.highlightAdminId) || null;
 
         const container = document.getElementById(elId);
         if (!container) return;
@@ -43,10 +51,11 @@ const LectureApp = (() => {
                 return events.map(s => {
                     const stageClass = `stage-${s.stage}`;
                     const zoomClass = s.zoom_status === 'failed' ? 'zoom-failed' : '';
+                    const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
                     const timeLabel = (s.start_time || '').substring(0, 5);
                     const hostBadge = `<span class="host-badge ${s.host_account}">${HOST_LABELS[s.host_account] || ''}</span>`;
                     const label = `${timeLabel} ${App.esc(s.coach_name || '')}`;
-                    return `<div class="lec-chip ${stageClass} ${zoomClass}" data-id="${s.id}" title="${App.esc(s.title)}">${hostBadge}<span>${label}</span></div>`;
+                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}">${hostBadge}<span>${label}</span></div>`;
                 }).join('');
             },
         }).mount();
