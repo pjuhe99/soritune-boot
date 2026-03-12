@@ -12,6 +12,7 @@ if (!defined('SCORE_OUT_THRESHOLD'))      define('SCORE_OUT_THRESHOLD', -25);
 if (!defined('SCORE_REVIVAL_CANDIDATE'))  define('SCORE_REVIVAL_CANDIDATE', -13);
 if (!defined('SCORE_REVIVAL_ELIGIBLE'))   define('SCORE_REVIVAL_ELIGIBLE', -15);
 if (!defined('SCORE_REVIVAL_AFTER'))      define('SCORE_REVIVAL_AFTER', -10);
+if (!defined('SCORE_REVIVAL_BONUS'))     define('SCORE_REVIVAL_BONUS', 7);
 
 /**
  * 감점 규칙 (하루 단위)

@@ -328,6 +328,108 @@ case 'record':
     ]);
     break;
 
+// ── 패자부활 QR 처리 (공개) ──
+case 'revival_record':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+
+    $input = getJsonInput();
+    $code = trim($input['session_code'] ?? '');
+    $memberId = (int)($input['member_id'] ?? 0);
+    if (!$code || !$memberId) jsonError('session_code와 member_id가 필요합니다.');
+
+    $db = getDB();
+    $session = getActiveSession($db, $code);
+    if (!$session || $session['status'] !== 'active') {
+        jsonError('세션이 만료되었거나 종료되었습니다.');
+    }
+    if (($session['session_type'] ?? '') !== 'revival') {
+        jsonError('패자부활 세션이 아닙니다.');
+    }
+
+    // 멤버 확인
+    $memberStmt = $db->prepare("
+        SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
+        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+    ");
+    $memberStmt->execute([$memberId, $session['cohort_id']]);
+    $member = $memberStmt->fetch();
+    if (!$member) jsonError('유효하지 않은 회원입니다.');
+
+    // 중복 체크: 같은 세션 내 동일 IP + 동일 User-Agent
+    $clientIP = getClientIP();
+    $clientUA = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+    $dupStmt = $db->prepare("
+        SELECT id FROM qr_attendance
+        WHERE qr_session_id = ? AND ip_address = ? AND user_agent = ?
+    ");
+    $dupStmt->execute([$session['id'], $clientIP, $clientUA]);
+    if ($dupStmt->fetch()) {
+        jsonError('이 기기에서 이미 패자부활 처리를 완료했습니다.');
+    }
+
+    // 현재 점수 조회
+    $scoreStmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
+    $scoreStmt->execute([$memberId]);
+    $scoreRow = $scoreStmt->fetch();
+    $beforeScore = $scoreRow ? (int)$scoreRow['current_score'] : 0;
+
+    // 대상 여부 확인: -15점 이하만
+    if ($beforeScore > SCORE_REVIVAL_ELIGIBLE) {
+        jsonSuccess([
+            'member_name'  => $member['nickname'],
+            'not_eligible' => true,
+            'current_score' => $beforeScore,
+        ], '패자부활전 대상이 아닙니다. (현재 점수: ' . $beforeScore . '점)');
+        break;
+    }
+
+    // 점수 반영: 현재 점수 + 7
+    $afterScore = $beforeScore + SCORE_REVIVAL_BONUS;
+    $change = SCORE_REVIVAL_BONUS;
+    $adminId = $session['admin_id'] ? (int)$session['admin_id'] : null;
+    $note = 'QR 패자부활 (세션: ' . $code . ')';
+
+    // revival_logs 기록
+    $db->prepare("
+        INSERT INTO revival_logs (member_id, before_score, after_score, note, created_by)
+        VALUES (?, ?, ?, ?, ?)
+    ")->execute([$memberId, $beforeScore, $afterScore, $note, $adminId]);
+
+    // score_logs 기록
+    $db->prepare("
+        INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
+        VALUES (?, ?, ?, ?, 'revival_adjustment', ?, ?)
+    ")->execute([$memberId, $change, $beforeScore, $afterScore, $note, $adminId]);
+
+    // member_scores 갱신
+    $db->prepare("
+        INSERT INTO member_scores (member_id, current_score, last_calculated_at)
+        VALUES (?, ?, NOW())
+        ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
+    ")->execute([$memberId, $afterScore]);
+
+    // 조관리 제외 상태 해제
+    if ($afterScore > SCORE_OUT_THRESHOLD) {
+        $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ? AND member_status = 'out_of_group_management'")
+           ->execute([$memberId]);
+    }
+
+    // qr_attendance 기록 (스캔 이력 + 중복 방지용)
+    $db->prepare("
+        INSERT INTO qr_attendance (qr_session_id, member_id, group_id, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+    ")->execute([$session['id'], $memberId, $member['group_id'], $clientIP, $clientUA]);
+
+    jsonSuccess([
+        'member_name'   => $member['nickname'],
+        'not_eligible'  => false,
+        'before_score'  => $beforeScore,
+        'after_score'   => $afterScore,
+        'bonus'         => $change,
+    ], $member['nickname'] . '님 패자부활 처리 완료! (' . $beforeScore . ' → ' . $afterScore . ')');
+    break;
+
 default:
     jsonError('알 수 없는 action: ' . $action, 404);
 }
