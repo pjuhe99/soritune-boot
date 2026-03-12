@@ -619,6 +619,7 @@ const BootcampApp = (() => {
     // ══════════════════════════════════════════════════════════
     async function loadRevival() {
         const sec = document.getElementById('bc-tab-revival');
+        selectedGroupId = 0;
         await loadGroups();
 
         sec.innerHTML = `
