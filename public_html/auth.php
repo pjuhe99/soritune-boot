@@ -65,16 +65,22 @@ function loginMember(int $id, string $name, string $cohort): void {
     $_SESSION['member_id']   = $id;
     $_SESSION['member_name'] = $name;
     $_SESSION['cohort']      = $cohort;
+    session_write_close();   // flush to disk + release lock before response
 }
 
 function getMemberSession(): ?array {
     startSessionFor('member');
-    if (empty($_SESSION['member_id'])) return null;
-    return [
+    if (empty($_SESSION['member_id'])) {
+        session_write_close();
+        return null;
+    }
+    $data = [
         'member_id'   => $_SESSION['member_id'],
         'member_name' => $_SESSION['member_name'],
         'cohort'      => $_SESSION['cohort'],
     ];
+    session_write_close();   // release lock so parallel requests don't block
+    return $data;
 }
 
 function requireMember(): array {
@@ -97,18 +103,24 @@ function loginAdmin(int $id, string $name, array $roles, ?string $cohort, ?int $
     $_SESSION['admin_roles'] = $roles;
     $_SESSION['cohort']      = $cohort;
     $_SESSION['bootcamp_group_id'] = $bootcampGroupId;
+    session_write_close();   // flush to disk + release lock before response
 }
 
 function getAdminSession(): ?array {
     startSessionFor('admin');
-    if (empty($_SESSION['admin_id'])) return null;
-    return [
+    if (empty($_SESSION['admin_id'])) {
+        session_write_close();
+        return null;
+    }
+    $data = [
         'admin_id'    => $_SESSION['admin_id'],
         'admin_name'  => $_SESSION['admin_name'],
         'admin_roles' => $_SESSION['admin_roles'] ?? [],
         'cohort'      => $_SESSION['cohort'],
         'bootcamp_group_id' => $_SESSION['bootcamp_group_id'] ?? null,
     ];
+    session_write_close();   // release lock so parallel requests don't block
+    return $data;
 }
 
 function requireAdmin(array $allowedRoles = []): array {

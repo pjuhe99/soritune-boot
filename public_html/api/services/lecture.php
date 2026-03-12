@@ -255,10 +255,8 @@ function handleLectureSessionDetail() {
     // admin이 아니면 zoom_start_url 숨김
     $isAdmin = false;
     if (!empty($_COOKIE['BOOT_ADMIN_SID'])) {
-        try {
-            getAdminSession();
-            $isAdmin = true;
-        } catch (\Exception $e) {}
+        $adminData = getAdminSession();
+        if ($adminData) $isAdmin = true;
     }
     if (!$isAdmin) {
         unset($session['zoom_start_url']);
@@ -383,9 +381,8 @@ function resolveLectureAuth(): ?int {
     // admin 시도
     if (!empty($_COOKIE['BOOT_ADMIN_SID'])) {
         try {
-            startSessionFor('admin');
-            if (!empty($_SESSION['admin_id'])) {
-                // admin이면 cohort_id는 GET에서 선택 가능 (없으면 전체)
+            $admin = getAdminSession();   // reads + closes session
+            if ($admin) {
                 $cid = (int)($_GET['cohort_id'] ?? 0);
                 return $cid ?: null;
             }
