@@ -178,21 +178,21 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#tab-head-lectures" data-hash="lectures">강의 관리</button>
-                            <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
+                            <button class="tab active" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
+                            <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">강의 관리</button>
                         </div>
-                        <div class="tab-content active" id="tab-head-lectures"></div>
-                        <div class="tab-content" id="bc-tab-checklist"></div>
+                        <div class="tab-content active" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
+                        <div class="tab-content" id="tab-head-lectures"></div>
                     </div>
                     </div>
                     `}

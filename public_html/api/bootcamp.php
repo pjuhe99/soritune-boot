@@ -30,7 +30,7 @@ $method = getMethod();
  * 리더의 조 스코핑: 리더이면 자기 bootcamp_group_id 반환, operation/coach이면 null(제한 없음)
  */
 function getLeaderGroupScope($admin) {
-    if (hasRole($admin, 'operation') || hasRole($admin, 'coach')) return null;
+    if (hasRole($admin, 'operation') || hasRole($admin, 'coach') || hasRole($admin, 'head') || hasRole($admin, 'subhead1') || hasRole($admin, 'subhead2')) return null;
     return $admin['bootcamp_group_id'] ?? null;
 }
 
@@ -179,11 +179,11 @@ case 'mission_types':
 
 case 'checklist':        handleChecklist(); break;
 case 'check_save':
-    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2']);
     handleCheckSave($method, $admin);
     break;
 case 'check_bulk_save':
-    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2']);
     handleCheckBulkSave($method, $admin);
     break;
 case 'status_board':     handleStatusBoard(); break;
@@ -192,7 +192,7 @@ case 'status_board':     handleStatusBoard(); break;
 
 case 'warning_notes':    handleWarningNotes(); break;
 case 'warning_note_create':
-    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach']);
+    $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2']);
     handleWarningNoteCreate($method, $admin);
     break;
 

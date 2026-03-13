@@ -40,7 +40,7 @@ function handleMembers() {
 
 function handleMemberCreate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $cohortId = (int)($input['cohort_id'] ?? 0);
     $nickname = trim($input['nickname'] ?? '');
@@ -79,7 +79,7 @@ function handleMemberCreate($method) {
 
 function handleMemberUpdate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
@@ -120,7 +120,7 @@ function handleMemberUpdate($method) {
 
 function handleMemberDelete($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');

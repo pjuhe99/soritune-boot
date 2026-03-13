@@ -24,7 +24,7 @@ function handleCoinBalance() {
 
 function handleCoinChange($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $coinChange = (int)($input['coin_change'] ?? 0);

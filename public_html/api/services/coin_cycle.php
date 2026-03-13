@@ -187,7 +187,7 @@ function handleCoinSettlementExecute($method) {
 function handleCoinCheerAward($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
     // leader/subleader 인증 — admin으로 로그인한 조장
-    $admin = requireAdmin(['leader', 'subleader', 'operation', 'coach']);
+    $admin = requireAdmin(['leader', 'subleader', 'operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $cycleId = (int)($input['cycle_id'] ?? 0);
