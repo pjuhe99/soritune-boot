@@ -85,6 +85,15 @@ const BootcampApp = (() => {
         }
 
         // 탭 이벤트 바인딩
+        const coachTabLoaders = {
+            '#bc-tab-checklist': loadChecklist,
+            '#bc-tab-status': loadStatusBoard,
+            '#bc-tab-qr': loadQR,
+            '#bc-tab-revival': loadRevival,
+            '#bc-tab-coins': loadCoins,
+            '#bc-tab-members': loadMembersMgmt,
+            '#bc-tab-groups': loadGroupsMgmt,
+        };
         const tabs = document.getElementById('sec-tabs');
         if (tabs) {
             tabs.querySelectorAll('.tab').forEach(btn => {
@@ -97,13 +106,8 @@ const BootcampApp = (() => {
                         if (revivalQrTimer) { clearInterval(revivalQrTimer); revivalQrTimer = null; }
                         revivalQrSessionCode = null;
                     }
-                    if (tab === '#bc-tab-checklist') loadChecklist();
-                    else if (tab === '#bc-tab-status') loadStatusBoard();
-                    else if (tab === '#bc-tab-qr') loadQR();
-                    else if (tab === '#bc-tab-revival') loadRevival();
-                    else if (tab === '#bc-tab-coins') loadCoins();
-                    else if (tab === '#bc-tab-members') loadMembersMgmt();
-                    else if (tab === '#bc-tab-groups') loadGroupsMgmt();
+                    const loader = coachTabLoaders[tab];
+                    if (loader) loader();
                 });
             });
         }
@@ -116,7 +120,15 @@ const BootcampApp = (() => {
             }
         });
 
-        loadChecklist();
+        // hash에 해당하는 탭 데이터 로드, 없으면 기본 체크리스트
+        const activeBtn = tabs && tabs.querySelector('.tab.active');
+        const activeTab = activeBtn && activeBtn.dataset.tab;
+        const hashLoader = activeTab && coachTabLoaders[activeTab];
+        if (hashLoader && activeTab !== '#bc-tab-checklist') {
+            hashLoader();
+        } else {
+            loadChecklist();
+        }
     }
 
     // ── Leader Mode Init (called from admin.js) ──
@@ -144,18 +156,29 @@ const BootcampApp = (() => {
         }
 
         // 탭 이벤트 바인딩
+        const leaderTabLoaders = {
+            '#bc-tab-checklist': loadChecklist,
+            '#bc-tab-status': loadStatusBoard,
+        };
         const tabs = document.getElementById('sec-tabs');
         if (tabs) {
             tabs.querySelectorAll('.tab').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const tab = btn.dataset.tab;
-                    if (tab === '#bc-tab-checklist') loadChecklist();
-                    else if (tab === '#bc-tab-status') loadStatusBoard();
+                    const loader = leaderTabLoaders[btn.dataset.tab];
+                    if (loader) loader();
                 });
             });
         }
 
-        loadChecklist();
+        // hash에 해당하는 탭 데이터 로드, 없으면 기본 체크리스트
+        const activeBtn = tabs && tabs.querySelector('.tab.active');
+        const activeTab = activeBtn && activeBtn.dataset.tab;
+        const hashLoader = activeTab && leaderTabLoaders[activeTab];
+        if (hashLoader && activeTab !== '#bc-tab-checklist') {
+            hashLoader();
+        } else {
+            loadChecklist();
+        }
     }
 
     async function loadMasterData() {
@@ -193,13 +216,13 @@ const BootcampApp = (() => {
                 </div>
                 <div class="admin-content">
                     <div class="admin-tabs" id="bc-tabs">
-                        <div class="tab_wrap">
-                            <button class="tab active" data-tab="#bc-tab-checklist">체크리스트</button>
-                            <button class="tab" data-tab="#bc-tab-status">현황판</button>
-                            <button class="tab" data-tab="#bc-tab-revival">패자부활전</button>
-                            <button class="tab" data-tab="#bc-tab-coins">코인 관리</button>
-                            <button class="tab" data-tab="#bc-tab-members">회원 관리</button>
-                            <button class="tab" data-tab="#bc-tab-groups">조 관리</button>
+                        <div class="tab-wrap">
+                            <button class="tab active" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
+                            <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
+                            <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
+                            <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
+                            <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
@@ -211,22 +234,35 @@ const BootcampApp = (() => {
                 </div>
             </div>
         `;
-        App.initTabs(document.getElementById('bc-tabs'));
+        const tabCtrl = App.initTabs(document.getElementById('bc-tabs'));
+
+        const bcTabLoaders = {
+            '#bc-tab-checklist': loadChecklist,
+            '#bc-tab-status': loadStatusBoard,
+            '#bc-tab-revival': loadRevival,
+            '#bc-tab-coins': loadCoins,
+            '#bc-tab-members': loadMembersMgmt,
+            '#bc-tab-groups': loadGroupsMgmt,
+        };
 
         // 탭 전환 시 데이터 로드
         document.querySelectorAll('#bc-tabs .tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                const tab = btn.dataset.tab;
-                if (tab === '#bc-tab-checklist') loadChecklist();
-                else if (tab === '#bc-tab-status') loadStatusBoard();
-                else if (tab === '#bc-tab-revival') loadRevival();
-                else if (tab === '#bc-tab-coins') loadCoins();
-                else if (tab === '#bc-tab-members') loadMembersMgmt();
-                else if (tab === '#bc-tab-groups') loadGroupsMgmt();
+                const loader = bcTabLoaders[btn.dataset.tab];
+                if (loader) loader();
             });
         });
 
-        loadChecklist();
+        // hash가 있으면 해당 탭 활성화 + 데이터 로드, 없으면 기본 체크리스트
+        if (tabCtrl.activateFromHash()) {
+            const activeBtn = document.querySelector('#bc-tabs .tab.active');
+            if (activeBtn) {
+                const loader = bcTabLoaders[activeBtn.dataset.tab];
+                if (loader) loader();
+            }
+        } else {
+            loadChecklist();
+        }
     }
 
     // ── Filter Bar HTML ──
@@ -581,7 +617,7 @@ const BootcampApp = (() => {
 
         const body = `
             <div class="admin-tabs" id="detail-tabs" style="margin:0">
-                <div class="tab_wrap">
+                <div class="tab-wrap">
                     <button class="tab active" data-tab="#detail-score">점수 이력</button>
                     <button class="tab" data-tab="#detail-coin">코인 이력</button>
                 </div>
@@ -648,7 +684,7 @@ const BootcampApp = (() => {
                 <span class="bc-toolbar-title">패자부활전</span>
             </div>
             <div class="admin-tabs" id="revival-tabs" style="margin:0">
-                <div class="tab_wrap">
+                <div class="tab-wrap">
                     <button class="tab active" data-tab="#revival-candidates">대상자</button>
                     <button class="tab" data-tab="#revival-qr-manage">QR 관리</button>
                     <button class="tab" data-tab="#revival-history">처리 이력</button>

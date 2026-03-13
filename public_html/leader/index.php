@@ -19,8 +19,8 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260313a"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-    <script src="/js/bootcamp.js?v=20260313"></script>
-    <script src="/js/admin.js?v=20260313a"></script>
+    <script src="/js/bootcamp.js?v=20260313a"></script>
+    <script src="/js/admin.js?v=20260313b"></script>
     <script src="/js/coin.js?v=20260313"></script>
     <script>AdminApp.init();</script>
 </body>
