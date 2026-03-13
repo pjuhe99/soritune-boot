@@ -966,6 +966,102 @@ case 'calendar_delete':
     jsonSuccess([], '캘린더가 삭제되었습니다.');
     break;
 
+// ── Curriculum (진도 관리) ───────────────────────────────────
+
+case 'curriculum_task_types':
+    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $types = [
+        ['key' => 'progress',              'label' => '진도'],
+        ['key' => 'event',                 'label' => '이벤트'],
+        ['key' => 'lecture',               'label' => '강의 듣기'],
+        ['key' => 'malkka_mission',        'label' => '말까미션'],
+        ['key' => 'naemat33_mission',      'label' => '내맛33미션'],
+        ['key' => 'zoom_or_daily_mission', 'label' => '줌 강의 / 데일리미션'],
+        ['key' => 'hamummal',              'label' => '하멈말'],
+    ];
+    jsonSuccess(['task_types' => $types]);
+    break;
+
+case 'curriculum_list':
+    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $cohort = getEffectiveCohort($admin);
+    $db = getDB();
+    $stmt = $db->prepare('
+        SELECT ci.*, a.name AS created_by_name
+        FROM curriculum_items ci
+        LEFT JOIN admins a ON ci.created_by = a.id
+        WHERE ci.cohort = ?
+        ORDER BY ci.target_date DESC, ci.sort_order ASC, ci.id DESC
+    ');
+    $stmt->execute([$cohort]);
+    $items = $stmt->fetchAll();
+
+    $typeLabels = [
+        'progress'              => '진도',
+        'event'                 => '이벤트',
+        'lecture'               => '강의 듣기',
+        'malkka_mission'        => '말까미션',
+        'naemat33_mission'      => '내맛33미션',
+        'zoom_or_daily_mission' => '줌 강의 / 데일리미션',
+        'hamummal'              => '하멈말',
+    ];
+    foreach ($items as &$item) {
+        $item['task_type_label'] = $typeLabels[$item['task_type']] ?? $item['task_type'];
+    }
+    unset($item);
+
+    jsonSuccess(['items' => $items]);
+    break;
+
+case 'curriculum_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $cohort     = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $targetDate = trim($input['target_date'] ?? '');
+    $taskType   = trim($input['task_type'] ?? '');
+    $note       = trim($input['note'] ?? '') ?: null;
+    $sortOrder  = (int)($input['sort_order'] ?? 0);
+
+    $validTypes = ['progress', 'event', 'lecture', 'malkka_mission', 'naemat33_mission', 'zoom_or_daily_mission', 'hamummal'];
+
+    if (!$targetDate) jsonError('날짜를 입력해주세요.');
+    if (!$taskType || !in_array($taskType, $validTypes)) jsonError('올바른 할 일 유형을 선택해주세요.');
+
+    // 주차/요일 모드 지원: week_number + weekday가 있으면 target_date 계산
+    if (empty($targetDate) || (!empty($input['week_number']) && isset($input['weekday']))) {
+        $weekNumber = (int)($input['week_number'] ?? 0);
+        $weekday    = (int)($input['weekday'] ?? -1);
+        if ($weekNumber < 1 || $weekday < 0 || $weekday > 6) jsonError('주차와 요일을 올바르게 입력해주세요.');
+
+        $db = getDB();
+        $stmt = $db->prepare('SELECT start_date FROM cohorts WHERE cohort = ?');
+        $stmt->execute([$cohort]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수의 시작일 정보가 없습니다.');
+
+        $cohortStart = new DateTime($cohortRow['start_date']);
+        $phpWeekday = $weekday === 0 ? 7 : $weekday;
+        $startDayOfWeek = (int)$cohortStart->format('N');
+        $weekMonday = clone $cohortStart;
+        $weekMonday->modify('-' . ($startDayOfWeek - 1) . ' days');
+        $weekMonday->modify('+' . ($weekNumber - 1) . ' weeks');
+        $targetDateObj = clone $weekMonday;
+        $targetDateObj->modify('+' . ($phpWeekday - 1) . ' days');
+        $targetDate = $targetDateObj->format('Y-m-d');
+    }
+
+    $db = getDB();
+    $stmt = $db->prepare('
+        INSERT INTO curriculum_items (cohort, target_date, task_type, note, sort_order, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ');
+    $stmt->execute([$cohort, $targetDate, $taskType, $note, $sortOrder, $admin['admin_id']]);
+
+    jsonSuccess(['id' => (int)$db->lastInsertId()], '진도가 추가되었습니다.');
+    break;
+
 // ── Default ─────────────────────────────────────────────────
 
 default:

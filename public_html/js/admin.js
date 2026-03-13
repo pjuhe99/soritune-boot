@@ -128,6 +128,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-cohorts-mgmt" data-hash="cohorts">기수 관리</button>
                             <button class="tab" data-tab="#tab-admins" data-hash="admins">관리자 관리</button>
                             <button class="tab" data-tab="#tab-guides-mgmt" data-hash="guides">가이드 관리</button>
+                            <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                         </div>
                         <div class="tab-content active" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
@@ -138,6 +139,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
                         <div class="tab-content" id="tab-admins"></div>
                         <div class="tab-content" id="tab-guides-mgmt"></div>
+                        <div class="tab-content" id="tab-curriculum"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -185,6 +187,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                             <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">강의 관리</button>
+                            <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
@@ -193,6 +196,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
                         <div class="tab-content" id="tab-head-lectures"></div>
+                        <div class="tab-content" id="tab-curriculum"></div>
                     </div>
                     </div>
                     `}
@@ -284,6 +288,20 @@ const AdminApp = (() => {
                     });
                     obs.observe(lecEl, { attributes: true, attributeFilter: ['class'] });
                 }
+            }
+        }
+
+        // Curriculum 탭 lazy load (operation + head 공통)
+        if (typeof CurriculumApp !== 'undefined') {
+            const curTab = document.getElementById('tab-curriculum');
+            if (curTab) {
+                const curObserver = new MutationObserver(() => {
+                    if (curTab.classList.contains('active') && !curTab.dataset.loaded) {
+                        curTab.dataset.loaded = '1';
+                        CurriculumApp.initTab(curTab, admin);
+                    }
+                });
+                curObserver.observe(curTab, { attributes: true, attributeFilter: ['class'] });
             }
         }
 

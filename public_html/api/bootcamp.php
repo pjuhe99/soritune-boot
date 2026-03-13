@@ -19,6 +19,7 @@ require_once __DIR__ . '/services/coin_cycle.php';
 require_once __DIR__ . '/services/integration.php';
 require_once __DIR__ . '/services/study.php';
 require_once __DIR__ . '/services/lecture.php';
+require_once __DIR__ . '/services/curriculum.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -256,6 +257,9 @@ case 'lecture_session_detail':    handleLectureSessionDetail(); break;
 case 'lecture_schedule_create':   handleLectureScheduleCreate($method); break;
 case 'lecture_schedule_cancel':   handleLectureScheduleCancel($method); break;
 case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
+
+// ── Curriculum (진도) ──────────────────────────────────────────
+case 'curriculum_today':    handleCurriculumToday(); break;
 
 // ──────────────────────────────────────────────────────────────
 
