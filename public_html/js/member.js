@@ -143,6 +143,31 @@ const MemberApp = (() => {
     // Curriculum — 오늘의 진도 & 할 일
     // ══════════════════════════════════════════════════════════
 
+    // ── 설명 팝업 데이터 (task_type → help content) ──
+    // 추후 API/관리자 관리로 전환 가능하도록 분리된 config 구조
+    const CURRICULUM_HELP = {
+        malkka_mission: {
+            title: '말까미션이란?',
+            description: '말까미션은 매일 30초~1분 동안 또박또박 발음하며 말을 깨끗하게 하는 연습입니다.\n\n목표 문장을 읽고 녹음하여 카페에 인증해주세요.',
+            images: ['/images/help/malkka_mission.png'],
+        },
+        naemat33_mission: {
+            title: '내맛33미션이란?',
+            description: '내 맛을 33번 반복하여 체화하는 미션입니다.\n\n지정된 연습 문장을 33번 반복하고 카페에 인증해주세요.',
+            images: ['/images/help/naemat33_mission.png'],
+        },
+        zoom_or_daily_mission: {
+            title: '줌 강의 / 데일리미션이란?',
+            description: '줌 강의가 있는 날은 줌 강의에 참석하고, 줌 강의가 없는 날은 데일리미션을 수행합니다.\n\n줌 강의 참석 또는 데일리미션 완료 후 카페에 인증해주세요.',
+            images: ['/images/help/zoom_or_daily_mission.png'],
+        },
+        hamummal: {
+            title: '하멈말이란?',
+            description: '하루를 멈추고 말하기 — 하루를 돌아보며 짧게 말해보는 시간입니다.\n\n오늘 하루를 한 문장으로 정리하여 카페에 인증해주세요.',
+            images: ['/images/help/hamummal.png'],
+        },
+    };
+
     async function loadCurriculumToday() {
         const sec = document.getElementById('member-curriculum-section');
         const r = await App.get(API + 'curriculum_today');
@@ -153,7 +178,10 @@ const MemberApp = (() => {
 
         const items = r.items.map(item => {
             const note = item.note ? `<span class="cur-note">${App.esc(item.note)}</span>` : '';
-            return `<div class="cur-item"><span class="cur-label">${App.esc(item.task_type_label)}</span>${note}</div>`;
+            const helpBtn = CURRICULUM_HELP[item.task_type]
+                ? `<button class="cur-help-btn" data-task-type="${App.esc(item.task_type)}">?</button>`
+                : '';
+            return `<div class="cur-item"><span class="cur-label">${App.esc(item.task_type_label)}</span>${helpBtn}${note}</div>`;
         }).join('');
 
         sec.innerHTML = `
@@ -162,6 +190,31 @@ const MemberApp = (() => {
                 <div class="cur-list">${items}</div>
             </div>
         `;
+
+        // [?] 버튼 이벤트 바인딩
+        sec.querySelectorAll('.cur-help-btn').forEach(btn => {
+            btn.onclick = () => showCurriculumHelp(btn.dataset.taskType);
+        });
+    }
+
+    function showCurriculumHelp(taskType) {
+        const help = CURRICULUM_HELP[taskType];
+        if (!help) return;
+
+        const imagesHtml = (help.images || []).map(url =>
+            `<img src="${App.esc(url)}" class="cur-help-img" alt="" onerror="this.style.display='none'">`
+        ).join('');
+
+        const descHtml = App.esc(help.description || '').replace(/\n/g, '<br>');
+
+        const body = `
+            <div class="cur-help-body">
+                ${imagesHtml}
+                <div class="cur-help-desc">${descHtml}</div>
+            </div>
+        `;
+
+        App.openModal(help.title, body);
     }
 
     // ══════════════════════════════════════════════════════════

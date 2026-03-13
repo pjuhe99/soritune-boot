@@ -167,9 +167,54 @@
     flex-shrink: 0;
 }
 
+.cur-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-primary);
+    background: none;
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: var(--font-bold);
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1;
+    padding: 0;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cur-help-btn:hover,
+.cur-help-btn:active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
 .cur-note {
     color: var(--color-text-sub);
     font-size: var(--text-xs);
+}
+
+/* ── Curriculum Help Popup ────────────────────────────────── */
+.cur-help-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.cur-help-img {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-gray-100);
+}
+
+.cur-help-desc {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text);
 }
 
 /* ── Calendar Section ──────────────────────────────────────── */
