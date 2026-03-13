@@ -22,7 +22,7 @@ function getPenaltyRules() {
     return [
         ['codes' => ['zoom_daily', 'daily_mission'], 'penalty' => -1, 'weekday' => null],
         ['codes' => ['inner33'], 'penalty' => -1, 'weekday' => null],
-        ['codes' => ['speak_mission'], 'penalty' => -2, 'weekday' => 3],
+        ['codes' => ['speak_mission'], 'penalty' => -2, 'weekday' => 1],
     ];
 }
 }
