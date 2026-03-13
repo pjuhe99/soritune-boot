@@ -165,7 +165,9 @@
 
 /* ── Chips ─────────────────────────────────────────────────── */
 .member-chip {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 3px;
     padding: 2px 4px;
     margin-bottom: 2px;
     font-size: var(--text-xs);
@@ -174,9 +176,15 @@
     border-radius: 3px;
     cursor: pointer;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     transition: opacity var(--transition-fast);
+}
+.member-chip .chip-line1 {
+    white-space: nowrap;
+}
+.member-chip .chip-line2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .member-chip:hover { opacity: 0.75; }
 

@@ -82,7 +82,7 @@ const MemberApp = (() => {
                 <div class="member-content">
                     <div class="member-info-card">
                         <div class="member-nickname">${App.esc(member.nickname)}</div>
-                        <div class="member-realname">${App.esc(member.member_name)}</div>
+                        <div class="member-realname">${App.esc(member.member_name)}${member.group_name ? ` · ${App.esc(member.group_name)}` : ''}</div>
                         <div class="member-stats">
                             <div class="member-stat">
                                 <div class="member-point">${member.score ?? 0}</div>
@@ -174,16 +174,17 @@ const MemberApp = (() => {
 
     function renderStudyChip(s) {
         const timeLabel = (s.start_time || '').substring(0, 5);
+        const levelLabel = s.level ? s.level + '단계' : '';
         const host = s.host_nickname || '';
-        const label = timeLabel + (host ? ' ' + host : '');
-        return `<div class="member-chip member-chip-study" data-type="study" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(label)}</div>`;
+        const firstLine = timeLabel + (levelLabel ? ' ' + levelLabel : '');
+        return `<div class="member-chip member-chip-study" data-type="study" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(host)}</span></div>`;
     }
 
     function renderLectureChip(s) {
         const timeLabel = (s.start_time || '').substring(0, 5);
         const coach = s.coach_name || '';
-        const label = timeLabel + (coach ? ' ' + coach : '');
-        return `<div class="member-chip member-chip-lecture" data-type="lecture" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(label)}</div>`;
+        const firstLine = timeLabel;
+        return `<div class="member-chip member-chip-lecture" data-type="lecture" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(coach)}</span></div>`;
     }
 
     // ══════════════════════════════════════════════════════════
