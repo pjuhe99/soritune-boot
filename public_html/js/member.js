@@ -176,7 +176,16 @@ const MemberApp = (() => {
             return;
         }
 
-        const items = r.items.map(item => {
+        // progress 항목과 나머지를 분리
+        const progressItems = r.items.filter(i => i.task_type === 'progress');
+        const taskItems = r.items.filter(i => i.task_type !== 'progress');
+
+        const progressHtml = progressItems.map(item => {
+            const note = item.note ? `<div class="cur-progress-note">${App.esc(item.note)}</div>` : '';
+            return `<div class="cur-progress-box"><div class="cur-progress-label">${App.esc(item.task_type_label)}</div>${note}</div>`;
+        }).join('');
+
+        const taskHtml = taskItems.map(item => {
             const note = item.note ? `<span class="cur-note">${App.esc(item.note)}</span>` : '';
             const helpBtn = CURRICULUM_HELP[item.task_type]
                 ? `<button class="cur-help-btn" data-task-type="${App.esc(item.task_type)}">?</button>`
@@ -184,10 +193,12 @@ const MemberApp = (() => {
             return `<div class="cur-item"><span class="cur-label">${App.esc(item.task_type_label)}</span>${helpBtn}${note}</div>`;
         }).join('');
 
+        const items = progressHtml + (taskHtml ? `<div class="cur-list">${taskHtml}</div>` : '');
+
         sec.innerHTML = `
             <div class="member-curriculum-card">
                 <div class="cur-title">오늘의 진도 &amp; 할 일</div>
-                <div class="cur-list">${items}</div>
+                ${items}
             </div>
         `;
 

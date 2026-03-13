@@ -167,6 +167,29 @@
     flex-shrink: 0;
 }
 
+/* ── Progress Highlight Box ────────────────────────────────── */
+.cur-progress-box {
+    background: var(--color-primary-50, #eff6ff);
+    border: 1px solid var(--color-primary-200, #bfdbfe);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+    text-align: center;
+}
+
+.cur-progress-label {
+    font-size: var(--text-lg);
+    font-weight: var(--font-extrabold);
+    color: var(--color-primary);
+}
+
+.cur-progress-note {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
+    line-height: var(--leading-normal);
+}
+
 .cur-help-btn {
     display: inline-flex;
     align-items: center;
