@@ -2,13 +2,13 @@
 /* V2: multi-role support, auto-assign tasks */
 const AdminApp = (() => {
     const ROLE_LABELS = {
-        leader: '조장', subleader: '부조장', coach: '코치', head: '총괄코치',
+        leader: '조장', subleader: '부조장', coach: '메인강사', sub_coach: '서브강사', head: '총괄코치',
         subhead1: '부총괄1', subhead2: '부총괄2', operation: '운영팀'
     };
-    const ALL_ROLES = ['leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2', 'operation'];
+    const ALL_ROLES = ['leader', 'subleader', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation'];
     const PAGE_ROLES = {
         head: ['head', 'subhead1', 'subhead2'],
-        coach: ['coach'],
+        coach: ['coach', 'sub_coach'],
         leader: ['leader', 'subleader'],
         operation: ['operation'],
     };
@@ -259,7 +259,7 @@ const AdminApp = (() => {
             }
         }
 
-        if ((role === 'coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
+        if ((role === 'coach' || role === 'sub_coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
             if (role === 'leader' || role === 'subleader') {
                 BootcampApp.initForLeader(admin);
             } else {
@@ -398,7 +398,8 @@ const AdminApp = (() => {
         const filters = [
             { key: 'mine', label: '내 Task' },
             { key: 'all', label: '전체' },
-            { key: 'coach', label: '코치' },
+            { key: 'coach', label: '메인강사' },
+            { key: 'sub_coach', label: '서브강사' },
             { key: 'head', label: '총괄' },
             { key: 'leader', label: '조장' },
             { key: 'operation', label: '운영팀' },
