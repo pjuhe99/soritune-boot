@@ -103,8 +103,10 @@ const StudyApp = (() => {
                 return events.map(s => {
                     const statusClass = `status-${s.status}`;
                     const timeLabel = (s.start_time || '').substring(0, 5);
-                    const chipLabel = timeLabel + ' ' + hostName(s.title);
-                    return `<div class="study-chip ${statusClass}" data-id="${s.id}" title="${App.esc(s.title)}">${App.esc(chipLabel)}</div>`;
+                    const levelLabel = s.level ? s.level + '단계' : '';
+                    const nick = hostName(s.title);
+                    const firstLine = timeLabel + ' ' + levelLabel;
+                    return `<div class="study-chip ${statusClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(nick)}</span></div>`;
                 }).join('');
             },
         }).mount();
@@ -121,7 +123,8 @@ const StudyApp = (() => {
     }
 
     function hostName(title) {
-        const m = title.match(/\]\s*(.+?)님의/);
+        // "[HH:MM] N단계 닉네임님의 복습 클래스" → "닉네임"
+        const m = title.match(/단계\s+(.+?)님의/) || title.match(/\]\s*(.+?)님의/);
         return m ? m[1] : '';
     }
 
@@ -434,6 +437,13 @@ const StudyApp = (() => {
                 </div>
             </div>
             <div class="form-group">
+                <label class="form-label">단계</label>
+                <div style="display:flex;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="create-level" value="1" checked> 1단계</label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="create-level" value="2"> 2단계</label>
+                </div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">날짜</label>
                 <input type="date" class="form-input" id="create-date" value="${defaultDate}">
             </div>
@@ -578,12 +588,15 @@ const StudyApp = (() => {
                 return Toast.warning(`이미 해당 날짜/시간에 예약된 복습클래스가 있습니다`);
             }
 
+            const level = parseInt(document.querySelector('input[name="create-level"]:checked').value);
+
             App.showLoading();
             const r = await App.post(API + 'study_session_create', {
                 host_member_id: state.hostMemberId,
                 study_date: studyDate,
                 start_time: startTime,
                 password: password,
+                level: level,
             });
             App.hideLoading();
 

@@ -70,7 +70,7 @@ function handleStudySessions() {
     if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
 
     $stmt = $db->prepare("
-        SELECT ss.id, ss.title, ss.study_date, ss.start_time, ss.end_time,
+        SELECT ss.id, ss.title, ss.level, ss.study_date, ss.start_time, ss.end_time,
                ss.status, ss.zoom_status, ss.host_member_id,
                bm.nickname AS host_nickname,
                (SELECT COUNT(*) FROM qr_attendance qa WHERE qa.qr_session_id = ss.qr_session_id) AS participant_count
@@ -164,10 +164,14 @@ function handleStudySessionCreate($method) {
     $studyDate = $input['study_date'] ?? '';
     $startTime = $input['start_time'] ?? '';
     $password = $input['password'] ?? '';
+    $level = (int)($input['level'] ?? 1);
 
     // 기본 검증
     if (!$hostMemberId || !$studyDate || !$startTime || !$password) {
         jsonError('host_member_id, study_date, start_time, password 필요');
+    }
+    if (!in_array($level, [1, 2])) {
+        jsonError('level은 1 또는 2만 가능합니다.');
     }
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) {
         jsonError('study_date 형식: YYYY-MM-DD');
@@ -211,14 +215,15 @@ function handleStudySessionCreate($method) {
 
     // 제목 자동 생성
     $timeLabel = substr($startTime, 0, 5); // "HH:MM"
-    $title = "[{$timeLabel}] {$nickname}님의 복습 클래스";
+    $levelLabel = "{$level}단계";
+    $title = "[{$timeLabel}] {$levelLabel} {$nickname}님의 복습 클래스";
 
     // DB 저장 (status=pending, zoom_status=pending)
     $db->prepare("
         INSERT INTO study_sessions
-            (cohort_id, host_member_id, title, study_date, start_time, end_time, password, status, zoom_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
-    ")->execute([$cohortId, $hostMemberId, $title, $studyDate, $startTimeFull, $endTime, $password]);
+            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, password, status, zoom_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
+    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime, $password]);
 
     $sessionId = (int)$db->lastInsertId();
 
