@@ -548,36 +548,15 @@ const AdminApp = (() => {
                 <span style="font-weight:600">회원 (${r.members.length}명)</span>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
-            <div style="overflow-x:auto">
-                <table class="data-table">
-                    <thead><tr><th>닉네임</th><th>이름</th><th>아이디</th><th>전화번호</th><th>조</th><th>참여</th><th>1단계</th><th>2단계</th><th>완주</th><th>등급</th><th>점수</th><th>코인</th><th>상태</th><th></th></tr></thead>
-                    <tbody>
-                        ${r.members.map(m => `
-                            <tr>
-                                <td><strong>${App.esc(m.nickname)}</strong></td>
-                                <td>${App.esc(m.real_name || '')}</td>
-                                <td>${App.esc(m.user_id || '')}</td>
-                                <td>${App.esc(m.phone || '')}</td>
-                                <td>${App.esc(m.group_name || '-')}</td>
-                                <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '첫 참여'}</td>
-                                <td>${m.stage1_participation_count || 0}</td>
-                                <td>${m.stage2_participation_count || 0}</td>
-                                <td>${m.completed_bootcamp_count || 0}</td>
-                                <td>${m.bravo_grade ? `<span class="badge badge-warning">${App.esc(m.bravo_grade)}</span>` : '-'}</td>
-                                <td style="font-weight:600">${m.current_score ?? '-'}</td>
-                                <td>${m.current_coin ?? '-'}</td>
-                                <td>${m.is_active == 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge badge-danger">비활성</span>'}</td>
-                                <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editMember(${m.id})">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteMember(${m.id}, '${App.esc(m.nickname)}')">삭제</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+            <div id="op-members-table"></div>
         `;
-        if (!r.members.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="14" class="empty-state">등록된 회원이 없습니다.</td></tr>';
+        const tableEl = document.getElementById('op-members-table');
+        tableEl.innerHTML = MemberTable.render(r.members, {
+            mode: 'operation',
+            editFn: 'AdminApp._editMember',
+            deleteFn: 'AdminApp._deleteMember',
+        });
+        MemberTable.bindToggle(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 

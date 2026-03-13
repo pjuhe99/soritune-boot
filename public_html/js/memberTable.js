@@ -1,0 +1,171 @@
+/**
+ * MemberTable — 회원 테이블 공통 렌더링 (admin.js, bootcamp.js 공용)
+ *
+ * 기본 행: 핵심 정보만 노출
+ * 펼침 행: 상세 정보 (연락처, 이력, 점수/코인 등)
+ */
+const MemberTable = (() => {
+    const ROLE_LABELS = { member: '회원', leader: '조장', subleader: '부조장' };
+
+    function bravoHtml(grade) {
+        if (!grade) return '';
+        const cls = grade === 'Bravo 3' ? 'badge-dark' : grade === 'Bravo 2' ? 'badge-warning-solid' : 'badge-warning';
+        return `<span class="badge ${cls}">${App.esc(grade)}</span>`;
+    }
+
+    function scoreHtml(score) {
+        const s = parseInt(score);
+        let cls = '';
+        if (s <= -25) cls = 'out';
+        else if (s <= -15) cls = 'danger';
+        else if (s <= -13) cls = 'revival-warning';
+        else if (s < 0) cls = 'negative';
+        else if (s > 0) cls = 'positive';
+        return `<span class="score-val ${cls}">${s}</span>`;
+    }
+
+    function statusBadge(m) {
+        if (m.is_active == 0) return '<span class="badge badge-danger">비활성</span>';
+        if (m.member_status === 'out_of_group_management') return '<span class="badge badge-danger">탈락</span>';
+        return '<span class="badge badge-success">활성</span>';
+    }
+
+    function historyHtml(m) {
+        const s1 = parseInt(m.stage1_participation_count) || 0;
+        const s2 = parseInt(m.stage2_participation_count) || 0;
+        const comp = parseInt(m.completed_bootcamp_count) || 0;
+        const parts = [];
+        if (s1) parts.push(`1단계 ${s1}회`);
+        if (s2) parts.push(`2단계 ${s2}회`);
+        parts.push(`완주 ${comp}회`);
+        return parts.join(' · ');
+    }
+
+    /**
+     * 테이블 HTML 생성
+     * @param {Array} members
+     * @param {Object} opts
+     *   - mode: 'operation' | 'bootcamp'
+     *   - editFn: 'AdminApp._editMember' | 'BootcampApp._editMember'
+     *   - deleteFn: 'AdminApp._deleteMember' | 'BootcampApp._deleteMember'
+     */
+    function render(members, opts = {}) {
+        const mode = opts.mode || 'bootcamp';
+        const editFn = opts.editFn || 'BootcampApp._editMember';
+        const deleteFn = opts.deleteFn || 'BootcampApp._deleteMember';
+        const showGroup = opts.showGroup !== false;
+
+        if (!members.length) {
+            return '<div class="empty-state">회원이 없습니다.</div>';
+        }
+
+        const headerCols = `
+            <th class="mt-col-name">이름</th>
+            ${showGroup ? '<th class="mt-col-group">조</th>' : ''}
+            <th class="mt-col-hist">이력</th>
+            <th class="mt-col-bravo">등급</th>
+            <th class="mt-col-score">점수</th>
+            <th class="mt-col-status">상태</th>
+        `;
+        const colCount = showGroup ? 6 : 5;
+
+        const rows = members.map(m => {
+            const pc = parseInt(m.participation_count);
+            const pcBadge = pc > 1 ? `<span class="badge badge-info mt-pc-badge">${pc}회차</span>` : '';
+            const roleBadge = m.member_role !== 'member'
+                ? `<span class="badge badge-primary mt-role-badge">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span>`
+                : '';
+            const bravo = bravoHtml(m.bravo_grade);
+            const stageBadge = `<span class="badge badge-neutral mt-stage-badge">${m.stage_no}단계</span>`;
+
+            // 기본 행
+            const mainRow = `
+            <tr class="mt-row" data-id="${m.id}">
+                <td class="mt-col-name">
+                    <div class="mt-name-primary">${App.esc(m.nickname)} ${roleBadge} ${pcBadge}</div>
+                    <div class="mt-name-sub">${App.esc(m.real_name || '')}</div>
+                </td>
+                ${showGroup ? `<td class="mt-col-group">${App.esc(m.group_name || '-')}</td>` : ''}
+                <td class="mt-col-hist">
+                    <div class="mt-hist-summary">${historyHtml(m)}</div>
+                </td>
+                <td class="mt-col-bravo">${bravo || '-'}</td>
+                <td class="mt-col-score">${scoreHtml(m.current_score)}</td>
+                <td class="mt-col-status">${statusBadge(m)}</td>
+            </tr>`;
+
+            // 펼침 행
+            const detailRow = `
+            <tr class="mt-detail" data-for="${m.id}" style="display:none">
+                <td colspan="${colCount}">
+                    <div class="mt-detail-grid">
+                        <div class="mt-detail-section">
+                            <div class="mt-detail-label">기본 정보</div>
+                            <div class="mt-detail-items">
+                                <span>${stageBadge}</span>
+                                ${mode === 'operation' ? `<span>ID: ${App.esc(m.user_id || '-')}</span>` : ''}
+                                <span>전화: ${App.esc(m.phone || '-')}</span>
+                                ${m.cafe_member_key ? `<span>카페: 연동됨</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="mt-detail-section">
+                            <div class="mt-detail-label">참여 이력</div>
+                            <div class="mt-detail-items">
+                                <span>1단계: ${parseInt(m.stage1_participation_count) || 0}회</span>
+                                <span>2단계: ${parseInt(m.stage2_participation_count) || 0}회</span>
+                                <span>완주: ${parseInt(m.completed_bootcamp_count) || 0}회</span>
+                            </div>
+                        </div>
+                        <div class="mt-detail-section">
+                            <div class="mt-detail-label">점수 / 코인</div>
+                            <div class="mt-detail-items">
+                                <span>점수: ${scoreHtml(m.current_score)}</span>
+                                <span>코인: ${m.current_coin || 0}</span>
+                            </div>
+                        </div>
+                        <div class="mt-detail-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="${editFn}(${m.id})">수정</button>
+                            <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">삭제</button>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+
+            return mainRow + detailRow;
+        }).join('');
+
+        return `
+        <div class="mt-container">
+            <table class="data-table mt-table">
+                <thead><tr>${headerCols}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+    }
+
+    /**
+     * 테이블 내 행 클릭 토글 이벤트 바인딩
+     * @param {HTMLElement} container - 테이블이 들어 있는 컨테이너
+     */
+    function bindToggle(container) {
+        container.querySelectorAll('.mt-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // 버튼 클릭은 무시
+                if (e.target.closest('button') || e.target.closest('a')) return;
+                const id = row.dataset.id;
+                const detail = container.querySelector(`.mt-detail[data-for="${id}"]`);
+                if (!detail) return;
+                const isOpen = detail.style.display !== 'none';
+                // 다른 열린 상세 닫기
+                container.querySelectorAll('.mt-detail').forEach(d => d.style.display = 'none');
+                container.querySelectorAll('.mt-row').forEach(r => r.classList.remove('mt-row--open'));
+                if (!isOpen) {
+                    detail.style.display = '';
+                    row.classList.add('mt-row--open');
+                }
+            });
+        });
+    }
+
+    return { render, bindToggle, ROLE_LABELS };
+})();

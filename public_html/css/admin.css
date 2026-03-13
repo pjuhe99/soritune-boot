@@ -133,7 +133,25 @@
     padding-bottom: calc(var(--safe-bottom) + var(--space-12));
     max-width: 800px;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
 }
+
+.admin-content > .section { margin-bottom: 0; }
+
+/* ── Dashboard Card ───────────────────────────────────────── */
+.dashboard-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
+}
+.dashboard-card > .section { margin-bottom: var(--space-4); }
+.dashboard-card > .section:last-child,
+.dashboard-card > .admin-tabs { margin-bottom: 0; }
+.dashboard-card .admin-tabs { margin-top: 0; }
 
 /* ── Weekly Goal ───────────────────────────────────────────── */
 .weekly-goal-card {
@@ -315,6 +333,27 @@
     gap: var(--space-2);
     flex-wrap: wrap;
 }
+.task-filter-chips .chip {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 6px 16px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    font-family: inherit;
+    color: var(--color-text-sub);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.task-filter-chips .chip:hover {
+    border-color: var(--color-primary-300);
+    color: var(--color-primary);
+}
+.task-filter-chips .chip.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
 
 /* ── Guide Button ──────────────────────────────────────────── */
 .guide-btn {
@@ -352,6 +391,108 @@
     color: var(--color-gray-600);
 }
 
+/* ── MemberTable (공통 회원 테이블) ────────────────────────── */
+.mt-container { overflow-x: auto; }
+
+.mt-table { border-collapse: collapse; }
+.mt-table th { white-space: nowrap; }
+
+/* 기본 행 */
+.mt-row { cursor: pointer; transition: background var(--transition-fast); }
+.mt-row:hover { background: var(--color-bg-subtle); }
+.mt-row--open { background: var(--color-primary-50); }
+.mt-row--open:hover { background: var(--color-primary-50); }
+
+/* 이름 셀 */
+.mt-name-primary {
+    font-weight: var(--font-bold);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.mt-name-sub {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-top: 1px;
+}
+.mt-role-badge { font-size: 10px; }
+.mt-pc-badge { font-size: 10px; }
+.mt-stage-badge { font-size: 11px; }
+
+/* 이력 셀 */
+.mt-hist-summary {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    white-space: nowrap;
+}
+
+/* 점수 */
+.score-val { font-weight: var(--font-bold); }
+.score-val.negative { color: var(--color-warning); }
+.score-val.danger { color: var(--color-danger); }
+.score-val.revival-warning { color: #d97706; }
+.score-val.out { color: var(--color-danger); font-weight: var(--font-extrabold); }
+.score-val.positive { color: var(--color-success); }
+
+/* 펼침 행 */
+.mt-detail > td {
+    padding: 0 !important;
+    background: var(--color-bg-subtle);
+    border-top: none;
+}
+
+.mt-detail-grid {
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    align-items: flex-start;
+}
+
+.mt-detail-section { min-width: 120px; }
+
+.mt-detail-label {
+    font-size: var(--text-xs);
+    font-weight: var(--font-bold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-1);
+}
+
+.mt-detail-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--text-sm);
+    color: var(--color-text);
+}
+
+.mt-detail-actions {
+    margin-left: auto;
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+}
+
+.btn-danger-outline {
+    background: none;
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+    border-radius: var(--radius-sm);
+    padding: 4px 12px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.btn-danger-outline:hover {
+    background: var(--color-danger);
+    color: #fff;
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .admin-content { padding: var(--space-4); }
@@ -359,4 +500,7 @@
         padding: var(--space-2) var(--space-4);
         padding-top: calc(var(--safe-top) + var(--space-2));
     }
+    .mt-detail-grid { flex-direction: column; gap: var(--space-3); }
+    .mt-detail-actions { margin-left: 0; }
+    .mt-hist-summary { white-space: normal; }
 }
