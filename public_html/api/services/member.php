@@ -26,18 +26,22 @@ function handleMembers() {
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin,
                CASE WHEN bm.cafe_member_key IS NOT NULL THEN 1 ELSE 0 END AS is_cafe_mapped,
-               bm.participation_count
+               bm.participation_count,
+               COALESCE(mhs_p.stage1_participation_count, mhs_u.stage1_participation_count, 0) AS stage1_participation_count,
+               COALESCE(mhs_p.stage2_participation_count, mhs_u.stage2_participation_count, 0) AS stage2_participation_count,
+               COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
+        LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
         WHERE " . implode(' AND ', $where) . "
         ORDER BY bg.name, bm.nickname
     ");
     $stmt->execute($params);
-    $members = $stmt->fetchAll();
-    $members = enrichMembersWithStats($db, $members);
-    jsonSuccess(['members' => $members]);
+    jsonSuccess(['members' => $stmt->fetchAll()]);
 }
 
 function handleMemberCreate($method) {
@@ -76,6 +80,9 @@ function handleMemberCreate($method) {
     $db->prepare("INSERT INTO member_scores (member_id, current_score) VALUES (?, ?)")->execute([$newId, SCORE_START]);
     $db->prepare("INSERT INTO member_coin_balances (member_id, current_coin) VALUES (?, 0)")->execute([$newId]);
 
+    // 집계 테이블 갱신
+    refreshMemberStats($db, $phone, $userId);
+
     jsonSuccess(['id' => $newId], '회원이 추가되었습니다.');
 }
 
@@ -100,6 +107,9 @@ function handleMemberUpdate($method) {
 
     $db = getDB();
 
+    // 변경 전 phone/user_id 보존 (갱신 대상 판별용)
+    $before = getMemberIdentifiers($db, $id);
+
     // role 변경 감지 (코인 처리용)
     $beforeRole = null;
     if (isset($input['member_role'])) {
@@ -117,6 +127,19 @@ function handleMemberUpdate($method) {
         handleRoleChangeCoin($db, $id, $beforeRole, $input['member_role'], $admin['admin_id']);
     }
 
+    // 집계 테이블 갱신 (stats 영향 필드 변경 시)
+    $statsFields = ['stage_no', 'is_active', 'phone', 'user_id', 'cohort_id'];
+    $needsRefresh = false;
+    foreach ($statsFields as $f) {
+        if (isset($input[$f])) { $needsRefresh = true; break; }
+    }
+    if ($needsRefresh) {
+        // 변경 전 인물의 stats도 갱신 (phone/user_id가 바뀐 경우)
+        refreshMemberStats($db, $before['phone'], $before['user_id']);
+        // 변경 후 인물의 stats 갱신
+        refreshMemberStatsById($db, $id);
+    }
+
     jsonSuccess([], '회원 정보가 수정되었습니다.');
 }
 
@@ -128,7 +151,15 @@ function handleMemberDelete($method) {
     if (!$id) jsonError('id 필요');
 
     $db = getDB();
+
+    // 삭제 전 식별자 보존
+    $ident = getMemberIdentifiers($db, $id);
+
     $db->prepare("DELETE FROM bootcamp_members WHERE id = ?")->execute([$id]);
+
+    // 삭제 후 해당 인물의 stats 갱신
+    refreshMemberStats($db, $ident['phone'], $ident['user_id']);
+
     jsonSuccess([], '회원이 삭제되었습니다.');
 }
 

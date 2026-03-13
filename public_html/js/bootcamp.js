@@ -1169,9 +1169,9 @@ const BootcampApp = (() => {
                                 <td>${m.stage_no}단계</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span></td>
                                 <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '<span style="color:#999">첫 참여</span>'}</td>
-                                <td>${m.stage1_count || 0}</td>
-                                <td>${m.stage2_count || 0}</td>
-                                <td>${m.completion_count || 0}</td>
+                                <td>${m.stage1_participation_count || 0}</td>
+                                <td>${m.stage2_participation_count || 0}</td>
+                                <td>${m.completed_bootcamp_count || 0}</td>
                                 <td>${m.bravo_grade ? `<span class="badge badge-warning">${App.esc(m.bravo_grade)}</span>` : '-'}</td>
                                 <td class="score-cell ${sc}" style="font-weight:700">${m.current_score}</td>
                                 <td>${m.current_coin || 0}</td>
