@@ -119,25 +119,25 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#tab-members" data-hash="members">회원 관리</button>
-                            <button class="tab" data-tab="#tab-admins" data-hash="admins">관리자 관리</button>
-                            <button class="tab" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
-                            <button class="tab" data-tab="#tab-guides-mgmt" data-hash="guides">가이드 관리</button>
+                            <button class="tab active" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
                             <button class="tab" data-tab="#tab-calendar-mgmt" data-hash="calendar">캘린더 관리</button>
-                            <button class="tab" data-tab="#tab-cohorts-mgmt" data-hash="cohorts">기수 관리</button>
-                            <button class="tab" data-tab="#tab-coin-cycles" data-hash="coins">코인 Cycle</button>
-                            <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
                             <button class="tab" data-tab="#tab-lectures" data-hash="lectures">강의 관리</button>
+                            <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
+                            <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
+                            <button class="tab" data-tab="#tab-coin-cycles" data-hash="coins">코인 Cycle</button>
+                            <button class="tab" data-tab="#tab-cohorts-mgmt" data-hash="cohorts">기수 관리</button>
+                            <button class="tab" data-tab="#tab-admins" data-hash="admins">관리자 관리</button>
+                            <button class="tab" data-tab="#tab-guides-mgmt" data-hash="guides">가이드 관리</button>
                         </div>
-                        <div class="tab-content active" id="tab-members"></div>
-                        <div class="tab-content" id="tab-admins"></div>
-                        <div class="tab-content" id="tab-tasks-mgmt"></div>
-                        <div class="tab-content" id="tab-guides-mgmt"></div>
+                        <div class="tab-content active" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
-                        <div class="tab-content" id="tab-cohorts-mgmt"></div>
-                        <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
-                        <div class="tab-content" id="tab-cafe-posts"></div>
                         <div class="tab-content" id="tab-lectures"></div>
+                        <div class="tab-content" id="tab-members"></div>
+                        <div class="tab-content" id="tab-cafe-posts"></div>
+                        <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
+                        <div class="tab-content" id="tab-cohorts-mgmt"></div>
+                        <div class="tab-content" id="tab-admins"></div>
+                        <div class="tab-content" id="tab-guides-mgmt"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `

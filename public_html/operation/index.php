@@ -20,7 +20,7 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260313b"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-    <script src="/js/admin.js?v=20260313b"></script>
+    <script src="/js/admin.js?v=20260313c"></script>
     <script src="/js/coin.js?v=20260313"></script>
     <script src="/js/calendar.js?v=20260312"></script>
     <script src="/js/lecture.js?v=20260313a"></script>
