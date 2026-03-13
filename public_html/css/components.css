@@ -256,6 +256,35 @@
 .tab-wrap-outer.fade-left::before { opacity: 1; }
 .tab-wrap-outer.fade-right::after { opacity: 1; }
 
+/* 좌우 화살표 버튼 */
+.tab-arrow {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 1px; /* border-bottom 위 */
+    width: 28px;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg, #fff);
+    border: none;
+    cursor: pointer;
+    z-index: 2;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    padding: 0;
+    font-family: inherit;
+    transition: color 0.15s;
+}
+.tab-arrow:hover { color: var(--color-primary); }
+.tab-arrow-left { left: 0; border-right: 1px solid var(--color-border); }
+.tab-arrow-right { right: 0; border-left: 1px solid var(--color-border); }
+.tab-wrap-outer.fade-left .tab-arrow-left { display: flex; }
+.tab-wrap-outer.fade-right .tab-arrow-right { display: flex; }
+
+/* 화살표 있을 때 탭 안 겹치도록 패딩 */
+.tab-wrap-outer.fade-left .tab-wrap { padding-left: 28px; }
+.tab-wrap-outer.fade-right .tab-wrap { padding-right: 28px; }
+
 .tab {
     padding: 10px 20px;
     font-size: var(--text-md);

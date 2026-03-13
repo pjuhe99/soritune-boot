@@ -147,7 +147,7 @@ const App = (() => {
         const btns = container.querySelectorAll('.tab');
         const contents = container.querySelectorAll('.tab-content');
 
-        // fade 힌트용 wrapper 생성
+        // fade 힌트 + 화살표 버튼용 wrapper 생성
         const tabWrap = container.querySelector('.tab-wrap');
         let outer = null;
         if (tabWrap) {
@@ -155,6 +155,20 @@ const App = (() => {
             outer.className = 'tab-wrap-outer';
             tabWrap.parentNode.insertBefore(outer, tabWrap);
             outer.appendChild(tabWrap);
+
+            // 좌우 화살표 버튼
+            const arrowLeft = document.createElement('button');
+            arrowLeft.className = 'tab-arrow tab-arrow-left';
+            arrowLeft.textContent = '\u25C0';
+            arrowLeft.onclick = () => tabWrap.scrollBy({ left: -200, behavior: 'smooth' });
+
+            const arrowRight = document.createElement('button');
+            arrowRight.className = 'tab-arrow tab-arrow-right';
+            arrowRight.textContent = '\u25B6';
+            arrowRight.onclick = () => tabWrap.scrollBy({ left: 200, behavior: 'smooth' });
+
+            outer.insertBefore(arrowLeft, tabWrap);
+            outer.appendChild(arrowRight);
 
             function updateFade() {
                 const sl = tabWrap.scrollLeft;
