@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
+require_once __DIR__ . '/services/member_stats.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -359,7 +360,9 @@ case 'member_list':
         ORDER BY bm.real_name
     ');
     $stmt->execute([$cohort]);
-    jsonSuccess(['members' => $stmt->fetchAll()]);
+    $members = $stmt->fetchAll();
+    $members = enrichMembersWithStats($db, $members);
+    jsonSuccess(['members' => $members]);
     break;
 
 case 'member_create':

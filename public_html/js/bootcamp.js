@@ -1157,7 +1157,7 @@ const BootcampApp = (() => {
         body.innerHTML = `
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>닉네임</th><th>이름</th><th>조</th><th>단계</th><th>역할</th><th>참여</th><th>점수</th><th>코인</th><th></th></tr></thead>
+                    <thead><tr><th>닉네임</th><th>이름</th><th>조</th><th>단계</th><th>역할</th><th>참여</th><th>1단계</th><th>2단계</th><th>완주</th><th>등급</th><th>점수</th><th>코인</th><th></th></tr></thead>
                     <tbody>
                         ${members.map(m => {
                             const sc = scoreClass(parseInt(m.current_score));
@@ -1169,6 +1169,10 @@ const BootcampApp = (() => {
                                 <td>${m.stage_no}단계</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span></td>
                                 <td>${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info">${m.participation_count}회차</span>` : '<span style="color:#999">첫 참여</span>'}</td>
+                                <td>${m.stage1_count || 0}</td>
+                                <td>${m.stage2_count || 0}</td>
+                                <td>${m.completion_count || 0}</td>
+                                <td>${m.bravo_grade ? `<span class="badge badge-warning">${App.esc(m.bravo_grade)}</span>` : '-'}</td>
                                 <td class="score-cell ${sc}" style="font-weight:700">${m.current_score}</td>
                                 <td>${m.current_coin || 0}</td>
                                 <td class="actions">

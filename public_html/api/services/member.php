@@ -35,7 +35,9 @@ function handleMembers() {
         ORDER BY bg.name, bm.nickname
     ");
     $stmt->execute($params);
-    jsonSuccess(['members' => $stmt->fetchAll()]);
+    $members = $stmt->fetchAll();
+    $members = enrichMembersWithStats($db, $members);
+    jsonSuccess(['members' => $members]);
 }
 
 function handleMemberCreate($method) {
