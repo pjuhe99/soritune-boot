@@ -124,9 +124,9 @@ const BootcampApp = (() => {
         const activeBtn = tabs && tabs.querySelector('.tab.active');
         const activeTab = activeBtn && activeBtn.dataset.tab;
         const hashLoader = activeTab && coachTabLoaders[activeTab];
-        if (hashLoader && activeTab !== '#bc-tab-checklist') {
+        if (hashLoader) {
             hashLoader();
-        } else {
+        } else if (!activeTab || activeTab === '#bc-tab-checklist') {
             loadChecklist();
         }
     }
