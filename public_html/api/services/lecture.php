@@ -276,19 +276,24 @@ function handleLectureScheduleCancel($method) {
     $scheduleId = (int)($input['schedule_id'] ?? 0);
     if (!$scheduleId) jsonError('schedule_id 필요');
 
+    // from_date: 프론트에서 전달된 기준 날짜 (해당 세션의 lecture_date)
+    $fromDate = $input['from_date'] ?? null;
+    if ($fromDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fromDate)) {
+        jsonError('잘못된 날짜 형식입니다.');
+    }
+    if (!$fromDate) $fromDate = date('Y-m-d'); // fallback: 오늘
+
     $db = getDB();
     $stmt = $db->prepare("SELECT * FROM lecture_schedules WHERE id = ? AND status = 'active'");
     $stmt->execute([$scheduleId]);
     $schedule = $stmt->fetch();
     if (!$schedule) jsonError('활성 상태의 스케줄을 찾을 수 없습니다.', 404);
 
-    $today = date('Y-m-d');
-
-    // 미래 세션만 취소 (오늘 포함)
+    // 기준 날짜 이후 세션 취소 (해당 날짜 포함)
     $db->prepare("
         UPDATE lecture_sessions SET status = 'cancelled'
         WHERE schedule_id = ? AND lecture_date >= ? AND status = 'active'
-    ")->execute([$scheduleId, $today]);
+    ")->execute([$scheduleId, $fromDate]);
     $cancelledCount = $db->prepare("SELECT ROW_COUNT()")->fetchColumn();
 
     // 남은 active 세션이 없으면 스케줄도 취소

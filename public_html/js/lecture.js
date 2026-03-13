@@ -128,9 +128,6 @@ const LectureApp = (() => {
                     <a href="${App.esc(s.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>
                     <button class="lec-btn-copy" onclick="LectureApp._copyZoom('${App.esc(s.zoom_join_url)}')">Zoom 링크 복사</button>
             `;
-            if (s.zoom_start_url) {
-                body += `<a href="${App.esc(s.zoom_start_url)}" target="_blank" class="lec-btn-zoom-host">호스트로 입장 (시작)</a>`;
-            }
             if (s.zoom_password) {
                 body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(s.zoom_password)}</strong></div>`;
             }
@@ -150,7 +147,7 @@ const LectureApp = (() => {
         if (canCancel) {
             body += `
                 <div class="lec-detail-cancel-area">
-                    <button class="btn btn-danger btn-sm" id="btn-lec-cancel" data-schedule="${s.schedule_id}">이 스케줄 취소 (미래 세션 전체)</button>
+                    <button class="btn btn-danger btn-sm" id="btn-lec-cancel" data-schedule="${s.schedule_id}" data-date="${s.lecture_date}">이 스케줄 취소 (이 날짜 이후 세션 전체)</button>
                 </div>
             `;
         }
@@ -162,7 +159,7 @@ const LectureApp = (() => {
         if (retryBtn) retryBtn.onclick = () => retryZoom(parseInt(retryBtn.dataset.schedule));
 
         const cancelBtn = document.getElementById('btn-lec-cancel');
-        if (cancelBtn) cancelBtn.onclick = () => cancelSchedule(parseInt(cancelBtn.dataset.schedule));
+        if (cancelBtn) cancelBtn.onclick = () => cancelSchedule(parseInt(cancelBtn.dataset.schedule), cancelBtn.dataset.date);
     }
 
     function _copyZoom(url) {
@@ -191,12 +188,12 @@ const LectureApp = (() => {
         }
     }
 
-    async function cancelSchedule(scheduleId) {
-        const ok = await App.confirm('이 스케줄의 미래 세션을 모두 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.');
+    async function cancelSchedule(scheduleId, fromDate) {
+        const ok = await App.confirm(`이 스케줄의 ${fromDate} 이후 세션을 모두 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
         if (!ok) return;
 
         App.showLoading();
-        const r = await App.post(API + 'lecture_schedule_cancel', { schedule_id: scheduleId });
+        const r = await App.post(API + 'lecture_schedule_cancel', { schedule_id: scheduleId, from_date: fromDate });
         App.hideLoading();
         if (r.success) {
             Toast.success(r.message || '취소되었습니다.');
