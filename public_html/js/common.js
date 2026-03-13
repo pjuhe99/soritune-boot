@@ -95,6 +95,51 @@ const App = (() => {
         if (m) m.remove();
     }
 
+    /**
+     * modal(title, bodyHtml, onConfirm, opts)
+     * onConfirm: async callback (null이면 확인 버튼 없음, return false면 닫지 않음)
+     * opts: { wide: true } 등
+     */
+    function modal(title, bodyHtml, onConfirm, opts = {}) {
+        closeModal();
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'app-modal';
+        const wideClass = opts.wide ? ' modal--wide' : '';
+        const footer = onConfirm ? `
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="modal-cancel">닫기</button>
+                <button class="btn btn-primary btn-sm" id="modal-ok">확인</button>
+            </div>` : '';
+        overlay.innerHTML = `
+            <div class="modal${wideClass}">
+                <div class="modal-header">
+                    <h3 class="modal-title">${esc(title)}</h3>
+                    <button class="modal-close" onclick="App.closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">${bodyHtml}</div>
+                ${footer}
+            </div>
+        `;
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
+        document.body.appendChild(overlay);
+        if (onConfirm) {
+            document.getElementById('modal-cancel').onclick = () => closeModal();
+            document.getElementById('modal-ok').onclick = async () => {
+                const result = await onConfirm();
+                if (result !== false) closeModal();
+            };
+        }
+    }
+
+    function toast(msg, type = 'success') {
+        if (typeof Toast !== 'undefined') {
+            type === 'error' ? Toast.error(msg) : Toast.success(msg);
+        }
+    }
+
     // ── Confirm ──
     function confirm(message) {
         return new Promise(resolve => {
@@ -236,7 +281,7 @@ const App = (() => {
     return {
         api, get, post,
         showLoading, hideLoading,
-        openModal, closeModal, confirm,
+        openModal, closeModal, modal, confirm, toast,
         formatDate, formatDateKo, today,
         initTabs, esc, debounce,
     };

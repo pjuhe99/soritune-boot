@@ -12,7 +12,7 @@ require_once __DIR__ . '/../config.php';
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-    <link rel="stylesheet" href="/css/common.css?v=20260313a">
+    <link rel="stylesheet" href="/css/common.css?v=20260313b">
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/study.css?v=20260313a">
     <link rel="manifest" href="/manifest.json">
@@ -20,7 +20,7 @@ require_once __DIR__ . '/../config.php';
 <body>
     <div id="study-root"></div>
     <script src="/js/toast.js?v=20260227"></script>
-    <script src="/js/common.js?v=20260313b"></script>
+    <script src="/js/common.js?v=20260313c"></script>
     <script src="/js/calendar.js?v=20260312"></script>
     <script src="/js/study.js?v=20260313"></script>
     <script>StudyApp.init();</script>

@@ -423,6 +423,10 @@
     justify-content: center;
 }
 
+.modal--wide {
+    max-width: 720px;
+}
+
 /* ══ Progress Bar ═════════════════════════════════════════════ */
 .progress {
     width: 100%;
