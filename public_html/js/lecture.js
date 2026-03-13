@@ -53,9 +53,11 @@ const LectureApp = (() => {
                     const zoomClass = s.zoom_status === 'failed' ? 'zoom-failed' : '';
                     const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
                     const timeLabel = (s.start_time || '').substring(0, 5);
+                    const stageLabel = STAGE_LABELS[s.stage] || '';
                     const hostBadge = `<span class="host-badge ${s.host_account}">${HOST_LABELS[s.host_account] || ''}</span>`;
-                    const label = `${timeLabel} ${App.esc(s.coach_name || '')}`;
-                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}">${hostBadge}<span>${label}</span></div>`;
+                    const firstLine = `${timeLabel} ${stageLabel}`;
+                    const coachName = App.esc(s.coach_name || '');
+                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}">${hostBadge}<span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
                 }).join('');
             },
         }).mount();

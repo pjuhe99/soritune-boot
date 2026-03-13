@@ -10,22 +10,23 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <link rel="stylesheet" href="/css/common.css?v=20260312">
-    <link rel="stylesheet" href="/css/admin.css?v=20260312">
+    <link rel="stylesheet" href="/css/admin.css?v=20260313">
     <link rel="stylesheet" href="/css/bootcamp.css?v=20260312">
-    <link rel="stylesheet" href="/css/lecture.css?v=20260312a">
+    <link rel="stylesheet" href="/css/calendar.css?v=20260313">
+    <link rel="stylesheet" href="/css/lecture.css?v=20260313">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
     <div id="admin-root" data-role="coach"></div>
     <script src="/js/toast.js?v=20260227"></script>
-    <script src="/js/common.js?v=20260312"></script>
+    <script src="/js/common.js?v=20260313"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="/js/bootcamp.js?v=20260310g"></script>
-    <script src="/js/admin.js?v=20260313"></script>
-    <script src="/js/coin.js?v=20260311a"></script>
+    <script src="/js/bootcamp.js?v=20260313"></script>
+    <script src="/js/admin.js?v=20260313a"></script>
+    <script src="/js/coin.js?v=20260313"></script>
     <script src="/js/calendar.js?v=20260312"></script>
-    <script src="/js/lecture.js?v=20260312a"></script>
+    <script src="/js/lecture.js?v=20260313a"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>

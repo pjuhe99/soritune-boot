@@ -182,8 +182,9 @@ const MemberApp = (() => {
 
     function renderLectureChip(s) {
         const timeLabel = (s.start_time || '').substring(0, 5);
+        const stageLabel = s.stage ? s.stage + '단계' : '';
         const coach = s.coach_name || '';
-        const firstLine = timeLabel;
+        const firstLine = timeLabel + (stageLabel ? ' ' + stageLabel : '');
         return `<div class="member-chip member-chip-lecture" data-type="lecture" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(coach)}</span></div>`;
     }
 

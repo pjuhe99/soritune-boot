@@ -17,8 +17,9 @@
 /* ── Lecture Chip ──────────────────────────────────────────── */
 .lec-chip {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 3px;
+    column-gap: 3px;
     padding: 2px 4px;
     margin-bottom: 2px;
     font-size: var(--text-xs);
@@ -27,11 +28,17 @@
     border-radius: 3px;
     cursor: pointer;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     transition: opacity var(--transition-fast);
     background: var(--color-success-100, #dcfce7);
     color: var(--color-success-700, #15803d);
+}
+.lec-chip .chip-line1 {
+    white-space: nowrap;
+}
+.lec-chip .chip-line2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .lec-chip:hover { opacity: 0.75; }
 
