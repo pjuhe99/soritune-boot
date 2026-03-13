@@ -123,6 +123,55 @@
     margin-top: var(--space-1);
 }
 
+/* ── Curriculum Card (오늘의 진도 & 할 일) ─────────────────── */
+.member-curriculum-card {
+    background: var(--color-bg);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    margin-bottom: var(--space-5);
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--color-primary);
+}
+
+.cur-title {
+    font-size: var(--text-md);
+    font-weight: var(--font-bold);
+    color: var(--color-text);
+    margin-bottom: var(--space-3);
+}
+
+.cur-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.cur-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-gray-100);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+}
+
+.cur-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.cur-label {
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+    flex-shrink: 0;
+}
+
+.cur-note {
+    color: var(--color-text-sub);
+    font-size: var(--text-xs);
+}
+
 /* ── Calendar Section ──────────────────────────────────────── */
 .member-cal-section {
     margin-bottom: var(--space-5);

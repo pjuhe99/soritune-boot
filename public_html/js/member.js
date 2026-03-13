@@ -95,6 +95,8 @@ const MemberApp = (() => {
                         </div>
                     </div>
 
+                    <div id="member-curriculum-section"></div>
+
                     <div class="member-cal-section">
                         <div class="member-legend">
                             <span class="member-legend-item"><span class="member-legend-dot member-legend-study"></span>복습클래스</span>
@@ -134,6 +136,32 @@ const MemberApp = (() => {
         }).mount();
 
         loadCalendarData();
+        loadCurriculumToday();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Curriculum — 오늘의 진도 & 할 일
+    // ══════════════════════════════════════════════════════════
+
+    async function loadCurriculumToday() {
+        const sec = document.getElementById('member-curriculum-section');
+        const r = await App.get(API + 'curriculum_today');
+        if (!r.success || !r.items || !r.items.length) {
+            sec.innerHTML = '';
+            return;
+        }
+
+        const items = r.items.map(item => {
+            const note = item.note ? `<span class="cur-note">${App.esc(item.note)}</span>` : '';
+            return `<div class="cur-item"><span class="cur-label">${App.esc(item.task_type_label)}</span>${note}</div>`;
+        }).join('');
+
+        sec.innerHTML = `
+            <div class="member-curriculum-card">
+                <div class="cur-title">오늘의 진도 &amp; 할 일</div>
+                <div class="cur-list">${items}</div>
+            </div>
+        `;
     }
 
     // ══════════════════════════════════════════════════════════

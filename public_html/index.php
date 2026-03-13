@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/study.css?v=20260313a">
     <link rel="stylesheet" href="/css/lecture.css?v=20260313">
-    <link rel="stylesheet" href="/css/member.css?v=20260313">
+    <link rel="stylesheet" href="/css/member.css?v=20260313a">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -21,7 +21,7 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260313c"></script>
     <script src="/js/calendar.js?v=20260312"></script>
-    <script src="/js/member.js?v=20260313b"></script>
+    <script src="/js/member.js?v=20260313c"></script>
     <script>MemberApp.init();</script>
 </body>
 </html>
