@@ -147,15 +147,62 @@ const App = (() => {
         const btns = container.querySelectorAll('.tab');
         const contents = container.querySelectorAll('.tab-content');
 
+        // fade 힌트용 wrapper 생성
+        const tabWrap = container.querySelector('.tab-wrap');
+        let outer = null;
+        if (tabWrap) {
+            outer = document.createElement('div');
+            outer.className = 'tab-wrap-outer';
+            tabWrap.parentNode.insertBefore(outer, tabWrap);
+            outer.appendChild(tabWrap);
+
+            function updateFade() {
+                const sl = tabWrap.scrollLeft;
+                const maxScroll = tabWrap.scrollWidth - tabWrap.clientWidth;
+                outer.classList.toggle('fade-left', sl > 4);
+                outer.classList.toggle('fade-right', sl < maxScroll - 4);
+            }
+            tabWrap.addEventListener('scroll', updateFade, { passive: true });
+            // 초기 + resize 시 업데이트
+            requestAnimationFrame(updateFade);
+            window.addEventListener('resize', updateFade);
+        }
+
+        function scrollToTab(btn) {
+            if (tabWrap) {
+                btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }
+
+        function activateTab(btn) {
+            btns.forEach(b => b.classList.remove('active'));
+            contents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const target = container.querySelector(btn.dataset.tab);
+            if (target) target.classList.add('active');
+            scrollToTab(btn);
+        }
+
         btns.forEach(btn => {
             btn.addEventListener('click', () => {
-                btns.forEach(b => b.classList.remove('active'));
-                contents.forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                const target = container.querySelector(btn.dataset.tab);
-                if (target) target.classList.add('active');
+                activateTab(btn);
+                if (btn.dataset.hash) {
+                    history.replaceState(null, '', '#' + btn.dataset.hash);
+                }
             });
         });
+
+        // hash 기반 탭 활성화 (외부에서 호출 가능하도록 반환)
+        function activateFromHash() {
+            const hash = location.hash.slice(1);
+            if (hash) {
+                const match = container.querySelector('.tab[data-hash="' + hash + '"]');
+                if (match) { activateTab(match); return true; }
+            }
+            return false;
+        }
+
+        return { activateFromHash };
     }
 
     // ── Escape HTML ──
