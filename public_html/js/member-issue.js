@@ -23,6 +23,8 @@ const MemberIssue = (() => {
         rejected:    { label: '반려',      cls: 'issue-badge--rejected' },
     };
 
+    const DESC_PREVIEW_LEN = 50;
+
     // ══════════════════════════════════════════════════════════
     // 안내 영역 렌더링
     // ══════════════════════════════════════════════════════════
@@ -92,13 +94,12 @@ const MemberIssue = (() => {
 
         if (!selected) {
             errorEl.textContent = '문의 유형을 선택해주세요.';
-            return false; // 모달 안 닫힘
+            return false;
         }
 
         const description = (document.getElementById('issue-description')?.value || '').trim();
         errorEl.textContent = '';
 
-        // 버튼 비활성화
         const okBtn = document.getElementById('modal-ok');
         if (okBtn) { okBtn.disabled = true; okBtn.textContent = '제출 중...'; }
 
@@ -109,7 +110,7 @@ const MemberIssue = (() => {
 
         if (r.success) {
             Toast.success(r.message || '오류 문의가 등록되었습니다.');
-            return true; // 모달 닫힘
+            return true;
         } else {
             errorEl.textContent = r.error || '등록에 실패했습니다.';
             if (okBtn) { okBtn.disabled = false; okBtn.textContent = '확인'; }
@@ -132,7 +133,7 @@ const MemberIssue = (() => {
 
         const r = await App.get(API + 'issue_list');
         const body = document.querySelector('#app-modal .issue-modal-body');
-        if (!body) return; // 모달이 이미 닫힌 경우
+        if (!body) return;
 
         if (!r.success) {
             body.innerHTML = '<p class="issue-modal-placeholder">목록을 불러올 수 없습니다.</p>';
@@ -140,41 +141,127 @@ const MemberIssue = (() => {
         }
 
         if (!r.issues || r.issues.length === 0) {
-            body.innerHTML = '<p class="issue-modal-placeholder">아직 등록된 문의가 없습니다.</p>';
+            body.innerHTML = `
+                <div class="issue-empty">
+                    <div class="issue-empty-icon">&#128196;</div>
+                    <p class="issue-empty-text">아직 등록된 문의가 없습니다.</p>
+                    <button type="button" class="btn btn-primary btn-sm" id="issue-empty-cta">오류 문의하기</button>
+                </div>
+            `;
+            const cta = document.getElementById('issue-empty-cta');
+            if (cta) cta.onclick = () => { App.closeModal(); openReportModal(); };
             return;
         }
 
         body.innerHTML = `
+            <div class="issue-list-count">${r.issues.length}건</div>
             <div class="issue-list">
                 ${r.issues.map(renderIssueRow).join('')}
             </div>
         `;
+
+        // 각 행 클릭 → 상세 모달
+        body.querySelectorAll('.issue-row[data-id]').forEach(row => {
+            row.onclick = () => {
+                const issue = r.issues.find(i => String(i.id) === row.dataset.id);
+                if (issue) openDetailModal(issue);
+            };
+        });
     }
+
+    // ══════════════════════════════════════════════════════════
+    // 목록 행 렌더링
+    // ══════════════════════════════════════════════════════════
 
     function renderIssueRow(issue) {
         const st = STATUS_MAP[issue.status] || STATUS_MAP.pending;
-        const date = issue.created_at ? issue.created_at.slice(0, 10) : '';
-        const desc = issue.description
-            ? `<p class="issue-row-desc">${App.esc(issue.description)}</p>`
-            : '';
-        const note = issue.admin_note
-            ? `<p class="issue-row-note">${App.esc(issue.admin_note)}</p>`
+        const dateStr = formatDateTime(issue.created_at);
+
+        // 설명 미리보기 (길면 자르기)
+        let descPreview = '';
+        if (issue.description) {
+            const full = issue.description;
+            descPreview = full.length > DESC_PREVIEW_LEN
+                ? `<p class="issue-row-desc">${App.esc(full.slice(0, DESC_PREVIEW_LEN))}…</p>`
+                : `<p class="issue-row-desc">${App.esc(full)}</p>`;
+        }
+
+        // 운영팀 답변 여부 표시
+        const hasNote = issue.admin_note
+            ? '<span class="issue-row-replied">답변 있음</span>'
             : '';
 
         return `
-            <div class="issue-row">
+            <div class="issue-row issue-row--clickable" data-id="${issue.id}">
                 <div class="issue-row-header">
                     <span class="issue-row-type">${App.esc(issue.issue_type_label)}</span>
                     <span class="issue-badge ${st.cls}">${st.label}</span>
                 </div>
-                ${desc}
-                ${note}
-                <div class="issue-row-date">${date}</div>
+                ${descPreview}
+                <div class="issue-row-footer">
+                    <span class="issue-row-date">${dateStr}</span>
+                    ${hasNote}
+                </div>
             </div>
         `;
     }
 
-    // ── 공통 유틸 ──
+    // ══════════════════════════════════════════════════════════
+    // 상세 모달
+    // ══════════════════════════════════════════════════════════
+
+    function openDetailModal(issue) {
+        const st = STATUS_MAP[issue.status] || STATUS_MAP.pending;
+        const dateStr = formatDateTime(issue.created_at);
+
+        const descHtml = issue.description
+            ? `<div class="issue-detail-section">
+                   <div class="issue-detail-label">내가 작성한 설명</div>
+                   <div class="issue-detail-value">${App.esc(issue.description).replace(/\n/g, '<br>')}</div>
+               </div>`
+            : '';
+
+        const noteHtml = issue.admin_note
+            ? `<div class="issue-detail-section">
+                   <div class="issue-detail-label">운영팀 답변</div>
+                   <div class="issue-detail-note">${App.esc(issue.admin_note).replace(/\n/g, '<br>')}</div>
+               </div>`
+            : '';
+
+        const resolvedHtml = issue.resolved_at
+            ? `<div class="issue-detail-meta">처리일: ${formatDateTime(issue.resolved_at)}</div>`
+            : '';
+
+        App.openModal('문의 상세', `
+            <div class="issue-detail">
+                <div class="issue-detail-header">
+                    <span class="issue-detail-type">${App.esc(issue.issue_type_label)}</span>
+                    <span class="issue-badge ${st.cls}">${st.label}</span>
+                </div>
+                <div class="issue-detail-meta">등록일: ${dateStr}</div>
+                ${resolvedHtml}
+                ${descHtml}
+                ${noteHtml}
+            </div>
+        `, `<button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>`);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // 유틸
+    // ══════════════════════════════════════════════════════════
+
+    function formatDateTime(dt) {
+        if (!dt) return '';
+        // "2026-03-16 14:30:00" → "3/16 14:30"
+        const d = new Date(dt.replace(' ', 'T'));
+        if (isNaN(d)) return dt.slice(0, 10);
+        const m = d.getMonth() + 1;
+        const day = d.getDate();
+        const h = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${m}/${day} ${h}:${min}`;
+    }
+
     function renderStatusBadge(status) {
         const st = STATUS_MAP[status] || STATUS_MAP.pending;
         return `<span class="issue-badge ${st.cls}">${st.label}</span>`;
