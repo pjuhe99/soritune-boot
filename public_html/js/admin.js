@@ -119,7 +119,8 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
+                            <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
                             <button class="tab" data-tab="#tab-calendar-mgmt" data-hash="calendar">캘린더 관리</button>
                             <button class="tab" data-tab="#tab-lectures" data-hash="lectures">강의 관리</button>
                             <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
@@ -131,7 +132,8 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                             <button class="tab" data-tab="#tab-issues" data-hash="issues">오류 문의</button>
                         </div>
-                        <div class="tab-content active" id="tab-tasks-mgmt"></div>
+                        <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-lectures"></div>
                         <div class="tab-content" id="tab-members"></div>
@@ -148,7 +150,8 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
+                            <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-lectures" data-hash="lectures">강의 관리</button>
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
@@ -157,7 +160,8 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                         </div>
-                        <div class="tab-content active" id="bc-tab-qr"></div>
+                        <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-lectures"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
@@ -171,10 +175,12 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
+                            <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                         </div>
-                        <div class="tab-content active" id="bc-tab-checklist"></div>
+                        <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                     </div>
                     </div>
@@ -182,7 +188,8 @@ const AdminApp = (() => {
                     <div class="dashboard-card">
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
-                            <button class="tab active" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
+                            <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
@@ -191,7 +198,8 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">강의 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                         </div>
-                        <div class="tab-content active" id="bc-tab-checklist"></div>
+                        <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
@@ -229,6 +237,24 @@ const AdminApp = (() => {
         if (isOperation()) renderTaskFilter();
 
         if (isOperation()) {
+            // Dashboard 탭 (기본 active이므로 즉시 로드, 또는 lazy)
+            if (typeof BootcampApp !== 'undefined') {
+                const dbTab = document.getElementById('bc-tab-dashboard');
+                if (dbTab) {
+                    if (dbTab.classList.contains('active')) {
+                        BootcampApp.loadDashboard(dbTab);
+                    } else {
+                        const dbObserver = new MutationObserver(() => {
+                            if (dbTab.classList.contains('active') && !dbTab.dataset.loaded) {
+                                dbTab.dataset.loaded = '1';
+                                BootcampApp.loadDashboard(dbTab);
+                            }
+                        });
+                        dbObserver.observe(dbTab, { attributes: true, attributeFilter: ['class'] });
+                    }
+                }
+            }
+
             loadMembersMgmt();
             loadAdminsMgmt();
             loadTasksMgmt();

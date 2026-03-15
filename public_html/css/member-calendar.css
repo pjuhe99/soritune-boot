@@ -54,7 +54,6 @@
 /* ── Calendar Section ─────────────────────────────────────── */
 .member-cal-section {
     margin-bottom: var(--space-5);
-    overflow: hidden;
 }
 
 /* ── Event Chips ──────────────────────────────────────────── */
@@ -115,5 +114,22 @@
         flex-direction: column;
         align-items: flex-start;
     }
-    .member-chip { font-size: 10px; padding: 1px 3px; }
+
+    /* 모바일: 칩을 작은 색상 도트로 변환 (탭하면 상세 모달) */
+    .member-chip {
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        min-height: 8px;
+        padding: 0;
+        margin-bottom: 1px;
+        border-radius: 2px;
+        display: inline-block;
+        font-size: 0;
+        line-height: 0;
+    }
+    .member-chip .chip-line1,
+    .member-chip .chip-line2 {
+        display: none;
+    }
 }

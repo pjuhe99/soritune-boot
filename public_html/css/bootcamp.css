@@ -430,8 +430,239 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* ══ Dashboard ═════════════════════════════════════════════════ */
+.db-section-title {
+    font-weight: var(--font-extrabold);
+    font-size: var(--text-md);
+    color: var(--color-text);
+    margin-bottom: var(--space-3);
+    margin-top: var(--space-5);
+}
+.db-section-title:first-child { margin-top: 0; }
+
+/* Metric Cards */
+.db-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+}
+.db-metric-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-gray-100);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: center;
+}
+.db-metric-label {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    font-weight: var(--font-semibold);
+    margin-bottom: var(--space-2);
+}
+.db-metric-value {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
+    margin-bottom: var(--space-2);
+}
+.db-metric-bar {
+    height: 8px;
+    background: var(--color-gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+.db-metric-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+    transition: width 0.5s ease;
+}
+.db-metric-sub {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    margin-top: var(--space-1);
+}
+
+/* Group Table */
+.db-group-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+.db-group-table th,
+.db-group-table td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-gray-100);
+    text-align: center;
+    white-space: nowrap;
+}
+.db-group-table th {
+    background: var(--color-gray-50);
+    font-weight: var(--font-bold);
+    font-size: var(--text-xs);
+    color: var(--color-text-sub);
+    position: sticky;
+    top: 0;
+}
+.db-group-table td:first-child,
+.db-group-table th:first-child { text-align: left; }
+.db-group-row { cursor: pointer; transition: background var(--transition-fast); }
+.db-group-row:hover { background: var(--color-gray-50); }
+
+/* Accordion Members */
+.db-member-panel { display: none; }
+.db-member-panel.open { display: table-row; }
+.db-member-panel td { padding: 0; }
+.db-member-list {
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-subtle);
+}
+.db-member-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-1);
+    border-bottom: 1px solid var(--color-gray-100);
+    font-size: var(--text-sm);
+}
+.db-member-item:last-child { border-bottom: none; }
+.db-member-name {
+    min-width: 80px;
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+}
+.db-member-score {
+    min-width: 40px;
+    font-weight: var(--font-bold);
+    text-align: center;
+}
+.db-member-bars { display: flex; gap: var(--space-2); flex: 1; }
+.db-mini-bar-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+.db-mini-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--color-gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+.db-mini-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+}
+.db-mini-bar-fill.high { background: var(--color-success); }
+.db-mini-bar-fill.mid { background: var(--color-accent); }
+.db-mini-bar-fill.low { background: var(--color-danger); }
+.db-mini-rate {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    min-width: 32px;
+    text-align: right;
+}
+.db-member-optional {
+    display: flex;
+    gap: var(--space-1);
+}
+.db-opt-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--color-gray-100);
+    color: var(--color-text-sub);
+    white-space: nowrap;
+}
+.db-opt-badge.active-1 { background: #dbeafe; color: #2563eb; }
+.db-opt-badge.active-2 { background: #bfdbfe; color: #1d4ed8; }
+.db-opt-badge.active-3 { background: #93c5fd; color: #1e40af; }
+
+/* Score Distribution */
+.db-score-chart { margin-bottom: var(--space-4); }
+.db-score-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+.db-score-label {
+    min-width: 70px;
+    font-size: var(--text-xs);
+    color: var(--color-text-sub);
+    text-align: right;
+    font-weight: var(--font-semibold);
+}
+.db-score-bar-wrap {
+    flex: 1;
+    height: 20px;
+    background: var(--color-gray-50);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+.db-score-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    padding-left: var(--space-2);
+    font-size: 11px;
+    font-weight: var(--font-bold);
+    color: #fff;
+    transition: width 0.5s ease;
+    min-width: fit-content;
+}
+.db-score-bar-fill.score-green { background: var(--color-success); }
+.db-score-bar-fill.score-lime { background: #84cc16; }
+.db-score-bar-fill.score-yellow { background: var(--color-accent); }
+.db-score-bar-fill.score-orange { background: #f97316; }
+.db-score-bar-fill.score-red { background: var(--color-danger); }
+.db-score-bar-fill.score-black { background: var(--color-gray-800); }
+.db-score-count {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    min-width: 30px;
+    margin-left: var(--space-1);
+}
+
+/* Warning List */
+.db-warning-group { margin-bottom: var(--space-3); }
+.db-warning-title {
+    font-size: var(--text-sm);
+    font-weight: var(--font-bold);
+    margin-bottom: var(--space-1);
+    color: var(--color-text-sub);
+}
+.db-warning-item {
+    font-size: var(--text-sm);
+    padding: 3px 0;
+    color: var(--color-text);
+}
+.db-warning-item .score {
+    font-weight: var(--font-bold);
+    color: var(--color-danger);
+}
+
+/* Chevron icon for accordion */
+.db-chevron {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+.db-chevron.open { transform: rotate(90deg); }
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
+    .db-metrics { grid-template-columns: 1fr; gap: var(--space-2); }
+    .db-metric-value { font-size: var(--text-xl); }
+    .db-group-table th, .db-group-table td { padding: var(--space-1) var(--space-2); font-size: var(--text-xs); }
+    .db-member-item { flex-wrap: wrap; gap: var(--space-1); }
+    .db-member-bars { min-width: 100%; }
+}
     .bc-filters { gap: var(--space-2); }
     .bc-filters select,
     .bc-filters input[type="date"] {

@@ -86,6 +86,7 @@ const BootcampApp = (() => {
 
         // 탭 이벤트 바인딩
         const coachTabLoaders = {
+            '#bc-tab-dashboard': () => loadDashboard(),
             '#bc-tab-checklist': loadChecklist,
             '#bc-tab-status': loadStatusBoard,
             '#bc-tab-qr': loadQR,
@@ -157,6 +158,7 @@ const BootcampApp = (() => {
 
         // 탭 이벤트 바인딩
         const leaderTabLoaders = {
+            '#bc-tab-dashboard': () => loadDashboard(),
             '#bc-tab-checklist': loadChecklist,
             '#bc-tab-status': loadStatusBoard,
         };
@@ -1570,11 +1572,263 @@ const BootcampApp = (() => {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Dashboard (대시보드)
+    // ══════════════════════════════════════════════════════════════
+
+    async function loadDashboard(container) {
+        const sec = container || document.getElementById('bc-tab-dashboard');
+        if (!sec) return;
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">대시보드</span>
+            </div>
+            <div id="db-body"><div class="empty-state">로딩 중...</div></div>
+        `;
+
+        await renderDashboard(sec);
+    }
+
+    async function renderDashboard(sec) {
+        const body = sec.querySelector('#db-body') || sec;
+        App.showLoading();
+        const params = selectedCohortId ? { cohort_id: selectedCohortId } : {};
+        const r = await App.get(API + 'dashboard_stats', params);
+        App.hideLoading();
+
+        if (!r.success || !r.cohort_summary) {
+            body.innerHTML = '<div class="empty-state">아직 채점 기간이 시작되지 않았습니다.</div>';
+            return;
+        }
+
+        const d = r;
+        const cs = d.cohort_summary;
+
+        // 색상 클래스 결정
+        function rateColor(rate) {
+            if (rate >= 80) return 'high';
+            if (rate >= 60) return 'mid';
+            return 'low';
+        }
+        function optLevel(count) {
+            if (count === 0) return '';
+            if (count <= 3) return 'active-1';
+            if (count <= 7) return 'active-2';
+            return 'active-3';
+        }
+        function scoreColor(score) {
+            if (score > -5) return '';
+            if (score > -10) return 'negative';
+            if (score > -15) return 'negative';
+            if (score <= -25) return 'danger';
+            return 'danger';
+        }
+
+        let html = '';
+
+        // ── 섹션 1: 기수 전체 요약
+        html += `
+            <div class="db-section-title">기수 전체 과제율 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(${d.scoring_start} ~ ${d.scoring_end}, ${cs.member_count}명)</span></div>
+            <div class="db-metrics">
+                <div class="db-metric-card">
+                    <div class="db-metric-label">줌/데일리미션</div>
+                    <div class="db-metric-value">${cs.zoom_daily_rate}%</div>
+                    <div class="db-metric-bar"><div class="db-metric-bar-fill" style="width:${cs.zoom_daily_rate}%"></div></div>
+                    <div class="db-metric-sub">총 ${d.total_days}일</div>
+                </div>
+                <div class="db-metric-card">
+                    <div class="db-metric-label">내맛33</div>
+                    <div class="db-metric-value">${cs.inner33_rate}%</div>
+                    <div class="db-metric-bar"><div class="db-metric-bar-fill" style="width:${cs.inner33_rate}%"></div></div>
+                    <div class="db-metric-sub">총 ${d.total_days}일</div>
+                </div>
+                <div class="db-metric-card">
+                    <div class="db-metric-label">말까미션</div>
+                    <div class="db-metric-value">${cs.speak_rate}%</div>
+                    <div class="db-metric-bar"><div class="db-metric-bar-fill" style="width:${cs.speak_rate}%"></div></div>
+                    <div class="db-metric-sub">총 ${d.total_mondays}주 (월요일)</div>
+                </div>
+            </div>
+        `;
+
+        // ── 섹션 2: 필수 과제율 - 조별 비교
+        html += `<div class="db-section-title">필수 과제율 - 조별 비교</div>`;
+        html += `<div style="overflow-x:auto"><table class="db-group-table">
+            <thead><tr>
+                <th>조</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th>
+            </tr></thead><tbody>`;
+
+        for (const g of d.groups) {
+            html += `
+                <tr class="db-group-row" data-group-id="${g.id}">
+                    <td><span class="db-chevron" id="chev-req-${g.id}">&#9654;</span> ${App.esc(g.name)}</td>
+                    <td>${g.member_count}</td>
+                    <td>${g.zoom_daily_rate}%</td>
+                    <td>${g.inner33_rate}%</td>
+                    <td>${g.speak_rate}%</td>
+                </tr>
+                <tr class="db-member-panel" id="panel-req-${g.id}"><td colspan="5">
+                    <div class="db-member-list">${renderGroupMembers(d.members.filter(m => m.group_id === g.id), 'required')}</div>
+                </td></tr>
+            `;
+        }
+        html += `</tbody></table></div>`;
+
+        // ── 섹션 3: 선택 참여 현황
+        html += `<div class="db-section-title">선택 참여 현황 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(1인 평균 횟수)</span></div>`;
+        html += `<div style="overflow-x:auto"><table class="db-group-table">
+            <thead><tr>
+                <th>조</th><th>인원</th><th>복클 개설</th><th>복클 참여</th><th>하멈말</th>
+            </tr></thead><tbody>`;
+
+        // 전체 행
+        html += `<tr style="font-weight:var(--font-bold);background:var(--color-gray-50)">
+            <td>전체</td><td>${cs.member_count}</td>
+            <td>${cs.optional_avg.bookclub_open}회</td>
+            <td>${cs.optional_avg.bookclub_join}회</td>
+            <td>${cs.optional_avg.hamemmal}회</td>
+        </tr>`;
+
+        for (const g of d.groups) {
+            const oa = g.optional_avg;
+            html += `
+                <tr class="db-group-row" data-group-id="opt-${g.id}">
+                    <td><span class="db-chevron" id="chev-opt-${g.id}">&#9654;</span> ${App.esc(g.name)}</td>
+                    <td>${g.member_count}</td>
+                    <td>${oa.bookclub_open}회</td>
+                    <td>${oa.bookclub_join}회</td>
+                    <td>${oa.hamemmal}회</td>
+                </tr>
+                <tr class="db-member-panel" id="panel-opt-${g.id}"><td colspan="5">
+                    <div class="db-member-list">${renderGroupMembers(d.members.filter(m => m.group_id === g.id), 'optional')}</div>
+                </td></tr>
+            `;
+        }
+        html += `</tbody></table></div>`;
+
+        // ── 섹션 4: 점수 현황
+        html += `<div class="db-section-title">점수 현황</div>`;
+
+        // 4a: 점수 분포
+        const scoreColors = ['score-green', 'score-lime', 'score-yellow', 'score-orange', 'score-red', 'score-black'];
+        const maxCount = Math.max(...d.score_distribution.map(s => s.count), 1);
+        html += `<div class="db-score-chart">`;
+        d.score_distribution.forEach((s, i) => {
+            const pct = Math.max(s.count / maxCount * 100, s.count > 0 ? 8 : 0);
+            html += `<div class="db-score-row">
+                <span class="db-score-label">${s.range}</span>
+                <div class="db-score-bar-wrap">
+                    <div class="db-score-bar-fill ${scoreColors[i]}" style="width:${pct}%">${s.count > 0 ? s.count + '명' : ''}</div>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+
+        // 4b: 경고 멤버
+        const sw = d.score_warnings;
+        if (sw.approaching.length || sw.revival_eligible.length || sw.out.length) {
+            html += `<div class="db-section-title">주의 필요 멤버</div>`;
+
+            if (sw.approaching.length) {
+                html += `<div class="db-warning-group">
+                    <div class="db-warning-title"><span class="badge-yellow">부활 후보</span> (${SCORE_REVIVAL_CANDIDATE} ~ ${SCORE_REVIVAL_CANDIDATE - 1}점)</div>`;
+                sw.approaching.forEach(m => {
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                });
+                html += `</div>`;
+            }
+            if (sw.revival_eligible.length) {
+                html += `<div class="db-warning-group">
+                    <div class="db-warning-title"><span class="badge-black">부활 대상</span> (${SCORE_REVIVAL_ELIGIBLE} ~ ${SCORE_OUT_THRESHOLD + 1}점)</div>`;
+                sw.revival_eligible.forEach(m => {
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                });
+                html += `</div>`;
+            }
+            if (sw.out.length) {
+                html += `<div class="db-warning-group">
+                    <div class="db-warning-title"><span class="badge-out">OUT</span> (${SCORE_OUT_THRESHOLD}점 이하)</div>`;
+                sw.out.forEach(m => {
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                });
+                html += `</div>`;
+            }
+        }
+
+        body.innerHTML = html;
+
+        // 아코디언 이벤트 바인딩
+        body.querySelectorAll('.db-group-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const gid = row.dataset.groupId;
+                const panel = body.querySelector(`#panel-${gid.startsWith('opt-') ? 'opt-' + gid.replace('opt-', '') : 'req-' + gid}`);
+                const chevron = body.querySelector(`#chev-${gid.startsWith('opt-') ? 'opt-' + gid.replace('opt-', '') : 'req-' + gid}`);
+                if (panel) {
+                    panel.classList.toggle('open');
+                    if (chevron) chevron.classList.toggle('open');
+                }
+            });
+        });
+    }
+
+    // 점수 임계값 상수 (경고 표시용)
+    const SCORE_REVIVAL_CANDIDATE = -13;
+    const SCORE_REVIVAL_ELIGIBLE = -15;
+    const SCORE_OUT_THRESHOLD = -25;
+
+    function renderGroupMembers(members, mode) {
+        if (!members.length) return '<div class="empty-state" style="padding:var(--space-3)">멤버가 없습니다.</div>';
+
+        return members.map(m => {
+            const scoreClass = m.current_score <= -25 ? 'danger' : m.current_score <= -10 ? 'negative' : '';
+
+            if (mode === 'required') {
+                const rq = m.required;
+                return `<div class="db-member-item">
+                    <span class="db-member-name">${App.esc(m.nickname)}</span>
+                    <span class="db-member-score score-cell ${scoreClass}">${m.current_score}</span>
+                    <div class="db-member-bars">
+                        ${miniBar('줌', rq.zoom_daily.rate)}
+                        ${miniBar('내맛', rq.inner33.rate)}
+                        ${miniBar('말까', rq.speak_mission.rate)}
+                    </div>
+                </div>`;
+            } else {
+                const op = m.optional;
+                return `<div class="db-member-item">
+                    <span class="db-member-name">${App.esc(m.nickname)}</span>
+                    <div class="db-member-optional">
+                        <span class="db-opt-badge ${optLevel(op.bookclub_open)}">개설 ${op.bookclub_open}</span>
+                        <span class="db-opt-badge ${optLevel(op.bookclub_join)}">참여 ${op.bookclub_join}</span>
+                        <span class="db-opt-badge ${optLevel(op.hamemmal)}">하멈말 ${op.hamemmal}</span>
+                    </div>
+                </div>`;
+            }
+        }).join('');
+
+        function miniBar(label, rate) {
+            const cls = rate >= 80 ? 'high' : rate >= 60 ? 'mid' : 'low';
+            return `<div class="db-mini-bar-wrap">
+                <div class="db-mini-bar"><div class="db-mini-bar-fill ${cls}" style="width:${rate}%"></div></div>
+                <span class="db-mini-rate">${rate}%</span>
+            </div>`;
+        }
+
+        function optLevel(count) {
+            if (count === 0) return '';
+            if (count <= 3) return 'active-1';
+            if (count <= 7) return 'active-2';
+            return 'active-3';
+        }
+    }
+
     // ── Public API ──
     return {
         init,
         initForCoach,
         initForLeader,
+        loadDashboard,
         _editMember, _deleteMember,
         _coinAction, _coinLogs,
         _editGroup, _deleteGroup,

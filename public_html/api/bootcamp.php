@@ -22,6 +22,7 @@ require_once __DIR__ . '/services/lecture.php';
 require_once __DIR__ . '/services/curriculum.php';
 require_once __DIR__ . '/services/member_page.php';
 require_once __DIR__ . '/services/issue_report.php';
+require_once __DIR__ . '/services/dashboard.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -270,6 +271,9 @@ case 'member_curriculum':        handleMemberCurriculum(); break;
 case 'member_curriculum_detail': handleMemberCurriculumDetail(); break;
 case 'member_bootees':           handleMemberBootees(); break;
 case 'member_event_log':         handleMemberEventLog($method); break;
+
+// ── Dashboard ────────────────────────────────────────────────
+case 'dashboard_stats':  handleDashboardStats(); break;
 
 // ── Issue Reports (오류 문의) ──────────────────────────────
 case 'issue_create':        handleIssueCreate($method); break;
