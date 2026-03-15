@@ -21,19 +21,31 @@
     margin: 0;
 }
 
-/* ── 필터 칩 ──────────────────────────────────────────────── */
-.issue-adm-filters {
+/* ── 필터 바 ──────────────────────────────────────────────── */
+.issue-adm-filter-bar {
     display: flex;
+    flex-direction: column;
     gap: var(--space-2);
-    flex-wrap: wrap;
     margin-bottom: var(--space-3);
 }
 
-.issue-adm-filters .filter-chip {
+.issue-adm-filter-group {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.issue-adm-filter-group:empty {
+    display: none;
+}
+
+/* ── 필터 칩 ──────────────────────────────────────────────── */
+.issue-adm-filter-group .filter-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 12px;
+    padding: 5px 14px;
     border: 1px solid var(--color-gray-300);
     border-radius: var(--radius-full, 9999px);
     background: var(--color-bg);
@@ -44,15 +56,29 @@
     transition: all var(--transition-fast);
 }
 
-.issue-adm-filters .filter-chip:hover {
+.issue-adm-filter-group .filter-chip:hover {
     border-color: var(--color-primary-300);
     color: var(--color-primary);
 }
 
-.issue-adm-filters .filter-chip.active {
+.issue-adm-filter-group .filter-chip.active {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: #fff;
+}
+
+/* 서브 칩 (유형 필터 등) — 작은 스타일 */
+.filter-chip--sub {
+    padding: 3px 10px !important;
+    font-size: 11px !important;
+    border-style: dashed !important;
+}
+
+.filter-chip--sub.active {
+    border-style: solid !important;
+    background: var(--color-gray-700) !important;
+    border-color: var(--color-gray-700) !important;
+    color: #fff !important;
 }
 
 .chip-count {
@@ -238,6 +264,38 @@
     background: var(--color-danger-50);
     color: #991b1b;
     border-color: #fca5a5;
+}
+
+/* ── Pagination ───────────────────────────────────────────── */
+.issue-adm-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+}
+
+.issue-adm-pager .pager-btn {
+    padding: 6px 14px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-primary);
+    background: var(--color-bg);
+    border: 1px solid var(--color-primary-200, #bfdbfe);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.issue-adm-pager .pager-btn:hover {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary);
+}
+
+.issue-adm-pager .pager-info {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
 }
 
 /* ── Responsive ───────────────────────────────────────────── */

@@ -1,10 +1,11 @@
 /* ══════════════════════════════════════════════════════════════
    AdminIssues — 운영용 오류 문의 관리 탭
-   목록 + 칩 필터 (상태별) + 상세 모달 + 상태 변경
+   목록 + 필터 (상태/유형) + 상세 모달 + 상태 변경
    ══════════════════════════════════════════════════════════════ */
 const AdminIssues = (() => {
     const API = '/api/bootcamp.php?action=';
 
+    // ── 상태 ──
     const STATUS_MAP = {
         pending:     { label: '접수됨',    cls: 'issue-adm-badge--pending' },
         in_progress: { label: '확인 중',   cls: 'issue-adm-badge--progress' },
@@ -12,11 +13,30 @@ const AdminIssues = (() => {
         rejected:    { label: '반려',      cls: 'issue-adm-badge--rejected' },
     };
 
+    // "처리 전" = pending + in_progress
+    const UNRESOLVED = ['pending', 'in_progress'];
+    const RESOLVED   = ['resolved', 'rejected'];
+
+    // ── 필터 정의 (확장 포인트) ──
+    const STATUS_FILTERS = [
+        { key: 'all',        label: '전체',    match: () => true },
+        { key: 'unresolved', label: '처리 전', match: i => UNRESOLVED.includes(i.status) },
+        { key: 'resolved',   label: '처리 완료', match: i => RESOLVED.includes(i.status) },
+    ];
+
+    const PAGE_SIZE = 30;
+
     let container = null;
     let admin = null;
     let allIssues = [];
     let issueTypes = {};
-    let activeFilter = 'all';
+
+    // ── 필터 상태 (복수 필터 확장 가능) ──
+    let filters = {
+        status: 'all',
+        type: 'all',    // 향후 문의 유형 필터
+    };
+    let currentPage = 1;
 
     // ══════════════════════════════════════════════════════════
     // Init
@@ -32,9 +52,13 @@ const AdminIssues = (() => {
                     <h3 class="issue-adm-title">오류 문의</h3>
                     <button class="btn btn-secondary btn-sm" id="issue-adm-refresh">새로고침</button>
                 </div>
-                <div class="issue-adm-filters" id="issue-adm-filters"></div>
+                <div class="issue-adm-filter-bar" id="issue-adm-filter-bar">
+                    <div class="issue-adm-filter-group" id="issue-adm-status-filters"></div>
+                    <div class="issue-adm-filter-group" id="issue-adm-type-filters"></div>
+                </div>
                 <div class="issue-adm-count" id="issue-adm-count"></div>
                 <div class="issue-adm-list" id="issue-adm-list"></div>
+                <div class="issue-adm-pager" id="issue-adm-pager"></div>
             </div>
         `;
 
@@ -63,7 +87,9 @@ const AdminIssues = (() => {
 
         allIssues = r.issues || [];
         issueTypes = r.issue_types || {};
-        renderFilters();
+        currentPage = 1;
+        renderStatusFilters();
+        renderTypeFilters();
         renderList();
     }
 
@@ -71,56 +97,106 @@ const AdminIssues = (() => {
     // Filters
     // ══════════════════════════════════════════════════════════
 
-    function renderFilters() {
-        const el = document.getElementById('issue-adm-filters');
+    function getFiltered() {
+        let result = allIssues;
+
+        // 상태 필터
+        const sf = STATUS_FILTERS.find(f => f.key === filters.status);
+        if (sf) result = result.filter(sf.match);
+
+        // 유형 필터
+        if (filters.type !== 'all') {
+            result = result.filter(i => i.issue_type === filters.type);
+        }
+
+        return result;
+    }
+
+    function renderStatusFilters() {
+        const el = document.getElementById('issue-adm-status-filters');
         if (!el) return;
 
-        const counts = { all: allIssues.length };
-        allIssues.forEach(i => {
-            counts[i.status] = (counts[i.status] || 0) + 1;
+        // 건수 계산
+        const counts = {};
+        STATUS_FILTERS.forEach(f => {
+            counts[f.key] = allIssues.filter(f.match).length;
         });
 
-        const chips = [
-            { key: 'all', label: '전체' },
-            { key: 'pending', label: '접수됨' },
-            { key: 'in_progress', label: '확인 중' },
-            { key: 'resolved', label: '처리 완료' },
-            { key: 'rejected', label: '반려' },
-        ];
-
-        el.innerHTML = chips.map(c => {
-            const cnt = counts[c.key] || 0;
-            const active = activeFilter === c.key ? ' active' : '';
-            return `<button class="filter-chip${active}" data-filter="${c.key}">${c.label} <span class="chip-count">${cnt}</span></button>`;
+        el.innerHTML = STATUS_FILTERS.map(f => {
+            const active = filters.status === f.key ? ' active' : '';
+            return `<button class="filter-chip${active}" data-filter="${f.key}">${f.label} <span class="chip-count">${counts[f.key]}</span></button>`;
         }).join('');
 
         el.querySelectorAll('.filter-chip').forEach(chip => {
             chip.onclick = () => {
-                activeFilter = chip.dataset.filter;
-                el.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
+                filters.status = chip.dataset.filter;
+                currentPage = 1;
+                renderStatusFilters();
+                renderList();
+            };
+        });
+    }
+
+    function renderTypeFilters() {
+        const el = document.getElementById('issue-adm-type-filters');
+        if (!el || !issueTypes || Object.keys(issueTypes).length === 0) return;
+
+        // 유형별 건수
+        const counts = { all: allIssues.length };
+        allIssues.forEach(i => {
+            counts[i.issue_type] = (counts[i.issue_type] || 0) + 1;
+        });
+
+        const chips = [{ key: 'all', label: '전체 유형' }];
+        Object.entries(issueTypes).forEach(([key, label]) => {
+            if (counts[key]) chips.push({ key, label });
+        });
+
+        // 유형이 1개뿐이면 필터 불필요
+        if (chips.length <= 2) { el.innerHTML = ''; return; }
+
+        el.innerHTML = chips.map(c => {
+            const active = filters.type === c.key ? ' active' : '';
+            const cnt = c.key === 'all' ? '' : ` <span class="chip-count">${counts[c.key] || 0}</span>`;
+            return `<button class="filter-chip filter-chip--sub${active}" data-filter="${c.key}">${c.label}${cnt}</button>`;
+        }).join('');
+
+        el.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.onclick = () => {
+                filters.type = chip.dataset.filter;
+                currentPage = 1;
+                renderTypeFilters();
                 renderList();
             };
         });
     }
 
     // ══════════════════════════════════════════════════════════
-    // List
+    // List + Pagination
     // ══════════════════════════════════════════════════════════
 
     function renderList() {
         const listEl = document.getElementById('issue-adm-list');
         const countEl = document.getElementById('issue-adm-count');
+        const pagerEl = document.getElementById('issue-adm-pager');
         if (!listEl) return;
 
-        const filtered = activeFilter === 'all'
-            ? allIssues
-            : allIssues.filter(i => i.status === activeFilter);
+        const filtered = getFiltered();
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        if (currentPage > totalPages) currentPage = totalPages;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const pageItems = filtered.slice(start, start + PAGE_SIZE);
 
-        if (countEl) countEl.textContent = `${filtered.length}건`;
+        if (countEl) {
+            countEl.textContent = total > PAGE_SIZE
+                ? `${total}건 중 ${start + 1}-${Math.min(start + PAGE_SIZE, total)}건`
+                : `${total}건`;
+        }
 
-        if (filtered.length === 0) {
+        if (total === 0) {
             listEl.innerHTML = '<div class="issue-adm-empty">해당 문의가 없습니다.</div>';
+            if (pagerEl) pagerEl.innerHTML = '';
             return;
         }
 
@@ -136,7 +212,7 @@ const AdminIssues = (() => {
                     </tr>
                 </thead>
                 <tbody>
-                    ${filtered.map(renderRow).join('')}
+                    ${pageItems.map(renderRow).join('')}
                 </tbody>
             </table>
         `;
@@ -147,6 +223,26 @@ const AdminIssues = (() => {
                 if (issue) openDetail(issue);
             };
         });
+
+        // Pagination
+        if (pagerEl) {
+            if (totalPages <= 1) {
+                pagerEl.innerHTML = '';
+            } else {
+                let html = '';
+                if (currentPage > 1) html += `<button class="pager-btn" data-page="${currentPage - 1}">&laquo; 이전</button>`;
+                html += `<span class="pager-info">${currentPage} / ${totalPages}</span>`;
+                if (currentPage < totalPages) html += `<button class="pager-btn" data-page="${currentPage + 1}">다음 &raquo;</button>`;
+                pagerEl.innerHTML = html;
+                pagerEl.querySelectorAll('.pager-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        currentPage = parseInt(btn.dataset.page);
+                        renderList();
+                        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    };
+                });
+            }
+        }
     }
 
     function renderRow(issue) {
@@ -264,13 +360,12 @@ const AdminIssues = (() => {
 
         if (r.success) {
             Toast.success(r.message || '상태가 변경되었습니다.');
-            // 로컬 데이터 갱신
             issue.status = newStatus;
             if (newStatus === 'resolved' || newStatus === 'rejected') {
                 issue.resolved_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
             }
             App.closeModal();
-            renderFilters();
+            renderStatusFilters();
             renderList();
         }
     }
