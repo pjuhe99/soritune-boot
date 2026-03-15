@@ -188,7 +188,63 @@ function handleMemberCurriculumDetail() {
 }
 
 /**
- * 탭 진입 로그 저장
+ * 다른 부티즈 목록 (같은 cohort, 본인 제외)
+ * 코인 내림차순 → 닉네임 가나다순
+ * 완주 횟수 / 브라보 등급은 member_history_stats에서 JOIN
+ */
+function handleMemberBootees() {
+    $member = requireMember();
+    $memberId = $member['member_id'];
+
+    $db = getDB();
+
+    // 본인의 cohort_id, group_id 조회
+    $myStmt = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
+    $myStmt->execute([$memberId]);
+    $myInfo = $myStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$myInfo) jsonError('회원 정보를 찾을 수 없습니다.');
+
+    $cohortId = (int)$myInfo['cohort_id'];
+    $myGroupId = $myInfo['group_id'] ? (int)$myInfo['group_id'] : null;
+
+    // 같은 cohort 활성 멤버 (본인 제외)
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.nickname, bm.group_id, bg.name AS group_name,
+               COALESCE(ms.current_score, 0) AS score,
+               COALESCE(mcb.current_coin, 0) AS coin,
+               COALESCE(mhs.completed_bootcamp_count, 0) AS completed_count,
+               mhs.bravo_grade
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
+        LEFT JOIN member_history_stats mhs ON bm.phone = mhs.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        WHERE bm.cohort_id = ?
+          AND bm.is_active = 1
+          AND bm.member_status = 'active'
+          AND bm.id != ?
+        ORDER BY coin DESC, bm.nickname ASC
+    ");
+    $stmt->execute([$cohortId, $memberId]);
+    $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // int 캐스팅
+    foreach ($members as &$m) {
+        $m['group_id'] = $m['group_id'] ? (int)$m['group_id'] : null;
+        $m['score'] = (int)$m['score'];
+        $m['coin'] = (int)$m['coin'];
+        $m['completed_count'] = (int)$m['completed_count'];
+    }
+    unset($m);
+
+    jsonSuccess([
+        'members' => $members,
+        'my_group_id' => $myGroupId,
+    ]);
+}
+
+/**
+ * 탭 진입 / 필터 변경 로그 저장
  * member_page_logs 테이블에 기록
  */
 function handleMemberPageLog($method) {
@@ -199,16 +255,20 @@ function handleMemberPageLog($method) {
     $tabName = trim($input['tab_name'] ?? '');
     if (!$tabName) jsonError('tab_name 필요');
 
-    // 허용 탭 목록 (화이트리스트)
-    $allowedTabs = ['calendar', 'assignments', 'curriculum', 'members'];
-    if (!in_array($tabName, $allowedTabs, true)) {
-        jsonError('유효하지 않은 tab_name');
+    // 허용 패턴 (탭 진입 + 필터 로그 + 상세 열람)
+    $allowedPrefixes = ['calendar', 'assignments', 'curriculum', 'members', 'curriculum_item:'];
+    $valid = false;
+    foreach ($allowedPrefixes as $prefix) {
+        if ($tabName === $prefix || str_starts_with($tabName, $prefix)) {
+            $valid = true;
+            break;
+        }
     }
+    if (!$valid) jsonError('유효하지 않은 tab_name');
 
     $db = getDB();
     $memberId = $member['member_id'];
 
-    // cohort_id 조회
     $cohortStmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
     $cohortStmt->execute([$memberId]);
     $cohortId = (int)$cohortStmt->fetchColumn();

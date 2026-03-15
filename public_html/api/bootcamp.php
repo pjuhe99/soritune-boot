@@ -266,6 +266,7 @@ case 'curriculum_today':    handleCurriculumToday(); break;
 case 'member_checks':            handleMemberChecks(); break;
 case 'member_curriculum':        handleMemberCurriculum(); break;
 case 'member_curriculum_detail': handleMemberCurriculumDetail(); break;
+case 'member_bootees':           handleMemberBootees(); break;
 case 'member_page_log':          handleMemberPageLog($method); break;
 
 // ──────────────────────────────────────────────────────────────
