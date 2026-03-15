@@ -76,8 +76,13 @@ function handleIssueCreate($method) {
     ]);
     $issueId = (int)$db->lastInsertId();
 
-    // ── 초기 로그 ──
+    // ── 상태 변경 로그 ──
     logIssueStatusChange($db, $issueId, null, 'pending', 'system', null, '사용자 등록');
+
+    // ── 이벤트 로그 (사용자 행동 추적) ──
+    logMemberEvent($memberId, 'submit_issue_report', (string)$issueId, [
+        'issue_type' => $issueType,
+    ]);
 
     jsonSuccess(['id' => $issueId], '오류 문의가 등록되었습니다.');
 }

@@ -19,6 +19,7 @@ const ALLOWED_EVENTS = [
     'open_curriculum_item',
     'click_members_filter',
     'open_issue_report',
+    'submit_issue_report',
     'open_my_issues',
 ];
 
