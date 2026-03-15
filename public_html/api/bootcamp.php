@@ -21,6 +21,7 @@ require_once __DIR__ . '/services/study.php';
 require_once __DIR__ . '/services/lecture.php';
 require_once __DIR__ . '/services/curriculum.php';
 require_once __DIR__ . '/services/member_page.php';
+require_once __DIR__ . '/services/issue_report.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -269,6 +270,14 @@ case 'member_curriculum':        handleMemberCurriculum(); break;
 case 'member_curriculum_detail': handleMemberCurriculumDetail(); break;
 case 'member_bootees':           handleMemberBootees(); break;
 case 'member_event_log':         handleMemberEventLog($method); break;
+
+// ── Issue Reports (오류 문의) ──────────────────────────────
+case 'issue_create':        handleIssueCreate($method); break;
+case 'issue_list':          handleIssueList(); break;
+case 'issue_detail':        handleIssueDetail(); break;
+case 'issue_admin_list':    handleIssueAdminList(); break;
+case 'issue_status_update': handleIssueStatusUpdate($method); break;
+case 'issue_admin_note':    handleIssueAdminNote($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
