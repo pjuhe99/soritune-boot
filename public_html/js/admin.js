@@ -129,6 +129,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-admins" data-hash="admins">관리자 관리</button>
                             <button class="tab" data-tab="#tab-guides-mgmt" data-hash="guides">가이드 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
+                            <button class="tab" data-tab="#tab-issues" data-hash="issues">오류 문의</button>
                         </div>
                         <div class="tab-content active" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
@@ -140,6 +141,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-admins"></div>
                         <div class="tab-content" id="tab-guides-mgmt"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
+                        <div class="tab-content" id="tab-issues"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -259,6 +261,20 @@ const AdminApp = (() => {
                         }
                     });
                     lecObserver.observe(lecTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Issue Reports 탭 lazy load
+            if (typeof AdminIssues !== 'undefined') {
+                const issueTab = document.getElementById('tab-issues');
+                if (issueTab) {
+                    const issueObserver = new MutationObserver(() => {
+                        if (issueTab.classList.contains('active') && !issueTab.dataset.loaded) {
+                            issueTab.dataset.loaded = '1';
+                            AdminIssues.init(issueTab, admin);
+                        }
+                    });
+                    issueObserver.observe(issueTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
         }

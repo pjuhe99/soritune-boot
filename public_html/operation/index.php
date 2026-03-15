@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/css/admin.css?v=20260313">
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/lecture.css?v=20260313">
+    <link rel="stylesheet" href="/css/admin-issues.css?v=20260316">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -26,6 +27,7 @@
     <script src="/js/coin.js?v=20260313"></script>
     <script src="/js/calendar.js?v=20260312"></script>
     <script src="/js/lecture.js?v=20260313a"></script>
+    <script src="/js/admin-issues.js?v=20260316"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>
