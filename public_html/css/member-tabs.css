@@ -44,6 +44,32 @@
     font-size: var(--text-sm);
 }
 
+/* ── Filter Chips (공통 — 캘린더/부티즈 등에서 재사용) ─────────── */
+.filter-chip {
+    padding: 4px 12px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    border: 1.5px solid var(--color-gray-200);
+    border-radius: var(--radius-full, 9999px);
+    background: var(--color-bg);
+    color: var(--color-text-sub);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.filter-chip:hover {
+    border-color: var(--color-primary-300, #93c5fd);
+    color: var(--color-primary);
+}
+
+.filter-chip.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .member-tab-bar .tab {
@@ -52,5 +78,9 @@
     }
     .member-tab-panels {
         padding: var(--space-3) var(--space-4);
+    }
+    .filter-chip {
+        padding: 3px 10px;
+        font-size: 13px;
     }
 }

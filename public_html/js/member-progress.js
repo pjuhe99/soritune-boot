@@ -47,7 +47,7 @@ const MemberProgress = (() => {
         cal = CalendarUI.create(document.getElementById('progress-cal-container'), {
             onMonthChange: () => loadData(),
             chipSelector: '.progress-chip',
-            onChipClick: (e, chip) => openDetail(parseInt(chip.dataset.id)),
+            onChipClick: (e, chip) => { const id = parseInt(chip.dataset.id); if (!isNaN(id)) openDetail(id); },
             renderChips: (events) => events.map(ev => renderChip(ev)).join(''),
         }).mount();
 
@@ -149,6 +149,5 @@ const MemberProgress = (() => {
         App.openModal(style.label, body);
     }
 
-    // openDetail 내에서 로그는 서버 측(member_curriculum_detail)에서 처리
-    return { TYPE_COLORS, getTypeStyle };
+    return {};
 })();

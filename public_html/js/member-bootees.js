@@ -39,7 +39,11 @@ const MemberBootees = (() => {
             </div>
         `;
 
-        bindFilterChips();
+        MemberUtils.bindFilterChips('bootees-filter-chips', 'filter', (filter) => {
+            activeFilter = filter;
+            MemberUtils.logEvent('click_members_filter', filter);
+            renderList();
+        });
         MemberUtils.logEvent('open_tab_members');
         loadData();
     }
@@ -48,30 +52,6 @@ const MemberBootees = (() => {
         mounted = false;
         panel = null;
         allMembers = [];
-    }
-
-    // ══════════════════════════════════════════════════════════
-    // Filter Chips
-    // ══════════════════════════════════════════════════════════
-
-    function bindFilterChips() {
-        const container = document.getElementById('bootees-filter-chips');
-        if (!container) return;
-
-        container.addEventListener('click', (e) => {
-            const chip = e.target.closest('.filter-chip');
-            if (!chip) return;
-
-            const filter = chip.dataset.filter;
-            if (filter === activeFilter) return;
-
-            container.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            activeFilter = filter;
-
-            MemberUtils.logEvent('click_members_filter', filter);
-            renderList();
-        });
     }
 
     // ══════════════════════════════════════════════════════════

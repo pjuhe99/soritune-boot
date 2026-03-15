@@ -8,10 +8,9 @@ const MemberCalendar = (() => {
 
     let cal = null;
     let mounted = false;
-    let allEvents = [];       // normalize된 전체 이벤트
-    let activeFilter = 'all'; // 'all' | '1' | '2'
+    let allEvents = [];
+    let activeFilter = 'all';
 
-    // 탭 핸들러 등록
     MemberTabs.register('calendar', { mount, unmount });
 
     // ══════════════════════════════════════════════════════════
@@ -21,7 +20,7 @@ const MemberCalendar = (() => {
     function mount(panel, member) {
         if (mounted) return;
         mounted = true;
-        activeFilter = 'all'; // 새로고침 시 기본값
+        activeFilter = 'all';
 
         panel.innerHTML = `
             <div class="member-cal-section">
@@ -40,15 +39,20 @@ const MemberCalendar = (() => {
             </div>
         `;
 
-        // 필터 칩 이벤트 바인딩
-        bindFilterChips();
+        MemberUtils.bindFilterChips('member-filter-chips', 'stage', (stage) => {
+            activeFilter = stage;
+            MemberUtils.logEvent('click_calendar_stage_filter', stage);
+            applyFilterAndRender();
+        });
         MemberUtils.logEvent('open_tab_calendar');
 
-        // 캘린더 초기화
         cal = CalendarUI.create(document.getElementById('member-cal-container'), {
             onMonthChange: () => loadData(),
             chipSelector: '.member-chip',
-            onChipClick: (e, chip) => MemberCalendarDetail.open(chip.dataset.type, parseInt(chip.dataset.id)),
+            onChipClick: (e, chip) => {
+                const id = parseInt(chip.dataset.id);
+                if (!isNaN(id)) MemberCalendarDetail.open(chip.dataset.type, id);
+            },
             renderChips: (events) => events.map(ev => renderChip(ev)).join(''),
         }).mount();
 
@@ -59,31 +63,6 @@ const MemberCalendar = (() => {
         mounted = false;
         cal = null;
         allEvents = [];
-    }
-
-    // ══════════════════════════════════════════════════════════
-    // Filter Chips
-    // ══════════════════════════════════════════════════════════
-
-    function bindFilterChips() {
-        const container = document.getElementById('member-filter-chips');
-        if (!container) return;
-
-        container.addEventListener('click', (e) => {
-            const chip = e.target.closest('.filter-chip');
-            if (!chip) return;
-
-            const stage = chip.dataset.stage;
-            if (stage === activeFilter) return; // 동일 필터 재클릭 무시
-
-            // UI 상태 전환
-            container.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-
-            activeFilter = stage;
-            MemberUtils.logEvent('click_calendar_stage_filter', stage);
-            applyFilterAndRender();
-        });
     }
 
     // ══════════════════════════════════════════════════════════
@@ -102,78 +81,40 @@ const MemberCalendar = (() => {
 
         allEvents = [];
 
-        // normalize: 공통 필드 _type, date, stage
         if (studyRes.success) {
             (studyRes.sessions || []).forEach(s => {
-                allEvents.push(normalizeStudy(s));
+                allEvents.push({ ...s, _type: 'study', date: s.study_date, stage: parseInt(s.level) || null });
             });
         }
-
         if (lectureRes.success) {
             (lectureRes.sessions || []).forEach(s => {
-                allEvents.push(normalizeLecture(s));
+                allEvents.push({ ...s, _type: 'lecture', date: s.lecture_date, stage: parseInt(s.stage) || null });
             });
         }
 
         applyFilterAndRender();
     }
 
-    /** 스터디 → 공통 이벤트 포맷 */
-    function normalizeStudy(s) {
-        return {
-            ...s,
-            _type: 'study',
-            date: s.study_date,
-            stage: parseInt(s.level) || null, // level → stage 통일
-        };
-    }
-
-    /** 강의 → 공통 이벤트 포맷 */
-    function normalizeLecture(s) {
-        return {
-            ...s,
-            _type: 'lecture',
-            date: s.lecture_date,
-            stage: parseInt(s.stage) || null, // 이미 stage 필드
-        };
-    }
-
-    /** 필터 적용 후 캘린더 렌더링 */
     function applyFilterAndRender() {
         if (!cal) return;
-        const filtered = filterByStage(allEvents, activeFilter);
+        const filtered = activeFilter === 'all'
+            ? allEvents
+            : allEvents.filter(ev => ev.stage === parseInt(activeFilter));
         cal.setEvents(filtered).render();
     }
 
-    /** 단계 필터링 */
-    function filterByStage(events, stage) {
-        if (stage === 'all') return events;
-        const stageNum = parseInt(stage);
-        return events.filter(ev => ev.stage === stageNum);
-    }
-
     // ══════════════════════════════════════════════════════════
-    // Chip Rendering
+    // Chip Rendering — study/lecture 공통 함수
     // ══════════════════════════════════════════════════════════
 
     function renderChip(ev) {
-        return ev._type === 'study' ? renderStudyChip(ev) : renderLectureChip(ev);
-    }
-
-    function renderStudyChip(s) {
-        const timeLabel = (s.start_time || '').substring(0, 5);
-        const levelLabel = s.stage ? s.stage + '단계' : '';
-        const host = s.host_nickname || '';
-        const firstLine = timeLabel + (levelLabel ? ' ' + levelLabel : '');
-        return `<div class="member-chip member-chip-study" data-type="study" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(host)}</span></div>`;
-    }
-
-    function renderLectureChip(s) {
-        const timeLabel = (s.start_time || '').substring(0, 5);
-        const stageLabel = s.stage ? s.stage + '단계' : '';
-        const coach = s.coach_name || '';
+        const timeLabel = (ev.start_time || '').substring(0, 5);
+        const stageLabel = ev.stage ? ev.stage + '단계' : '';
         const firstLine = timeLabel + (stageLabel ? ' ' + stageLabel : '');
-        return `<div class="member-chip member-chip-lecture" data-type="lecture" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(coach)}</span></div>`;
+        const secondLine = ev._type === 'study' ? (ev.host_nickname || '') : (ev.coach_name || '');
+        const cssClass = ev._type === 'study' ? 'member-chip-study' : 'member-chip-lecture';
+
+        return `<div class="member-chip ${cssClass}" data-type="${ev._type}" data-id="${ev.id}" title="${App.esc(ev.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(secondLine)}</span></div>`;
     }
 
     return { loadData };
