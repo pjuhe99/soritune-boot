@@ -141,7 +141,7 @@ case 'group_update':
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('id 필요');
     $fields = []; $params = [];
-    foreach (['name', 'code'] as $f) {
+    foreach (['name', 'code', 'kakao_link'] as $f) {
         if (isset($input[$f])) { $fields[] = "$f = ?"; $params[] = trim($input[$f]); }
     }
     if (!$fields) jsonError('수정할 내용 없음');
