@@ -1,0 +1,111 @@
+/* ══════════════════════════════════════════════════════════════
+   CalendarUI — 공통 달력 스타일
+   /study, /operation(강의), /coach, /head, /member 에서 재사용
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Navigation ───────────────────────────────────────────── */
+.cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
+}
+
+.cal-nav .page-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    cursor: pointer;
+    font-size: var(--text-md);
+    color: var(--color-text-sub);
+    font-family: inherit;
+    transition: all var(--transition-fast);
+}
+.cal-nav .page-btn:hover { background: var(--color-bg-subtle); }
+
+.cal-month-label {
+    font-size: var(--text-lg);
+    font-weight: var(--font-extrabold);
+    min-width: 120px;
+    text-align: center;
+}
+
+.cal-nav .page-today {
+    font-size: var(--text-sm);
+    color: var(--color-primary);
+    font-weight: var(--font-bold);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+}
+.cal-nav .page-today:hover { text-decoration: underline; }
+
+/* ── Calendar Grid ────────────────────────────────────────── */
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 2px solid var(--color-text);
+    width: 100%;
+    overflow: hidden;
+}
+
+.cal-head {
+    padding: var(--space-2) var(--space-1);
+    text-align: center;
+    font-size: var(--text-sm);
+    font-weight: var(--font-bold);
+    color: var(--color-text-sub);
+    border-bottom: 1px solid var(--color-border);
+}
+.cal-head:first-child { color: var(--color-danger); }
+.cal-head:last-child  { color: var(--color-primary); }
+
+.cal-cell {
+    min-height: 80px;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    padding: var(--space-1);
+    position: relative;
+}
+.cal-cell:nth-child(7n) { border-right: none; }
+
+.cal-cell.other-month { background: var(--color-gray-50); }
+.cal-cell.other-month .cal-day { color: var(--color-text-muted); }
+
+.cal-cell.today .cal-day {
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cal-day {
+    font-size: var(--text-sm);
+    font-weight: var(--font-bold);
+    margin-bottom: 2px;
+    display: inline-block;
+}
+.cal-cell:nth-child(7n+1) .cal-day { color: var(--color-danger); }
+.cal-cell:nth-child(7n)   .cal-day { color: var(--color-primary); }
+.cal-cell.today .cal-day { color: #fff !important; }
+.cal-cell.other-month .cal-day { color: var(--color-text-muted) !important; }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .cal-cell {
+        min-height: 60px;
+        padding: 2px;
+    }
+    .cal-day { font-size: var(--text-xs); }
+}

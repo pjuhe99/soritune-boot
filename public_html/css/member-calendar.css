@@ -54,6 +54,7 @@
 /* ── Calendar Section ─────────────────────────────────────── */
 .member-cal-section {
     margin-bottom: var(--space-5);
+    overflow: hidden;
 }
 
 /* ── Event Chips ──────────────────────────────────────────── */
