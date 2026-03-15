@@ -2,7 +2,7 @@
    Service Worker — 소리튠 부트캠프 PWA
    전략: 정적 에셋은 Cache First, API는 Network Only
    ══════════════════════════════════════════════════════════════ */
-const CACHE_NAME = 'boot-v20260315';
+const CACHE_NAME = 'boot-v20260316';
 
 const STATIC_ASSETS = [
     '/',
@@ -59,23 +59,31 @@ self.addEventListener('fetch', (e) => {
     // 외부 리소스는 패스
     if (url.origin !== location.origin) return;
 
+    // HTML 페이지(navigate): Network First — 항상 최신 HTML을 가져옴
+    if (e.request.mode === 'navigate') {
+        e.respondWith(
+            fetch(e.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+                }
+                return response;
+            }).catch(() => caches.match(e.request).then(c => c || caches.match('/')))
+        );
+        return;
+    }
+
     // 정적 에셋: Cache First
     e.respondWith(
         caches.match(e.request).then(cached => {
             if (cached) return cached;
             return fetch(e.request).then(response => {
-                // 성공 응답만 캐시
                 if (response.ok && e.request.method === 'GET') {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
                 }
                 return response;
             });
-        }).catch(() => {
-            // 오프라인 + 캐시 미스 시 기본 페이지
-            if (e.request.mode === 'navigate') {
-                return caches.match('/');
-            }
-        })
+        }).catch(() => caches.match(e.request))
     );
 });
