@@ -18,6 +18,8 @@ const ALLOWED_EVENTS = [
     'click_calendar_stage_filter',
     'open_curriculum_item',
     'click_members_filter',
+    'open_issue_report',
+    'open_my_issues',
 ];
 
 /**

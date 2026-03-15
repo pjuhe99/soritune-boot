@@ -16,7 +16,8 @@
     <link rel="stylesheet" href="/css/member.css?v=20260315">
     <link rel="stylesheet" href="/css/member-tabs.css?v=20260315">
     <link rel="stylesheet" href="/css/member-calendar.css?v=20260315">
-    <link rel="stylesheet" href="/css/member-assignments.css?v=20260315">
+    <link rel="stylesheet" href="/css/member-assignments.css?v=20260316">
+    <link rel="stylesheet" href="/css/member-issue.css?v=20260316">
     <link rel="stylesheet" href="/css/member-progress.css?v=20260315">
     <link rel="stylesheet" href="/css/member-shortcuts.css?v=20260316">
     <link rel="stylesheet" href="/css/member-bootees.css?v=20260315">
@@ -34,7 +35,8 @@
     <script src="/js/member-shortcuts.js?v=20260316"></script>
     <script src="/js/member-calendar-detail.js?v=20260315"></script>
     <script src="/js/member-calendar.js?v=20260315"></script>
-    <script src="/js/member-assignments.js?v=20260315"></script>
+    <script src="/js/member-issue.js?v=20260316"></script>
+    <script src="/js/member-assignments.js?v=20260316"></script>
     <script src="/js/member-progress.js?v=20260315"></script>
     <script src="/js/member-bootees.js?v=20260315"></script>
     <script src="/js/member.js?v=20260315"></script>

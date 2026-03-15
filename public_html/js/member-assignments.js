@@ -23,12 +23,14 @@ const MemberAssignments = (() => {
                 <div class="assignments-header">
                     <h3 class="assignments-title">과제 이력</h3>
                 </div>
+                <div id="assignments-notice"></div>
                 <div id="assignments-summary"></div>
                 <div id="assignments-list"></div>
                 <div id="assignments-pager"></div>
             </div>
         `;
 
+        MemberIssue.renderNotice(document.getElementById('assignments-notice'));
         MemberUtils.logEvent('open_tab_assignments');
         loadSummary();
         loadPage(1);
