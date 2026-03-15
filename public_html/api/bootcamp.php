@@ -20,6 +20,7 @@ require_once __DIR__ . '/services/integration.php';
 require_once __DIR__ . '/services/study.php';
 require_once __DIR__ . '/services/lecture.php';
 require_once __DIR__ . '/services/curriculum.php';
+require_once __DIR__ . '/services/member_page.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -260,6 +261,10 @@ case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
 
 // ── Curriculum (진도) ──────────────────────────────────────────
 case 'curriculum_today':    handleCurriculumToday(); break;
+
+// ── Member Page (사용자 페이지 전용) ──────────────────────────
+case 'member_checks':       handleMemberChecks(); break;
+case 'member_page_log':     handleMemberPageLog($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
