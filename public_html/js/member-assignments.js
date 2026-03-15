@@ -28,7 +28,7 @@ const MemberAssignments = (() => {
             </div>
         `;
 
-        logTabView('assignments');
+        MemberUtils.logEvent('open_tab_assignments');
         loadPage(1);
     }
 
@@ -149,14 +149,6 @@ const MemberAssignments = (() => {
                 }
             };
         });
-    }
-
-    // ══════════════════════════════════════════════════════════
-    // Tab View Log
-    // ══════════════════════════════════════════════════════════
-
-    function logTabView(tabName) {
-        App.post(API + 'member_page_log', { tab_name: tabName }).catch(() => {});
     }
 
     return {};

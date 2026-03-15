@@ -42,6 +42,7 @@ const MemberCalendar = (() => {
 
         // 필터 칩 이벤트 바인딩
         bindFilterChips();
+        MemberUtils.logEvent('open_tab_calendar');
 
         // 캘린더 초기화
         cal = CalendarUI.create(document.getElementById('member-cal-container'), {
@@ -80,6 +81,7 @@ const MemberCalendar = (() => {
             chip.classList.add('active');
 
             activeFilter = stage;
+            MemberUtils.logEvent('click_calendar_stage_filter', stage);
             applyFilterAndRender();
         });
     }

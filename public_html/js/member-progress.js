@@ -51,7 +51,7 @@ const MemberProgress = (() => {
             renderChips: (events) => events.map(ev => renderChip(ev)).join(''),
         }).mount();
 
-        logTabView('curriculum');
+        MemberUtils.logEvent('open_tab_curriculum');
         loadData();
     }
 
@@ -149,13 +149,6 @@ const MemberProgress = (() => {
         App.openModal(style.label, body);
     }
 
-    // ══════════════════════════════════════════════════════════
-    // Tab View Log
-    // ══════════════════════════════════════════════════════════
-
-    function logTabView(tabName) {
-        App.post(API + 'member_page_log', { tab_name: tabName }).catch(() => {});
-    }
-
+    // openDetail 내에서 로그는 서버 측(member_curriculum_detail)에서 처리
     return { TYPE_COLORS, getTypeStyle };
 })();

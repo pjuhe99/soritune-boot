@@ -1,15 +1,59 @@
 <?php
 /**
  * Member Page Service
- * 사용자 페이지 전용 읽기 API (과제 이력, 탭 로그 등)
+ * 사용자 페이지 전용 읽기 API (과제 이력, 진도, 부티즈, 이벤트 로그)
  * 관리자 API(check.php)와 분리 — 회원 인증만 사용, 수정 기능 없음
  */
 
+// ══════════════════════════════════════════════════════════════
+// 공통 이벤트 로그 함수
+// ══════════════════════════════════════════════════════════════
+
+/** 허용된 이벤트 이름 목록 */
+const ALLOWED_EVENTS = [
+    'open_tab_calendar',
+    'open_tab_assignments',
+    'open_tab_curriculum',
+    'open_tab_members',
+    'click_calendar_stage_filter',
+    'open_curriculum_item',
+    'click_members_filter',
+];
+
+/**
+ * 이벤트 로그 저장 (공통)
+ * 실패해도 예외를 던지지 않음 — 화면 기능에 영향 없도록
+ *
+ * @param int         $memberId
+ * @param string      $eventName  ALLOWED_EVENTS 중 하나
+ * @param string|null $eventValue 필터값, 항목ID 등
+ * @param array|null  $meta       추가 메타 (JSON으로 저장)
+ */
+function logMemberEvent(int $memberId, string $eventName, ?string $eventValue = null, ?array $meta = null): void {
+    try {
+        $db = getDB();
+        $cohortStmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
+        $cohortStmt->execute([$memberId]);
+        $cohortId = (int)$cohortStmt->fetchColumn();
+
+        $metaJson = $meta ? json_encode($meta, JSON_UNESCAPED_UNICODE) : null;
+
+        $db->prepare("
+            INSERT INTO member_event_logs (member_id, cohort_id, event_name, event_value, meta_json, created_at)
+            VALUES (?, ?, ?, ?, ?, NOW())
+        ")->execute([$memberId, $cohortId, $eventName, $eventValue, $metaJson]);
+    } catch (\Throwable $e) {
+        // 로그 실패는 무시 — 화면 기능 우선
+        error_log("logMemberEvent failed: " . $e->getMessage());
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// API Handlers
+// ══════════════════════════════════════════════════════════════
+
 /**
  * 회원 본인의 과제 이력 조회 (읽기 전용)
- * - today까지만 노출 (서버 기준)
- * - 최신순 정렬
- * - 페이지네이션 지원
  */
 function handleMemberChecks() {
     $member = requireMember();
@@ -22,7 +66,7 @@ function handleMemberChecks() {
     $db = getDB();
     $today = date('Y-m-d');
 
-    // 회원의 cohort 정보 (적응기간 계산용)
+    // 회원의 cohort 정보
     $cohortStmt = $db->prepare("
         SELECT c.start_date, c.end_date, bm.stage_no
         FROM bootcamp_members bm
@@ -41,7 +85,7 @@ function handleMemberChecks() {
         $missionMap[(int)$mt['id']] = $mt;
     }
 
-    // 전체 날짜 수 (총 페이지 계산용)
+    // 전체 날짜 수
     $countStmt = $db->prepare("
         SELECT COUNT(DISTINCT check_date) AS cnt
         FROM member_mission_checks
@@ -51,7 +95,7 @@ function handleMemberChecks() {
     $totalDates = (int)$countStmt->fetchColumn();
     $totalPages = max(1, ceil($totalDates / $limit));
 
-    // 날짜 목록 (최신순, 페이지네이션)
+    // 날짜 목록 (최신순)
     $dateStmt = $db->prepare("
         SELECT DISTINCT check_date
         FROM member_mission_checks
@@ -72,7 +116,7 @@ function handleMemberChecks() {
         return;
     }
 
-    // 해당 날짜들의 체크 데이터 일괄 조회
+    // 체크 데이터 일괄 조회
     $ph = implode(',', array_fill(0, count($dates), '?'));
     $checkStmt = $db->prepare("
         SELECT check_date, mission_type_id, status, source
@@ -89,7 +133,6 @@ function handleMemberChecks() {
         $d = $row['check_date'];
         $typeId = (int)$row['mission_type_id'];
         $mt = $missionMap[$typeId] ?? null;
-
         $grouped[$d][] = [
             'mission_type_id'   => $typeId,
             'mission_code'      => $mt ? $mt['code'] : null,
@@ -99,7 +142,6 @@ function handleMemberChecks() {
         ];
     }
 
-    // 날짜 배열 구성
     $result = [];
     foreach ($dates as $d) {
         $result[] = [
@@ -120,7 +162,6 @@ function handleMemberChecks() {
 
 /**
  * 월별 진도 달력 데이터 조회 (회원용)
- * curriculum_items를 해당 월의 전체 일자에 대해 반환
  */
 function handleMemberCurriculum() {
     $member = requireMember();
@@ -174,23 +215,14 @@ function handleMemberCurriculumDetail() {
 
     $item['task_type_label'] = CURRICULUM_TYPE_LABELS[$item['task_type']] ?? $item['task_type'];
 
-    // 열람 로그 저장
-    $cohortStmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
-    $cohortStmt->execute([$memberId]);
-    $cohortId = (int)$cohortStmt->fetchColumn();
-
-    $db->prepare("
-        INSERT INTO member_page_logs (member_id, cohort_id, tab_name, viewed_at)
-        VALUES (?, ?, ?, NOW())
-    ")->execute([$memberId, $cohortId, 'curriculum_item:' . $itemId]);
+    // 열람 로그
+    logMemberEvent($memberId, 'open_curriculum_item', (string)$itemId);
 
     jsonSuccess(['item' => $item]);
 }
 
 /**
  * 다른 부티즈 목록 (같은 cohort, 본인 제외)
- * 코인 내림차순 → 닉네임 가나다순
- * 완주 횟수 / 브라보 등급은 member_history_stats에서 JOIN
  */
 function handleMemberBootees() {
     $member = requireMember();
@@ -198,7 +230,6 @@ function handleMemberBootees() {
 
     $db = getDB();
 
-    // 본인의 cohort_id, group_id 조회
     $myStmt = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
     $myStmt->execute([$memberId]);
     $myInfo = $myStmt->fetch(PDO::FETCH_ASSOC);
@@ -207,7 +238,6 @@ function handleMemberBootees() {
     $cohortId = (int)$myInfo['cohort_id'];
     $myGroupId = $myInfo['group_id'] ? (int)$myInfo['group_id'] : null;
 
-    // 같은 cohort 활성 멤버 (본인 제외)
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.group_id, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS score,
@@ -228,7 +258,6 @@ function handleMemberBootees() {
     $stmt->execute([$cohortId, $memberId]);
     $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // int 캐스팅
     foreach ($members as &$m) {
         $m['group_id'] = $m['group_id'] ? (int)$m['group_id'] : null;
         $m['score'] = (int)$m['score'];
@@ -244,39 +273,25 @@ function handleMemberBootees() {
 }
 
 /**
- * 탭 진입 / 필터 변경 로그 저장
- * member_page_logs 테이블에 기록
+ * 범용 이벤트 로그 저장 API
+ * 프론트에서 POST로 호출
  */
-function handleMemberPageLog($method) {
+function handleMemberEventLog($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
     $member = requireMember();
     $input = getJsonInput();
 
-    $tabName = trim($input['tab_name'] ?? '');
-    if (!$tabName) jsonError('tab_name 필요');
+    $eventName = trim($input['event_name'] ?? '');
+    if (!$eventName) jsonError('event_name 필요');
 
-    // 허용 패턴 (탭 진입 + 필터 로그 + 상세 열람)
-    $allowedPrefixes = ['calendar', 'assignments', 'curriculum', 'members', 'curriculum_item:'];
-    $valid = false;
-    foreach ($allowedPrefixes as $prefix) {
-        if ($tabName === $prefix || str_starts_with($tabName, $prefix)) {
-            $valid = true;
-            break;
-        }
+    // 화이트리스트 검증
+    if (!in_array($eventName, ALLOWED_EVENTS, true)) {
+        jsonError('유효하지 않은 event_name');
     }
-    if (!$valid) jsonError('유효하지 않은 tab_name');
 
-    $db = getDB();
-    $memberId = $member['member_id'];
+    $eventValue = isset($input['event_value']) ? trim((string)$input['event_value']) : null;
 
-    $cohortStmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
-    $cohortStmt->execute([$memberId]);
-    $cohortId = (int)$cohortStmt->fetchColumn();
-
-    $db->prepare("
-        INSERT INTO member_page_logs (member_id, cohort_id, tab_name, viewed_at)
-        VALUES (?, ?, ?, NOW())
-    ")->execute([$memberId, $cohortId, $tabName]);
+    logMemberEvent($member['member_id'], $eventName, $eventValue);
 
     jsonSuccess([]);
 }

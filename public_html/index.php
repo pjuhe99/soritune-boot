@@ -26,7 +26,8 @@
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260313c"></script>
     <script src="/js/calendar.js?v=20260312"></script>
-    <!-- Member 모듈 (로드 순서 중요: tabs → 각 탭 → 메인) -->
+    <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
+    <script src="/js/member-utils.js?v=20260315"></script>
     <script src="/js/member-tabs.js?v=20260315"></script>
     <script src="/js/member-home.js?v=20260315"></script>
     <script src="/js/member-calendar-detail.js?v=20260315"></script>

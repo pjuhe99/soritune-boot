@@ -40,7 +40,7 @@ const MemberBootees = (() => {
         `;
 
         bindFilterChips();
-        logTabView('members');
+        MemberUtils.logEvent('open_tab_members');
         loadData();
     }
 
@@ -69,8 +69,7 @@ const MemberBootees = (() => {
             chip.classList.add('active');
             activeFilter = filter;
 
-            // 필터 변경 로그
-            logFilterChange(filter);
+            MemberUtils.logEvent('click_members_filter', filter);
             renderList();
         });
     }
@@ -152,18 +151,6 @@ const MemberBootees = (() => {
             <div class="bootees-count">${filtered.length}명</div>
             <div class="bootees-list">${rows}</div>
         `;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    // Logging
-    // ══════════════════════════════════════════════════════════
-
-    function logTabView(tabName) {
-        App.post(API + 'member_page_log', { tab_name: tabName }).catch(() => {});
-    }
-
-    function logFilterChange(filterType) {
-        App.post(API + 'member_page_log', { tab_name: 'members:' + filterType }).catch(() => {});
     }
 
     return {};
