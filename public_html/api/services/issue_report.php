@@ -234,6 +234,9 @@ function handleIssueAdminNote($method) {
     if (!$id) jsonError('id 필요');
 
     $note = trim($input['admin_note'] ?? '');
+    if (mb_strlen($note) > ISSUE_DESC_MAX_LENGTH) {
+        jsonError('메모는 ' . ISSUE_DESC_MAX_LENGTH . '자 이내로 입력해주세요.');
+    }
 
     $db = getDB();
     $db->prepare("UPDATE issue_reports SET admin_note = ? WHERE id = ?")->execute([$note ?: null, $id]);

@@ -7,10 +7,10 @@ const AdminIssues = (() => {
 
     // ── 상태 ──
     const STATUS_MAP = {
-        pending:     { label: '접수됨',    cls: 'issue-adm-badge--pending' },
-        in_progress: { label: '확인 중',   cls: 'issue-adm-badge--progress' },
-        resolved:    { label: '처리 완료', cls: 'issue-adm-badge--resolved' },
-        rejected:    { label: '반려',      cls: 'issue-adm-badge--rejected' },
+        pending:     { label: '접수됨',    cls: 'issue-badge--pending' },
+        in_progress: { label: '확인 중',   cls: 'issue-badge--progress' },
+        resolved:    { label: '처리 완료', cls: 'issue-badge--resolved' },
+        rejected:    { label: '반려',      cls: 'issue-badge--rejected' },
     };
 
     // "처리 전" = pending + in_progress
@@ -236,7 +236,7 @@ const AdminIssues = (() => {
                 pagerEl.innerHTML = html;
                 pagerEl.querySelectorAll('.pager-btn').forEach(btn => {
                     btn.onclick = () => {
-                        currentPage = parseInt(btn.dataset.page);
+                        currentPage = parseInt(btn.dataset.page, 10);
                         renderList();
                         container.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     };
@@ -253,7 +253,7 @@ const AdminIssues = (() => {
 
         return `
             <tr class="issue-adm-row" data-id="${issue.id}">
-                <td><span class="issue-adm-badge ${st.cls}">${st.label}</span></td>
+                <td><span class="issue-badge ${st.cls}">${st.label}</span></td>
                 <td>${App.esc(issue.issue_type_label)}</td>
                 <td>${App.esc(name)}</td>
                 <td>${App.esc(group)}</td>
@@ -308,7 +308,7 @@ const AdminIssues = (() => {
                 </div>
                 <div class="issue-adm-detail-row">
                     <span class="issue-adm-detail-label">현재 상태</span>
-                    <span class="issue-adm-badge ${st.cls}" id="adm-issue-current-status">${st.label}</span>
+                    <span class="issue-badge ${st.cls}" id="adm-issue-current-status">${st.label}</span>
                 </div>
                 ${issue.resolved_at ? `
                 <div class="issue-adm-detail-row">

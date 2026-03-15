@@ -26,7 +26,7 @@ const MemberShortcuts = (() => {
             const href = s.url || kakaoLink;
             const disabled = !href;
             const disabledClass = disabled ? ' shortcut-btn--disabled' : '';
-            const disabledAttr = disabled ? ' aria-disabled="true"' : '';
+            const disabledAttr = disabled ? ' disabled aria-disabled="true"' : '';
 
             if (disabled) {
                 return `<button class="shortcut-btn${disabledClass}" type="button"${disabledAttr}>
