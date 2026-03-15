@@ -62,7 +62,7 @@ case 'check_session':
     $s = getMemberSession();
     if ($s) {
         $db = getDB();
-        $stmt = $db->prepare('
+        $stmt = $db->prepare("
             SELECT bm.id, bm.real_name, bm.nickname,
                    COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
                    c.cohort, bg.name AS group_name
@@ -70,7 +70,7 @@ case 'check_session':
             JOIN cohorts c ON bm.cohort_id = c.id
             LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
             WHERE bm.id = ? AND bm.is_active = 1
-        ');
+        ");
         $stmt->execute([$s['member_id']]);
         $member = $stmt->fetch();
         if ($member) {
