@@ -94,7 +94,7 @@ function handleMemberUpdate($method) {
     if (!$id) jsonError('id 필요');
 
     $fields = []; $params = [];
-    foreach (['nickname', 'real_name', 'cafe_member_key'] as $f) {
+    foreach (['nickname', 'real_name', 'cafe_member_key', 'kakao_link'] as $f) {
         if (isset($input[$f])) { $fields[] = "$f = ?"; $params[] = trim($input[$f]) ?: null; }
     }
     foreach (['cohort_id', 'group_id', 'user_id'] as $f) {

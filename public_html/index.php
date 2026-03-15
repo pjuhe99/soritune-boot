@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/css/member-calendar.css?v=20260315">
     <link rel="stylesheet" href="/css/member-assignments.css?v=20260315">
     <link rel="stylesheet" href="/css/member-progress.css?v=20260315">
+    <link rel="stylesheet" href="/css/member-shortcuts.css?v=20260316">
     <link rel="stylesheet" href="/css/member-bootees.css?v=20260315">
     <link rel="manifest" href="/manifest.json">
 </head>
@@ -29,7 +30,8 @@
     <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
     <script src="/js/member-utils.js?v=20260315"></script>
     <script src="/js/member-tabs.js?v=20260315"></script>
-    <script src="/js/member-home.js?v=20260315"></script>
+    <script src="/js/member-home.js?v=20260316"></script>
+    <script src="/js/member-shortcuts.js?v=20260316"></script>
     <script src="/js/member-calendar-detail.js?v=20260315"></script>
     <script src="/js/member-calendar.js?v=20260315"></script>
     <script src="/js/member-assignments.js?v=20260315"></script>

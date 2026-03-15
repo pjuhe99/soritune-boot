@@ -63,7 +63,7 @@ case 'check_session':
     if ($s) {
         $db = getDB();
         $stmt = $db->prepare('
-            SELECT bm.id, bm.real_name, bm.nickname, c.cohort, bg.name AS group_name
+            SELECT bm.id, bm.real_name, bm.nickname, bm.kakao_link, c.cohort, bg.name AS group_name
             FROM bootcamp_members bm
             JOIN cohorts c ON bm.cohort_id = c.id
             LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
@@ -89,6 +89,7 @@ case 'check_session':
                     'nickname'    => $member['nickname'],
                     'cohort'      => $member['cohort'],
                     'group_name'  => $member['group_name'],
+                    'kakao_link'  => $member['kakao_link'] ?: null,
                     'score'       => $score,
                     'coin'        => $coin,
                 ],

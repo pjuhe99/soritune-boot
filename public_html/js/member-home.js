@@ -51,9 +51,11 @@ const MemberHome = (() => {
                 </div>
             </div>
             <div id="member-curriculum-section"></div>
+            <div id="member-shortcuts-section"></div>
         `;
 
         loadCurriculumToday();
+        MemberShortcuts.render(document.getElementById('member-shortcuts-section'), member);
     }
 
     async function loadCurriculumToday() {
