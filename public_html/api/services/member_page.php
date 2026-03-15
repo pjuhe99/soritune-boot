@@ -119,6 +119,75 @@ function handleMemberChecks() {
 }
 
 /**
+ * 월별 진도 달력 데이터 조회 (회원용)
+ * curriculum_items를 해당 월의 전체 일자에 대해 반환
+ */
+function handleMemberCurriculum() {
+    $member = requireMember();
+    $cohort = $member['cohort'];
+
+    $month = $_GET['month'] ?? date('Y-m');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) jsonError('month 형식: YYYY-MM');
+
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-t', strtotime($startDate));
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT id, target_date, task_type, note, sort_order
+        FROM curriculum_items
+        WHERE cohort = ? AND target_date BETWEEN ? AND ?
+        ORDER BY target_date, sort_order ASC, id ASC
+    ");
+    $stmt->execute([$cohort, $startDate, $endDate]);
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($items as &$item) {
+        $item['task_type_label'] = CURRICULUM_TYPE_LABELS[$item['task_type']] ?? $item['task_type'];
+    }
+    unset($item);
+
+    jsonSuccess([
+        'month' => $month,
+        'items' => $items,
+    ]);
+}
+
+/**
+ * 진도 항목 상세 조회 + 열람 로그 저장
+ */
+function handleMemberCurriculumDetail() {
+    $member = requireMember();
+    $memberId = $member['member_id'];
+    $itemId = (int)($_GET['item_id'] ?? 0);
+    if (!$itemId) jsonError('item_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT id, cohort, target_date, task_type, note, sort_order
+        FROM curriculum_items
+        WHERE id = ?
+    ");
+    $stmt->execute([$itemId]);
+    $item = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$item) jsonError('항목을 찾을 수 없습니다.', 404);
+
+    $item['task_type_label'] = CURRICULUM_TYPE_LABELS[$item['task_type']] ?? $item['task_type'];
+
+    // 열람 로그 저장
+    $cohortStmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
+    $cohortStmt->execute([$memberId]);
+    $cohortId = (int)$cohortStmt->fetchColumn();
+
+    $db->prepare("
+        INSERT INTO member_page_logs (member_id, cohort_id, tab_name, viewed_at)
+        VALUES (?, ?, ?, NOW())
+    ")->execute([$memberId, $cohortId, 'curriculum_item:' . $itemId]);
+
+    jsonSuccess(['item' => $item]);
+}
+
+/**
  * 탭 진입 로그 저장
  * member_page_logs 테이블에 기록
  */

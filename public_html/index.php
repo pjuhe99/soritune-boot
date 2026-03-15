@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/css/member-tabs.css?v=20260315">
     <link rel="stylesheet" href="/css/member-calendar.css?v=20260315">
     <link rel="stylesheet" href="/css/member-assignments.css?v=20260315">
+    <link rel="stylesheet" href="/css/member-progress.css?v=20260315">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -30,6 +31,7 @@
     <script src="/js/member-calendar-detail.js?v=20260315"></script>
     <script src="/js/member-calendar.js?v=20260315"></script>
     <script src="/js/member-assignments.js?v=20260315"></script>
+    <script src="/js/member-progress.js?v=20260315"></script>
     <script src="/js/member.js?v=20260315"></script>
     <script>MemberApp.init();</script>
 </body>

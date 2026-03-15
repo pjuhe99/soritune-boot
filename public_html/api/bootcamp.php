@@ -263,8 +263,10 @@ case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
 case 'curriculum_today':    handleCurriculumToday(); break;
 
 // ── Member Page (사용자 페이지 전용) ──────────────────────────
-case 'member_checks':       handleMemberChecks(); break;
-case 'member_page_log':     handleMemberPageLog($method); break;
+case 'member_checks':            handleMemberChecks(); break;
+case 'member_curriculum':        handleMemberCurriculum(); break;
+case 'member_curriculum_detail': handleMemberCurriculumDetail(); break;
+case 'member_page_log':          handleMemberPageLog($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
