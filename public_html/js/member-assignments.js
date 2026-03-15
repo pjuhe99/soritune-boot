@@ -23,18 +23,49 @@ const MemberAssignments = (() => {
                 <div class="assignments-header">
                     <h3 class="assignments-title">과제 이력</h3>
                 </div>
+                <div id="assignments-summary"></div>
                 <div id="assignments-list"></div>
                 <div id="assignments-pager"></div>
             </div>
         `;
 
         MemberUtils.logEvent('open_tab_assignments');
+        loadSummary();
         loadPage(1);
     }
 
     function unmount() {
         mounted = false;
         panel = null;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Summary Card
+    // ══════════════════════════════════════════════════════════
+
+    async function loadSummary() {
+        const el = document.getElementById('assignments-summary');
+        if (!el) return;
+
+        const r = await App.get(API + 'member_checks_summary');
+        if (!r.success || r.total_days === 0) { el.innerHTML = ''; return; }
+
+        el.innerHTML = `
+            <div class="assignments-summary-card">
+                <div class="summary-stat">
+                    <span class="summary-value">${r.completion_rate}<small>%</small></span>
+                    <span class="summary-label">완료율</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-value">${r.current_streak}<small>일</small></span>
+                    <span class="summary-label">연속 올클</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-value">${r.perfect_days}<small>/${r.total_days}</small></span>
+                    <span class="summary-label">올클 일수</span>
+                </div>
+            </div>
+        `;
     }
 
     // ══════════════════════════════════════════════════════════

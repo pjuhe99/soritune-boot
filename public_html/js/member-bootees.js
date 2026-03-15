@@ -11,7 +11,8 @@ const MemberBootees = (() => {
     let allMembers = [];
     let myGroupId = null;
     let myMemberId = null;
-    let activeFilter = 'all'; // 'all' | 'my_group'
+    let activeFilter = 'all';
+    let searchKeyword = '';
 
     MemberTabs.register('members', { mount, unmount });
 
@@ -25,6 +26,7 @@ const MemberBootees = (() => {
         panel = el;
         myMemberId = member.member_id;
         activeFilter = 'all';
+        searchKeyword = '';
 
         panel.innerHTML = `
             <div class="bootees-container">
@@ -35,9 +37,17 @@ const MemberBootees = (() => {
                         <button class="filter-chip" data-filter="my_group">우리 조</button>
                     </div>
                 </div>
+                <div class="bootees-search">
+                    <input type="text" class="bootees-search-input" id="bootees-search" placeholder="닉네임 검색">
+                </div>
                 <div id="bootees-list"></div>
             </div>
         `;
+
+        document.getElementById('bootees-search').oninput = App.debounce((e) => {
+            searchKeyword = e.target.value.trim().toLowerCase();
+            renderList();
+        }, 200);
 
         MemberUtils.bindFilterChips('bootees-filter-chips', 'filter', (filter) => {
             activeFilter = filter;
@@ -85,7 +95,10 @@ const MemberBootees = (() => {
 
         let filtered = allMembers;
         if (activeFilter === 'my_group' && myGroupId) {
-            filtered = allMembers.filter(m => m.group_id === myGroupId);
+            filtered = filtered.filter(m => m.group_id === myGroupId);
+        }
+        if (searchKeyword) {
+            filtered = filtered.filter(m => (m.nickname || '').toLowerCase().includes(searchKeyword));
         }
 
         if (filtered.length === 0) {

@@ -36,6 +36,11 @@
     <script src="/js/member-progress.js?v=20260315"></script>
     <script src="/js/member-bootees.js?v=20260315"></script>
     <script src="/js/member.js?v=20260315"></script>
-    <script>MemberApp.init();</script>
+    <script>
+        MemberApp.init();
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
 </body>
 </html>

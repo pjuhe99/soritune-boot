@@ -1062,6 +1062,62 @@ case 'curriculum_create':
     jsonSuccess(['id' => (int)$db->lastInsertId()], '진도가 추가되었습니다.');
     break;
 
+// ── Member Event Logs (로그 대시보드) ─────────────────────────
+
+case 'member_event_stats':
+    requireAdmin(['operation', 'coach', 'head']);
+    $db = getDB();
+    $days = max(1, min(90, (int)($_GET['days'] ?? 7)));
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+
+    $where = "created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)";
+    $params = [$days];
+    if ($cohortId) {
+        $where .= " AND cohort_id = ?";
+        $params[] = $cohortId;
+    }
+
+    // 이벤트별 집계
+    $stmt = $db->prepare("
+        SELECT event_name, COUNT(*) AS cnt, COUNT(DISTINCT member_id) AS unique_members
+        FROM member_event_logs
+        WHERE {$where}
+        GROUP BY event_name
+        ORDER BY cnt DESC
+    ");
+    $stmt->execute($params);
+    $byEvent = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 일별 추이
+    $stmt2 = $db->prepare("
+        SELECT DATE(created_at) AS log_date, COUNT(*) AS cnt, COUNT(DISTINCT member_id) AS unique_members
+        FROM member_event_logs
+        WHERE {$where}
+        GROUP BY DATE(created_at)
+        ORDER BY log_date DESC
+    ");
+    $stmt2->execute($params);
+    $byDate = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+    // 필터 값별 집계 (캘린더 필터, 부티즈 필터)
+    $stmt3 = $db->prepare("
+        SELECT event_name, event_value, COUNT(*) AS cnt
+        FROM member_event_logs
+        WHERE {$where} AND event_value IS NOT NULL
+        GROUP BY event_name, event_value
+        ORDER BY event_name, cnt DESC
+    ");
+    $stmt3->execute($params);
+    $byValue = $stmt3->fetchAll(PDO::FETCH_ASSOC);
+
+    jsonSuccess([
+        'days' => $days,
+        'by_event' => $byEvent,
+        'by_date' => $byDate,
+        'by_value' => $byValue,
+    ]);
+    break;
+
 // ── Default ─────────────────────────────────────────────────
 
 default:

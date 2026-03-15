@@ -53,6 +53,75 @@ function logMemberEvent(int $memberId, string $eventName, ?string $eventValue = 
 // ══════════════════════════════════════════════════════════════
 
 /**
+ * 과제 이력 요약 통계 (완료율, 연속 완료일수)
+ */
+function handleMemberChecksSummary() {
+    $member = requireMember();
+    $memberId = $member['member_id'];
+    $db = getDB();
+    $today = date('Y-m-d');
+
+    // 전체 완료 항목 / 전체 항목
+    $totalStmt = $db->prepare("
+        SELECT COUNT(*) AS total, SUM(status) AS done
+        FROM member_mission_checks
+        WHERE member_id = ? AND check_date <= ?
+    ");
+    $totalStmt->execute([$memberId, $today]);
+    $totals = $totalStmt->fetch(PDO::FETCH_ASSOC);
+    $totalAll = (int)$totals['total'];
+    $totalDone = (int)$totals['done'];
+
+    // 연속 올클 일수 (최근부터 역순)
+    $streakStmt = $db->prepare("
+        SELECT check_date, COUNT(*) AS total, SUM(status) AS done
+        FROM member_mission_checks
+        WHERE member_id = ? AND check_date <= ?
+        GROUP BY check_date
+        ORDER BY check_date DESC
+    ");
+    $streakStmt->execute([$memberId, $today]);
+    $streak = 0;
+    while ($row = $streakStmt->fetch(PDO::FETCH_ASSOC)) {
+        if ((int)$row['done'] === (int)$row['total'] && (int)$row['total'] > 0) {
+            $streak++;
+        } else {
+            break;
+        }
+    }
+
+    // 활동 일수
+    $dayStmt = $db->prepare("
+        SELECT COUNT(DISTINCT check_date) FROM member_mission_checks
+        WHERE member_id = ? AND check_date <= ?
+    ");
+    $dayStmt->execute([$memberId, $today]);
+    $totalDays = (int)$dayStmt->fetchColumn();
+
+    // 올클 일수
+    $perfectStmt = $db->prepare("
+        SELECT COUNT(*) FROM (
+            SELECT check_date
+            FROM member_mission_checks
+            WHERE member_id = ? AND check_date <= ?
+            GROUP BY check_date
+            HAVING SUM(status) = COUNT(*)
+        ) AS perfect_days
+    ");
+    $perfectStmt->execute([$memberId, $today]);
+    $perfectDays = (int)$perfectStmt->fetchColumn();
+
+    jsonSuccess([
+        'total_checks' => $totalAll,
+        'total_done' => $totalDone,
+        'completion_rate' => $totalAll > 0 ? round($totalDone / $totalAll * 100) : 0,
+        'total_days' => $totalDays,
+        'perfect_days' => $perfectDays,
+        'current_streak' => $streak,
+    ]);
+}
+
+/**
  * 회원 본인의 과제 이력 조회 (읽기 전용)
  */
 function handleMemberChecks() {

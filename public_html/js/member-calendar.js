@@ -112,9 +112,10 @@ const MemberCalendar = (() => {
         const stageLabel = ev.stage ? ev.stage + '단계' : '';
         const firstLine = timeLabel + (stageLabel ? ' ' + stageLabel : '');
         const secondLine = ev._type === 'study' ? (ev.host_nickname || '') : (ev.coach_name || '');
-        const cssClass = ev._type === 'study' ? 'member-chip-study' : 'member-chip-lecture';
+        const typeClass = ev._type === 'study' ? 'member-chip-study' : 'member-chip-lecture';
+        const todayClass = ev.date === App.today() ? ' member-chip-today' : '';
 
-        return `<div class="member-chip ${cssClass}" data-type="${ev._type}" data-id="${ev.id}" title="${App.esc(ev.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(secondLine)}</span></div>`;
+        return `<div class="member-chip ${typeClass}${todayClass}" data-type="${ev._type}" data-id="${ev.id}" title="${App.esc(ev.title)}"><span class="chip-line1">${App.esc(firstLine)}</span><span class="chip-line2">${App.esc(secondLine)}</span></div>`;
     }
 
     return { loadData };

@@ -264,6 +264,7 @@ case 'curriculum_today':    handleCurriculumToday(); break;
 
 // ── Member Page (사용자 페이지 전용) ──────────────────────────
 case 'member_checks':            handleMemberChecks(); break;
+case 'member_checks_summary':    handleMemberChecksSummary(); break;
 case 'member_curriculum':        handleMemberCurriculum(); break;
 case 'member_curriculum_detail': handleMemberCurriculumDetail(); break;
 case 'member_bootees':           handleMemberBootees(); break;
