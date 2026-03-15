@@ -22,13 +22,16 @@ case 'login':
     if (strlen($phoneLast) !== 4 || !ctype_digit($phoneLast)) jsonError('전화번호 뒷자리 4자리를 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('
-        SELECT bm.*, c.cohort
+    $stmt = $db->prepare("
+        SELECT bm.*, c.cohort,
+               COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
+               bg.name AS group_name
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         WHERE bm.real_name = ? AND RIGHT(bm.phone, 4) = ? AND bm.is_active = 1
         LIMIT 1
-    ');
+    ");
     $stmt->execute([$name, $phoneLast]);
     $member = $stmt->fetch();
 
@@ -52,6 +55,8 @@ case 'login':
             'member_name' => $member['real_name'],
             'nickname'    => $member['nickname'],
             'cohort'      => $member['cohort'],
+            'group_name'  => $member['group_name'],
+            'kakao_link'  => $member['kakao_link'] ?: null,
             'score'       => $score,
             'coin'        => $coin,
         ],
