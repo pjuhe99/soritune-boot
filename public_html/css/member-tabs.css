@@ -1,0 +1,56 @@
+/* ══════════════════════════════════════════════════════════════
+   Member Tabs — 사용자 페이지 탭 네비게이션
+   components.css의 .tab-wrap / .tab 기반, 사용자 페이지 전용 오버라이드
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Tab Bar ──────────────────────────────────────────────────── */
+.member-tab-bar {
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.member-tab-bar .tab-wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    justify-content: stretch;
+}
+
+.member-tab-bar .tab {
+    flex: 1;
+    text-align: center;
+    padding: 12px 8px;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+/* ── Tab Panels ───────────────────────────────────────────────── */
+.member-tab-panels {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: var(--space-4) var(--space-5);
+    min-height: 50vh;
+}
+
+/* ── Placeholder ──────────────────────────────────────────────── */
+.member-tab-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: var(--color-text-sub);
+    font-size: var(--text-sm);
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .member-tab-bar .tab {
+        padding: 10px 4px;
+        font-size: 13px;
+    }
+    .member-tab-panels {
+        padding: var(--space-3) var(--space-4);
+    }
+}
