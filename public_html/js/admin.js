@@ -300,10 +300,11 @@ const AdminApp = (() => {
             if (typeof GroupAssignmentApp !== 'undefined') {
                 const gaTab = document.getElementById('tab-group-assign');
                 if (gaTab) {
-                    const gaObserver = new MutationObserver(() => {
+                    const gaObserver = new MutationObserver(async () => {
                         if (gaTab.classList.contains('active') && !gaTab.dataset.loaded) {
                             gaTab.dataset.loaded = '1';
-                            const cohorts = typeof BootcampApp !== 'undefined' && BootcampApp._getCohorts ? BootcampApp._getCohorts() : [];
+                            const rCohorts = await App.get('/api/bootcamp.php?action=cohorts');
+                            const cohorts = rCohorts.cohorts || [];
                             const activeCohort = cohorts.find(c => c.is_active) || cohorts[0];
                             GroupAssignmentApp.init(admin, role, cohorts, activeCohort ? parseInt(activeCohort.id) : 0);
                             GroupAssignmentApp.renderTab(gaTab);
