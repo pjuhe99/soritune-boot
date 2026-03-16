@@ -588,6 +588,11 @@ const BulkRegisterApp = (() => {
         sec.style.display = '';
 
         const s = validationResult.summary;
+        const corrections = s.corrections || 0;
+
+        // 오류/경고를 자동보정과 분리
+        const realWarnings = validationResult.warnings.filter(w => !w.includes('자동 보정:'));
+        const correctionWarnings = validationResult.warnings.filter(w => w.includes('자동 보정:'));
 
         body.innerHTML = `
             <div class="bulk-summary ${s.error > 0 ? 'has-error' : 'all-ok'}">
@@ -604,26 +609,38 @@ const BulkRegisterApp = (() => {
                     <span class="summary-num">${s.error}</span>
                     <span class="summary-label">오류</span>
                 </div>` : ''}
-                ${s.warnings > 0 ? `
+                ${realWarnings.length > 0 ? `
                 <div class="bulk-summary-item warning">
-                    <span class="summary-num">${s.warnings}</span>
+                    <span class="summary-num">${realWarnings.length}</span>
                     <span class="summary-label">경고</span>
+                </div>` : ''}
+                ${corrections > 0 ? `
+                <div class="bulk-summary-item corrected">
+                    <span class="summary-num">${corrections}</span>
+                    <span class="summary-label">자동 보정</span>
                 </div>` : ''}
             </div>
             ${validationResult.errors.length > 0 ? `
             <div class="bulk-error-list">
-                <h4>오류 목록</h4>
+                <h4>오류 목록 (등록 불가)</h4>
                 <ul>
                     ${validationResult.errors.map(e =>
                         `<li><strong>${e.row_num}행</strong> ${App.esc(e.real_name || '(이름없음)')} — ${e.errors.map(App.esc).join(', ')}</li>`
                     ).join('')}
                 </ul>
             </div>` : ''}
-            ${validationResult.warnings.length > 0 ? `
+            ${realWarnings.length > 0 ? `
             <div class="bulk-warning-list">
-                <h4>경고 목록</h4>
+                <h4>경고 (등록은 가능)</h4>
                 <ul>
-                    ${validationResult.warnings.map(w => `<li>${App.esc(w)}</li>`).join('')}
+                    ${realWarnings.map(w => `<li>${App.esc(w)}</li>`).join('')}
+                </ul>
+            </div>` : ''}
+            ${correctionWarnings.length > 0 ? `
+            <div class="bulk-correction-list">
+                <h4>자동 보정 내역</h4>
+                <ul>
+                    ${correctionWarnings.map(w => `<li>${App.esc(w.replace('자동 보정: ', ''))}</li>`).join('')}
                 </ul>
             </div>` : ''}
         `;
@@ -655,23 +672,40 @@ const BulkRegisterApp = (() => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${all.map(row => `
+                        ${all.map(row => {
+                            const hasCorrectedPhone = row.phone_raw && row.phone_raw !== row.phone && row.phone;
+                            const hasCorrectedStage = row.stage_raw !== undefined && row.stage_raw !== '' && String(row.stage_raw) !== String(row.stage_no);
+                            // 비고: 오류 → 경고(보정 제외) → 보정 순서
+                            const notes = [];
+                            if (row.errors && row.errors.length > 0) {
+                                row.errors.forEach(e => notes.push(`<span class="text-danger">${App.esc(e)}</span>`));
+                            }
+                            if (row.warnings) {
+                                row.warnings.filter(w => !w.startsWith('자동 보정:')).forEach(w =>
+                                    notes.push(`<span class="text-warning">${App.esc(w)}</span>`)
+                                );
+                            }
+                            if (row.corrections && row.corrections.length > 0) {
+                                row.corrections.forEach(c =>
+                                    notes.push(`<span class="text-corrected">${App.esc(c)}</span>`)
+                                );
+                            }
+                            return `
                         <tr class="bulk-row-${row.status}">
                             <td>${row.row_num}</td>
                             <td>${statusBadge(row.status)}</td>
                             <td>${App.esc(row.real_name || '')}</td>
                             <td>${App.esc(row.nickname || '')}</td>
                             <td>${App.esc(row.user_id || '-')}</td>
-                            <td>${App.esc(row.phone || '-')}</td>
-                            <td>${row.stage_no || '-'}</td>
-                            <td class="bulk-note-cell">${
-                                row.errors && row.errors.length > 0
-                                    ? row.errors.map(e => `<span class="text-danger">${App.esc(e)}</span>`).join('<br>')
-                                    : row.warnings && row.warnings.length > 0
-                                        ? row.warnings.map(w => `<span class="text-warning">${App.esc(w)}</span>`).join('<br>')
-                                        : ''
-                            }</td>
-                        </tr>`).join('')}
+                            <td>${hasCorrectedPhone
+                                ? `<span class="val-corrected" title="원본: ${App.esc(row.phone_raw)}">${App.esc(row.phone)}</span>`
+                                : App.esc(row.phone || '-')}</td>
+                            <td>${hasCorrectedStage
+                                ? `<span class="val-corrected" title="원본: ${App.esc(row.stage_raw)}">${row.stage_no}</span>`
+                                : (row.stage_no || '-')}</td>
+                            <td class="bulk-note-cell">${notes.join('<br>')}</td>
+                        </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>

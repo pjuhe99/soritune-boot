@@ -93,6 +93,16 @@
 .bulk-parse-error { font-size: 0.88rem; color: #dc2626; margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; }
 .bulk-parse-ok { font-size: 0.88rem; color: #059669; margin-top: 0.5rem; }
 
+/* Correction styles */
+.bulk-summary-item.corrected { background: #eff6ff; }
+.bulk-summary-item.corrected .summary-num { color: #2563eb; }
+.bulk-correction-list { margin-top: 0.75rem; padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; background: #eff6ff; border: 1px solid #bfdbfe; }
+.bulk-correction-list h4 { color: #2563eb; margin: 0 0 0.5rem; font-size: 0.9rem; }
+.bulk-correction-list ul { margin: 0; padding-left: 1.2rem; }
+.bulk-correction-list li { margin-bottom: 0.2rem; }
+.text-corrected { color: #2563eb; font-size: 0.8rem; }
+.val-corrected { border-bottom: 1px dashed #2563eb; color: #2563eb; cursor: help; }
+
 /* Badge styles (reuse existing where possible) */
 .badge-success { background: #ecfdf5; color: #059669; }
 .badge-warning { background: #fffbeb; color: #d97706; }
