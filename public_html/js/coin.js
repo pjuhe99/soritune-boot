@@ -24,7 +24,7 @@ const CoinApp = (() => {
 
     async function showCycles(container) {
         const r = await api('coin_cycles');
-        if (!r.success) { container.innerHTML = `<p class="text-danger">${r.message}</p>`; return; }
+        if (!r.success) { container.innerHTML = `<p class="text-danger">${r.error || r.message}</p>`; return; }
 
         container.innerHTML = `
             <div class="mgmt-toolbar mt-md">
@@ -35,7 +35,7 @@ const CoinApp = (() => {
                 <table class="data-table">
                     <thead><tr><th>이름</th><th>기간</th><th>상태</th><th>참여자</th><th>총 코인</th><th></th></tr></thead>
                     <tbody>
-                        ${r.data.cycles.map(c => `
+                        ${r.cycles.map(c => `
                             <tr>
                                 <td><strong>${esc(c.name)}</strong></td>
                                 <td>${c.start_date} ~ ${c.end_date}</td>
@@ -56,7 +56,7 @@ const CoinApp = (() => {
                 </table>
             </div>
         `;
-        if (!r.data.cycles.length) {
+        if (!r.cycles.length) {
             container.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">등록된 Coin Cycle이 없습니다.</td></tr>';
         }
         document.getElementById('btn-add-cycle').onclick = () => showCycleForm(container);
@@ -73,7 +73,7 @@ const CoinApp = (() => {
                 start_date: document.getElementById('cycle-start').value,
                 end_date: document.getElementById('cycle-end').value,
             }});
-            if (!r.success) { App.toast(r.message, 'error'); return false; }
+            if (!r.success) { App.toast(r.error || r.message, 'error'); return false; }
             App.toast(r.message);
             App.closeModal();
             showCycles(container);
@@ -85,9 +85,9 @@ const CoinApp = (() => {
     async function showCycleMembers(cycleId, cycleName) {
         currentCycleId = cycleId;
         const r = await api('coin_cycle_members', { qs: `&cycle_id=${cycleId}` });
-        if (!r.success) { App.toast(r.message, 'error'); return; }
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
 
-        const members = r.data.members;
+        const members = r.members;
         App.modal(`${esc(cycleName)} - 회원 코인 현황`, `
             <div style="overflow-x:auto;max-height:70vh">
                 <table class="data-table" style="font-size:13px">
@@ -117,7 +117,7 @@ const CoinApp = (() => {
     async function leaderGrant(cycleId) {
         if (!confirm('이 cycle의 조장/부조장에게 리더 코인을 일괄 지급합니다.\n계속하시겠습니까?')) return;
         const r = await api('coin_leader_grant', { body: { cycle_id: cycleId } });
-        if (!r.success) { App.toast(r.message, 'error'); return; }
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
         App.toast(r.message);
     }
 
@@ -125,9 +125,9 @@ const CoinApp = (() => {
 
     async function showSettlement(cycleId) {
         const r = await api('coin_settlement_preview', { qs: `&cycle_id=${cycleId}` });
-        if (!r.success) { App.toast(r.message, 'error'); return; }
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
 
-        const { members, summary } = r.data;
+        const { members, summary } = r;
         const eligible = members.filter(m => m.perfect_attendance || m.hamemmal_eligible);
 
         App.modal('정산 미리보기', `
@@ -155,8 +155,8 @@ const CoinApp = (() => {
         `, eligible.length ? async () => {
             if (!confirm('정산을 실행합니다. 계속하시겠습니까?')) return false;
             const er = await api('coin_settlement_execute', { body: { cycle_id: cycleId } });
-            if (!er.success) { App.toast(er.message, 'error'); return false; }
-            App.toast(er.message);
+            if (!er.success) { App.toast(er.error || er.message, 'error'); return false; }
+            App.toast(er.message || '정산 완료');
             App.closeModal();
         } : null, { wide: true });
     }
@@ -166,7 +166,7 @@ const CoinApp = (() => {
     async function closeCycle(cycleId) {
         if (!confirm('이 cycle을 마감합니다. 마감 후에도 코인 변동은 가능하지만, 정산/리더코인 일괄지급 버튼이 사라집니다.\n계속하시겠습니까?')) return;
         const r = await api('coin_cycle_close', { body: { id: cycleId } });
-        if (!r.success) { App.toast(r.message, 'error'); return; }
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
         App.toast(r.message);
         const container = document.querySelector('.coin-cycles-container');
         if (container) showCycles(container);
@@ -180,10 +180,10 @@ const CoinApp = (() => {
             api('study_members'),
         ]);
 
-        if (!statusR.success) { container.innerHTML = `<p class="text-danger">${statusR.message}</p>`; return; }
+        if (!statusR.success) { container.innerHTML = `<p class="text-danger">${statusR.error || statusR.message}</p>`; return; }
 
-        const { awards, remaining } = statusR.data;
-        const members = membersR.success ? (membersR.data.members || []) : [];
+        const { awards, remaining } = statusR;
+        const members = membersR.success ? (membersR.members || []) : [];
 
         container.innerHTML = `
             <h3>응원상 (남은 선택: ${remaining}명)</h3>
@@ -213,7 +213,7 @@ const CoinApp = (() => {
                     cycle_id: cycleId,
                     target_member_ids: [parseInt(targetId)],
                 }});
-                if (!r.success) { App.toast(r.message, 'error'); return; }
+                if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
                 App.toast(r.message);
                 showCheerAward(container, cycleId);
             };
