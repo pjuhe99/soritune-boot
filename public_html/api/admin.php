@@ -8,6 +8,7 @@
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
 require_once __DIR__ . '/services/member_stats.php';
+require_once __DIR__ . '/services/member_bulk.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -1115,6 +1116,72 @@ case 'member_event_stats':
         'by_event' => $byEvent,
         'by_date' => $byDate,
         'by_value' => $byValue,
+    ]);
+    break;
+
+// ── Bulk Member Registration ────────────────────────────────
+
+case 'member_bulk_validate':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $rows = $input['rows'] ?? [];
+    $cohort = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+
+    if (empty($rows) || !is_array($rows)) jsonError('등록할 데이터가 없습니다.');
+    if (count($rows) > 500) jsonError('한 번에 최대 500명까지 등록 가능합니다.');
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+    $stmt->execute([$cohort]);
+    $cohortRow = $stmt->fetch();
+    if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+
+    $result = validateBulkMembers($rows, (int)$cohortRow['id']);
+    jsonSuccess($result);
+    break;
+
+case 'member_bulk_register':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $members = $input['members'] ?? [];
+    $cohort = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
+
+    if (empty($members) || !is_array($members)) jsonError('등록할 데이터가 없습니다.');
+    if (count($members) > 500) jsonError('한 번에 최대 500명까지 등록 가능합니다.');
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+    $stmt->execute([$cohort]);
+    $cohortRow = $stmt->fetch();
+    if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+    $cohortId = (int)$cohortRow['id'];
+
+    // 최종 등록 전 재검증
+    $validation = validateBulkMembers($members, $cohortId);
+    if ($validation['summary']['error'] > 0) {
+        jsonError('검증 실패한 데이터가 포함되어 있습니다. 다시 확인해주세요.');
+    }
+
+    try {
+        $result = insertBulkMembers($validation['valid'], $cohortId, $admin['admin_id']);
+        jsonSuccess($result, "{$result['inserted']}명이 등록되었습니다.");
+    } catch (\Exception $e) {
+        jsonError('등록 중 오류가 발생했습니다: ' . $e->getMessage(), 500);
+    }
+    break;
+
+case 'member_bulk_template':
+    $admin = requireAdmin(['operation']);
+    // 템플릿 컬럼 정보 반환
+    jsonSuccess([
+        'columns' => [
+            ['key' => 'real_name', 'label' => '이름', 'required' => true, 'example' => '홍길동'],
+            ['key' => 'nickname', 'label' => '닉네임', 'required' => true, 'example' => '길동이'],
+            ['key' => 'phone', 'label' => '전화번호', 'required' => false, 'example' => '010-1234-5678'],
+            ['key' => 'stage_no', 'label' => '단계', 'required' => false, 'example' => '1'],
+        ],
     ]);
     break;
 

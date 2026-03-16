@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/lecture.css?v=20260313">
     <link rel="stylesheet" href="/css/admin-issues.css?v=20260316">
+    <link rel="stylesheet" href="/css/bulk-register.css?v=20260316">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -31,6 +32,8 @@
     <script src="/js/calendar.js?v=20260312"></script>
     <script src="/js/lecture.js?v=20260313a"></script>
     <script src="/js/admin-issues.js?v=20260316"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="/js/bulk-register.js?v=20260316"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>
