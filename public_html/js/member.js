@@ -42,7 +42,8 @@ const MemberApp = (() => {
                             <label class="form-label">휴대폰번호</label>
                             <input type="tel" class="form-input" id="login-phone"
                                    placeholder="01012345678" maxlength="11"
-                                   inputmode="numeric" pattern="[0-9]*" required>
+                                   inputmode="numeric" pattern="[0-9]*" required
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                             <p class="form-hint">하이픈(-) 없이 숫자만 입력해주세요</p>
                         </div>
                         <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
