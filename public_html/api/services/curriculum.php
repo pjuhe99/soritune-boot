@@ -10,7 +10,7 @@ const CURRICULUM_TYPE_LABELS = [
     'lecture'               => '강의 듣기',
     'malkka_mission'        => '말까미션',
     'naemat33_mission'      => '내맛33미션',
-    'zoom_or_daily_mission' => '줌 강의 / 데일리미션',
+    'zoom_or_daily_mission' => '줌 특강 / 데일리미션',
     'hamummal'              => '하멈말',
 ];
 

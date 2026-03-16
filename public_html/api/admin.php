@@ -976,7 +976,7 @@ case 'curriculum_task_types':
         ['key' => 'lecture',               'label' => '강의 듣기'],
         ['key' => 'malkka_mission',        'label' => '말까미션'],
         ['key' => 'naemat33_mission',      'label' => '내맛33미션'],
-        ['key' => 'zoom_or_daily_mission', 'label' => '줌 강의 / 데일리미션'],
+        ['key' => 'zoom_or_daily_mission', 'label' => '줌 특강 / 데일리미션'],
         ['key' => 'hamummal',              'label' => '하멈말'],
     ];
     jsonSuccess(['task_types' => $types]);
@@ -1002,7 +1002,7 @@ case 'curriculum_list':
         'lecture'               => '강의 듣기',
         'malkka_mission'        => '말까미션',
         'naemat33_mission'      => '내맛33미션',
-        'zoom_or_daily_mission' => '줌 강의 / 데일리미션',
+        'zoom_or_daily_mission' => '줌 특강 / 데일리미션',
         'hamummal'              => '하멈말',
     ];
     foreach ($items as &$item) {
