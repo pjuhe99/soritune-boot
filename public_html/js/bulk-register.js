@@ -107,30 +107,23 @@ const BulkRegisterApp = (() => {
                     </div>
                 </div>
 
-                <!-- Step 3: 검증 결과 -->
-                <div class="bulk-section" id="bulk-validation-section" style="display:none">
+                <!-- Step 3: 검증 결과 + 미리보기 -->
+                <div class="bulk-section" id="bulk-result-section" style="display:none">
                     <div class="bulk-section-header">
                         <span class="bulk-step-badge">3</span>
-                        <span>검증 결과</span>
+                        <span>검증 결과 및 미리보기</span>
                     </div>
-                    <div class="bulk-section-body" id="bulk-validation-body"></div>
+                    <div class="bulk-section-body">
+                        <div id="bulk-summary-area"></div>
+                        <div id="bulk-detail-area"></div>
+                        <div id="bulk-filter-area"></div>
+                        <div id="bulk-preview-area"></div>
+                    </div>
                 </div>
 
-                <!-- Step 4: 미리보기 -->
-                <div class="bulk-section" id="bulk-preview-section" style="display:none">
-                    <div class="bulk-section-header">
-                        <span class="bulk-step-badge">4</span>
-                        <span>미리보기</span>
-                    </div>
-                    <div class="bulk-section-body" id="bulk-preview-body"></div>
-                </div>
-
-                <!-- Step 5: 최종 등록 -->
+                <!-- Step 4: 최종 등록 -->
                 <div class="bulk-section" id="bulk-register-section" style="display:none">
-                    <div class="bulk-section-body bulk-register-actions">
-                        <button class="btn btn-primary btn-lg" id="bulk-register-btn" disabled>등록하기</button>
-                        <button class="btn btn-secondary btn-lg" id="bulk-reset-btn">초기화</button>
-                    </div>
+                    <div class="bulk-section-body" id="bulk-register-body"></div>
                 </div>
             </div>
         `;
@@ -165,8 +158,6 @@ const BulkRegisterApp = (() => {
         };
 
         document.getElementById('bulk-paste-btn').onclick = handlePaste;
-        document.getElementById('bulk-register-btn').onclick = handleRegister;
-        document.getElementById('bulk-reset-btn').onclick = resetState;
     }
 
     function resetState() {
@@ -184,7 +175,7 @@ const BulkRegisterApp = (() => {
     }
 
     function hideDownstreamSections() {
-        ['bulk-validation-section', 'bulk-preview-section', 'bulk-register-section'].forEach(id => {
+        ['bulk-result-section', 'bulk-register-section'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
@@ -576,29 +567,36 @@ const BulkRegisterApp = (() => {
         }
 
         validationResult = r;
-        renderValidation();
-        renderPreview();
+        previewFilter = 'all';
+        renderResult();
     }
 
-    // ── 검증 결과 렌더 ──
+    // ── 통합 결과 렌더 (요약 + 상세 + 필터 + 테이블 + 등록 버튼) ──
 
-    function renderValidation() {
-        const sec = document.getElementById('bulk-validation-section');
-        const body = document.getElementById('bulk-validation-body');
+    let previewFilter = 'all'; // 'all' | 'ok' | 'warning' | 'error' | 'duplicate'
+
+    function renderResult() {
+        const sec = document.getElementById('bulk-result-section');
         sec.style.display = '';
 
+        renderSummary();
+        renderDetailLists();
+        renderFilterBar();
+        renderPreviewTable();
+        renderRegisterButton();
+    }
+
+    function renderSummary() {
+        const el = document.getElementById('bulk-summary-area');
         const s = validationResult.summary;
         const corrections = s.corrections || 0;
+        const duplicates = s.duplicates || 0;
 
-        // 오류/경고를 자동보정과 분리
-        const realWarnings = validationResult.warnings.filter(w => !w.includes('자동 보정:'));
-        const correctionWarnings = validationResult.warnings.filter(w => w.includes('자동 보정:'));
-
-        body.innerHTML = `
+        el.innerHTML = `
             <div class="bulk-summary ${s.error > 0 ? 'has-error' : 'all-ok'}">
                 <div class="bulk-summary-item">
                     <span class="summary-num">${s.total}</span>
-                    <span class="summary-label">전체</span>
+                    <span class="summary-label">전체 업로드</span>
                 </div>
                 <div class="bulk-summary-item ok">
                     <span class="summary-num">${s.valid}</span>
@@ -609,10 +607,10 @@ const BulkRegisterApp = (() => {
                     <span class="summary-num">${s.error}</span>
                     <span class="summary-label">오류</span>
                 </div>` : ''}
-                ${realWarnings.length > 0 ? `
-                <div class="bulk-summary-item warning">
-                    <span class="summary-num">${realWarnings.length}</span>
-                    <span class="summary-label">경고</span>
+                ${duplicates > 0 ? `
+                <div class="bulk-summary-item duplicate">
+                    <span class="summary-num">${duplicates}</span>
+                    <span class="summary-label">중복</span>
                 </div>` : ''}
                 ${corrections > 0 ? `
                 <div class="bulk-summary-item corrected">
@@ -620,109 +618,174 @@ const BulkRegisterApp = (() => {
                     <span class="summary-label">자동 보정</span>
                 </div>` : ''}
             </div>
-            ${validationResult.errors.length > 0 ? `
-            <div class="bulk-error-list">
-                <h4>오류 목록 (등록 불가)</h4>
+        `;
+    }
+
+    function renderDetailLists() {
+        const el = document.getElementById('bulk-detail-area');
+        const realWarnings = validationResult.warnings.filter(w => !w.includes('자동 보정:'));
+        const correctionWarnings = validationResult.warnings.filter(w => w.includes('자동 보정:'));
+
+        let html = '';
+
+        if (validationResult.errors.length > 0) {
+            html += `
+            <details class="bulk-detail-block error" open>
+                <summary>오류 ${validationResult.errors.length}건 (등록 불가)</summary>
                 <ul>
                     ${validationResult.errors.map(e =>
                         `<li><strong>${e.row_num}행</strong> ${App.esc(e.real_name || '(이름없음)')} — ${e.errors.map(App.esc).join(', ')}</li>`
                     ).join('')}
                 </ul>
-            </div>` : ''}
-            ${realWarnings.length > 0 ? `
-            <div class="bulk-warning-list">
-                <h4>경고 (등록은 가능)</h4>
-                <ul>
-                    ${realWarnings.map(w => `<li>${App.esc(w)}</li>`).join('')}
-                </ul>
-            </div>` : ''}
-            ${correctionWarnings.length > 0 ? `
-            <div class="bulk-correction-list">
-                <h4>자동 보정 내역</h4>
-                <ul>
-                    ${correctionWarnings.map(w => `<li>${App.esc(w.replace('자동 보정: ', ''))}</li>`).join('')}
-                </ul>
-            </div>` : ''}
-        `;
+            </details>`;
+        }
+
+        if (realWarnings.length > 0) {
+            html += `
+            <details class="bulk-detail-block warning">
+                <summary>경고 ${realWarnings.length}건 (등록은 가능)</summary>
+                <ul>${realWarnings.map(w => `<li>${App.esc(w)}</li>`).join('')}</ul>
+            </details>`;
+        }
+
+        if (correctionWarnings.length > 0) {
+            html += `
+            <details class="bulk-detail-block correction">
+                <summary>자동 보정 ${correctionWarnings.length}건</summary>
+                <ul>${correctionWarnings.map(w => `<li>${App.esc(w.replace('자동 보정: ', ''))}</li>`).join('')}</ul>
+            </details>`;
+        }
+
+        el.innerHTML = html;
     }
 
-    // ── 미리보기 렌더 ──
+    function renderFilterBar() {
+        const el = document.getElementById('bulk-filter-area');
+        const s = validationResult.summary;
+        const all = [...validationResult.valid, ...validationResult.errors];
+        const warningCount = validationResult.valid.filter(r => r.status === 'warning').length;
+        const okCount = validationResult.valid.filter(r => r.status === 'ok').length;
+        const dupCount = s.duplicates || 0;
 
-    function renderPreview() {
-        const sec = document.getElementById('bulk-preview-section');
-        const body = document.getElementById('bulk-preview-body');
-        sec.style.display = '';
+        el.innerHTML = `
+            <div class="bulk-filter-bar">
+                <span class="bulk-filter-label">필터:</span>
+                <button class="bulk-filter-btn ${previewFilter === 'all' ? 'active' : ''}" data-filter="all">전체 (${s.total})</button>
+                ${okCount > 0 ? `<button class="bulk-filter-btn ${previewFilter === 'ok' ? 'active' : ''}" data-filter="ok">정상 (${okCount})</button>` : ''}
+                ${warningCount > 0 ? `<button class="bulk-filter-btn ${previewFilter === 'warning' ? 'active' : ''}" data-filter="warning">경고 (${warningCount})</button>` : ''}
+                ${s.error > 0 ? `<button class="bulk-filter-btn ${previewFilter === 'error' ? 'active' : ''}" data-filter="error">오류 (${s.error})</button>` : ''}
+                ${dupCount > 0 ? `<button class="bulk-filter-btn ${previewFilter === 'duplicate' ? 'active' : ''}" data-filter="duplicate">중복 (${dupCount})</button>` : ''}
+            </div>
+        `;
 
-        const all = [...validationResult.valid, ...validationResult.errors]
+        el.querySelectorAll('.bulk-filter-btn').forEach(btn => {
+            btn.onclick = () => {
+                previewFilter = btn.dataset.filter;
+                renderFilterBar();
+                renderPreviewTable();
+            };
+        });
+    }
+
+    function renderPreviewTable() {
+        const el = document.getElementById('bulk-preview-area');
+
+        let all = [...validationResult.valid, ...validationResult.errors]
             .sort((a, b) => a.row_num - b.row_num);
 
-        body.innerHTML = `
+        // 필터 적용
+        if (previewFilter === 'ok') all = all.filter(r => r.status === 'ok');
+        else if (previewFilter === 'warning') all = all.filter(r => r.status === 'warning');
+        else if (previewFilter === 'error') all = all.filter(r => r.status === 'error');
+        else if (previewFilter === 'duplicate') all = all.filter(r => r.is_duplicate);
+
+        if (all.length === 0) {
+            el.innerHTML = `<div class="bulk-empty-filter">해당하는 행이 없습니다.</div>`;
+            return;
+        }
+
+        el.innerHTML = `
             <div class="bulk-preview-scroll">
                 <table class="data-table bulk-preview-table">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>상태</th>
+                            <th class="col-num">#</th>
+                            <th class="col-status">상태</th>
                             <th>이름</th>
                             <th>닉네임</th>
                             <th>아이디</th>
                             <th>전화번호</th>
-                            <th>단계</th>
-                            <th>비고</th>
+                            <th class="col-stage">단계</th>
+                            <th class="col-note">비고</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${all.map(row => {
-                            const hasCorrectedPhone = row.phone_raw && row.phone_raw !== row.phone && row.phone;
-                            const hasCorrectedStage = row.stage_raw !== undefined && row.stage_raw !== '' && String(row.stage_raw) !== String(row.stage_no);
-                            // 비고: 오류 → 경고(보정 제외) → 보정 순서
-                            const notes = [];
-                            if (row.errors && row.errors.length > 0) {
-                                row.errors.forEach(e => notes.push(`<span class="text-danger">${App.esc(e)}</span>`));
-                            }
-                            if (row.warnings) {
-                                row.warnings.filter(w => !w.startsWith('자동 보정:')).forEach(w =>
-                                    notes.push(`<span class="text-warning">${App.esc(w)}</span>`)
-                                );
-                            }
-                            if (row.corrections && row.corrections.length > 0) {
-                                row.corrections.forEach(c =>
-                                    notes.push(`<span class="text-corrected">${App.esc(c)}</span>`)
-                                );
-                            }
-                            return `
-                        <tr class="bulk-row-${row.status}">
-                            <td>${row.row_num}</td>
-                            <td>${statusBadge(row.status)}</td>
-                            <td>${App.esc(row.real_name || '')}</td>
-                            <td>${App.esc(row.nickname || '')}</td>
-                            <td>${App.esc(row.user_id || '-')}</td>
-                            <td>${hasCorrectedPhone
-                                ? `<span class="val-corrected" title="원본: ${App.esc(row.phone_raw)}">${App.esc(row.phone)}</span>`
-                                : App.esc(row.phone || '-')}</td>
-                            <td>${hasCorrectedStage
-                                ? `<span class="val-corrected" title="원본: ${App.esc(row.stage_raw)}">${row.stage_no}</span>`
-                                : (row.stage_no || '-')}</td>
-                            <td class="bulk-note-cell">${notes.join('<br>')}</td>
-                        </tr>`;
-                        }).join('')}
+                        ${all.map(row => renderPreviewRow(row)).join('')}
                     </tbody>
                 </table>
             </div>
         `;
+    }
 
-        const regSec = document.getElementById('bulk-register-section');
-        const regBtn = document.getElementById('bulk-register-btn');
-        regSec.style.display = '';
+    function renderPreviewRow(row) {
+        const hasCorrectedPhone = row.phone_raw && row.phone_raw !== row.phone && row.phone;
+        const hasCorrectedStage = row.stage_raw !== undefined && row.stage_raw !== '' && String(row.stage_raw) !== String(row.stage_no);
+
+        const notes = [];
+        if (row.errors && row.errors.length > 0) {
+            row.errors.forEach(e => notes.push(`<span class="text-danger">${App.esc(e)}</span>`));
+        }
+        if (row.warnings) {
+            row.warnings.filter(w => !w.startsWith('자동 보정:')).forEach(w =>
+                notes.push(`<span class="text-warning">${App.esc(w)}</span>`)
+            );
+        }
+        if (row.corrections && row.corrections.length > 0) {
+            row.corrections.forEach(c =>
+                notes.push(`<span class="text-corrected">${App.esc(c)}</span>`)
+            );
+        }
+
+        return `
+        <tr class="bulk-row-${row.status}${row.is_duplicate ? ' bulk-row-dup' : ''}">
+            <td>${row.row_num}</td>
+            <td>${statusBadge(row.status)}${row.is_duplicate ? '<span class="badge badge-dup" title="중복">DUP</span>' : ''}</td>
+            <td>${App.esc(row.real_name || '')}</td>
+            <td>${App.esc(row.nickname || '')}</td>
+            <td>${App.esc(row.user_id || '-')}</td>
+            <td>${hasCorrectedPhone
+                ? `<span class="val-corrected" title="원본: ${App.esc(row.phone_raw)}">${App.esc(row.phone)}</span>`
+                : App.esc(row.phone || '-')}</td>
+            <td>${hasCorrectedStage
+                ? `<span class="val-corrected" title="원본: ${App.esc(row.stage_raw)}">${row.stage_no}</span>`
+                : (row.stage_no || '-')}</td>
+            <td class="bulk-note-cell">${notes.join('<br>')}</td>
+        </tr>`;
+    }
+
+    function renderRegisterButton() {
+        const sec = document.getElementById('bulk-register-section');
+        const body = document.getElementById('bulk-register-body');
+        sec.style.display = '';
 
         const validCount = validationResult.valid.length;
-        if (validCount > 0) {
-            regBtn.disabled = false;
-            regBtn.textContent = `${validCount}명 등록하기`;
-        } else {
-            regBtn.disabled = true;
-            regBtn.textContent = '등록 가능한 데이터가 없습니다';
-        }
+        const errorCount = validationResult.summary.error;
+
+        body.innerHTML = `
+            <div class="bulk-register-confirm">
+                ${errorCount > 0 ? `<p class="bulk-register-note text-danger">${errorCount}건의 오류는 제외되고, 정상 데이터만 등록됩니다.</p>` : ''}
+                ${validCount > 0 ? `<p class="bulk-register-note">등록 후 조 배정은 별도로 진행합니다.</p>` : ''}
+                <div class="bulk-register-actions">
+                    <button class="btn btn-primary btn-lg" id="bulk-register-btn" ${validCount === 0 ? 'disabled' : ''}>
+                        ${validCount > 0 ? `${validCount}명 등록하기` : '등록 가능한 데이터가 없습니다'}
+                    </button>
+                    <button class="btn btn-secondary btn-lg" id="bulk-reset-btn">초기화</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('bulk-register-btn').onclick = handleRegister;
+        document.getElementById('bulk-reset-btn').onclick = resetState;
     }
 
     function statusBadge(status) {

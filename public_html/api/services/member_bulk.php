@@ -170,16 +170,16 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         $stageNo = $stageResult['value'] ?? 1;
 
         // ── 4. 전화번호 중복 체크 ──
+        $isDuplicate = false;
         if ($phoneNormalized !== '') {
-            // DB 기존 (같은 cohort)
             if (isset($existingPhoneSet[$phoneNormalized])) {
                 $rowErrors[] = "이미 등록된 전화번호입니다 (같은 기수): {$phoneNormalized}";
+                $isDuplicate = true;
             }
-            // 파일 내부
             if (isset($seenPhones[$phoneNormalized])) {
                 $rowErrors[] = "파일 내 전화번호 중복 ({$seenPhones[$phoneNormalized]}행과 동일)";
+                $isDuplicate = true;
             }
-            // 다른 cohort에 존재 → 재참여 (경고)
             if (isset($otherCohortPhones[$phoneNormalized]) && !isset($existingPhoneSet[$phoneNormalized])) {
                 $rowWarnings[] = "다른 기수에서 참여 이력이 있습니다 (재참여)";
             }
@@ -189,9 +189,11 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         if ($userId !== '') {
             if (isset($existingUserIdSet[$userId])) {
                 $rowErrors[] = "이미 등록된 아이디입니다 (같은 기수): {$userId}";
+                $isDuplicate = true;
             }
             if (isset($seenUserIds[$userId])) {
                 $rowErrors[] = "파일 내 아이디 중복 ({$seenUserIds[$userId]}행과 동일)";
+                $isDuplicate = true;
             }
         }
 
@@ -226,17 +228,18 @@ function validateBulkMembers(array $rows, int $cohortId): array {
 
         // ── 결과 조립 ──
         $processed = [
-            'row_num'     => $rowNum,
-            'real_name'   => $realName,
-            'nickname'    => $nickname,
-            'user_id'     => $userId,
-            'phone'       => $phoneNormalized,
-            'phone_raw'   => $phoneRaw,
-            'stage_no'    => $stageNo,
-            'stage_raw'   => $stageRaw,
-            'corrections' => $corrections,
-            'errors'      => $rowErrors,
-            'warnings'    => $rowWarnings,
+            'row_num'      => $rowNum,
+            'real_name'    => $realName,
+            'nickname'     => $nickname,
+            'user_id'      => $userId,
+            'phone'        => $phoneNormalized,
+            'phone_raw'    => $phoneRaw,
+            'stage_no'     => $stageNo,
+            'stage_raw'    => $stageRaw,
+            'is_duplicate' => $isDuplicate,
+            'corrections'  => $corrections,
+            'errors'       => $rowErrors,
+            'warnings'     => $rowWarnings,
         ];
 
         if (!empty($rowErrors)) {
@@ -259,6 +262,7 @@ function validateBulkMembers(array $rows, int $cohortId): array {
             'total'       => count($rows),
             'valid'       => count($valid),
             'error'       => count($errors),
+            'duplicates'  => array_sum(array_map(fn($r) => $r['is_duplicate'] ? 1 : 0, array_merge($valid, $errors))),
             'warnings'    => count($warnings),
             'corrections' => array_sum(array_map(fn($r) => count($r['corrections']), array_merge($valid, $errors))),
         ],
