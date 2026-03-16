@@ -78,6 +78,21 @@
 .bulk-success h3 { margin: 0.5rem 0; }
 .bulk-success p { color: var(--text-secondary, #6b7280); font-size: 0.9rem; }
 
+/* Header report */
+.bulk-header-report { margin-bottom: 0.75rem; padding: 0.75rem; border-radius: 6px; background: var(--bg-subtle, #f3f4f6); border: 1px solid var(--border, #e5e7eb); }
+.header-report-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-primary, #374151); }
+.header-matched { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.35rem; }
+.header-chip { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.78rem; }
+.header-chip.ok { background: #ecfdf5; color: #059669; }
+.header-chip.ignored { background: #f3f4f6; color: #9ca3af; text-decoration: line-through; }
+.header-ignored { font-size: 0.8rem; color: var(--text-muted, #9ca3af); margin-bottom: 0.25rem; }
+.header-ignored-label { font-weight: 500; }
+.header-missing { font-size: 0.85rem; color: #dc2626; margin-top: 0.35rem; padding: 0.35rem 0.5rem; background: #fef2f2; border-radius: 4px; }
+
+/* Parse result messages */
+.bulk-parse-error { font-size: 0.88rem; color: #dc2626; margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; }
+.bulk-parse-ok { font-size: 0.88rem; color: #059669; margin-top: 0.5rem; }
+
 /* Badge styles (reuse existing where possible) */
 .badge-success { background: #ecfdf5; color: #059669; }
 .badge-warning { background: #fffbeb; color: #d97706; }

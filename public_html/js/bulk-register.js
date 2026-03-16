@@ -1,18 +1,20 @@
 /* ── Bulk Member Registration ──────────────────────────────── */
 const BulkRegisterApp = (() => {
     let container = null;
-    let parsedRows = [];       // 파싱된 원본 데이터
-    let validationResult = null; // 서버 검증 결과
-    let templateColumns = [];
+    let parsedRows = [];
+    let validationResult = null;
 
-    const EXPECTED_HEADERS = ['이름', '닉네임', '아이디', '전화번호', '단계'];
+    const REQUIRED_KEYS = ['real_name', 'nickname'];
     const HEADER_KEY_MAP = {
-        '이름': 'real_name', 'real_name': 'real_name', 'name': 'real_name',
-        '닉네임': 'nickname', 'nickname': 'nickname',
-        '아이디': 'user_id', 'user_id': 'user_id', 'id': 'user_id',
-        '전화번호': 'phone', 'phone': 'phone', '연락처': 'phone', '휴대폰': 'phone',
+        '이름': 'real_name', 'real_name': 'real_name', 'name': 'real_name', '성명': 'real_name',
+        '닉네임': 'nickname', 'nickname': 'nickname', '별명': 'nickname',
+        '아이디': 'user_id', 'user_id': 'user_id',
+        '전화번호': 'phone', 'phone': 'phone', '연락처': 'phone', '휴대폰': 'phone', '핸드폰': 'phone', '휴대전화': 'phone',
         '단계': 'stage_no', 'stage_no': 'stage_no', 'stage': 'stage_no',
     };
+    const KEY_LABELS = { real_name: '이름', nickname: '닉네임', user_id: '아이디', phone: '전화번호', stage_no: '단계' };
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const MAX_ROWS = 500;
 
     function init(el) {
         container = el;
@@ -92,7 +94,7 @@ const BulkRegisterApp = (() => {
                                 <p>파일을 여기에 끌어다 놓거나</p>
                                 <button class="btn btn-primary btn-sm" id="bulk-file-btn">파일 선택</button>
                                 <input type="file" id="bulk-file-input" accept=".xlsx,.xls,.csv" style="display:none">
-                                <p class="bulk-file-hint">xlsx, xls, csv 지원</p>
+                                <p class="bulk-file-hint">xlsx, xls, csv 지원 (최대 ${MAX_ROWS}명, 5MB)</p>
                             </div>
                         </div>
                         <div class="bulk-upload-area" id="bulk-upload-paste" style="display:none">
@@ -136,11 +138,9 @@ const BulkRegisterApp = (() => {
     }
 
     function bindEvents() {
-        // 템플릿 다운로드
         document.getElementById('bulk-dl-csv').onclick = downloadCsvTemplate;
         document.getElementById('bulk-dl-xlsx').onclick = downloadXlsxTemplate;
 
-        // 업로드 탭 전환
         container.querySelectorAll('.bulk-upload-tab').forEach(tab => {
             tab.onclick = () => {
                 container.querySelectorAll('.bulk-upload-tab').forEach(t => t.classList.remove('active'));
@@ -151,12 +151,10 @@ const BulkRegisterApp = (() => {
             };
         });
 
-        // 파일 선택
         const fileInput = document.getElementById('bulk-file-input');
         document.getElementById('bulk-file-btn').onclick = () => fileInput.click();
         fileInput.onchange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
 
-        // 드래그 앤 드롭
         const dz = document.getElementById('bulk-dropzone');
         dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('dragover'); };
         dz.ondragleave = () => dz.classList.remove('dragover');
@@ -166,16 +164,30 @@ const BulkRegisterApp = (() => {
             if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
         };
 
-        // 복붙
         document.getElementById('bulk-paste-btn').onclick = handlePaste;
-
-        // 등록
         document.getElementById('bulk-register-btn').onclick = handleRegister;
-        document.getElementById('bulk-reset-btn').onclick = () => {
-            parsedRows = [];
-            validationResult = null;
-            render();
-        };
+        document.getElementById('bulk-reset-btn').onclick = resetState;
+    }
+
+    function resetState() {
+        parsedRows = [];
+        validationResult = null;
+        render();
+    }
+
+    // ── 상태 표시 ──
+
+    function showStatus(html) {
+        const el = document.getElementById('bulk-file-status');
+        el.style.display = '';
+        el.innerHTML = html;
+    }
+
+    function hideDownstreamSections() {
+        ['bulk-validation-section', 'bulk-preview-section', 'bulk-register-section'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
     }
 
     // ── 템플릿 다운로드 ──
@@ -199,10 +211,8 @@ const BulkRegisterApp = (() => {
             ['김철수', 'Bella', '', '010-9876-5432', 1],
         ]);
         ws['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 8 }];
-        // 전화번호 컬럼을 텍스트 서식으로 설정 (엑셀에서 앞의 0이 잘리는 것 방지)
-        const phoneCol = 3; // D열 (0-indexed)
         for (let r = 1; r <= 2; r++) {
-            const addr = XLSX.utils.encode_cell({ r, c: phoneCol });
+            const addr = XLSX.utils.encode_cell({ r, c: 3 });
             if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
         }
         const wb = XLSX.utils.book_new();
@@ -218,80 +228,216 @@ const BulkRegisterApp = (() => {
         URL.revokeObjectURL(a.href);
     }
 
-    // ── 파일 파싱 ──
+    // ── 헤더 매핑 ──
+
+    function mapHeaders(rawHeaders) {
+        const mapped = {};   // rawHeader → key
+        const matched = [];  // 매핑 성공 목록
+        const ignored = [];  // 매핑 실패 목록
+
+        rawHeaders.forEach(h => {
+            const trimmed = h.trim();
+            if (!trimmed) return;
+            const key = HEADER_KEY_MAP[trimmed] || HEADER_KEY_MAP[trimmed.toLowerCase()];
+            if (key) {
+                mapped[h] = key;
+                matched.push({ header: trimmed, key, label: KEY_LABELS[key] || key });
+            } else {
+                ignored.push(trimmed);
+            }
+        });
+
+        // 필수 컬럼 체크
+        const mappedKeys = new Set(Object.values(mapped));
+        const missing = REQUIRED_KEYS.filter(k => !mappedKeys.has(k));
+
+        return { mapped, matched, ignored, missing, mappedKeys };
+    }
+
+    function renderHeaderReport(headerResult, source) {
+        const { matched, ignored, missing } = headerResult;
+
+        let html = `<div class="bulk-header-report">`;
+        html += `<div class="header-report-title">${App.esc(source)} 헤더 인식 결과</div>`;
+
+        // 매핑 성공
+        if (matched.length > 0) {
+            html += `<div class="header-matched">`;
+            html += matched.map(m =>
+                `<span class="header-chip ok">${App.esc(m.header)} → ${App.esc(m.label)}</span>`
+            ).join(' ');
+            html += `</div>`;
+        }
+
+        // 무시된 헤더
+        if (ignored.length > 0) {
+            html += `<div class="header-ignored">`;
+            html += `<span class="header-ignored-label">무시됨:</span> `;
+            html += ignored.map(h => `<span class="header-chip ignored">${App.esc(h)}</span>`).join(' ');
+            html += `</div>`;
+        }
+
+        // 필수 누락
+        if (missing.length > 0) {
+            html += `<div class="header-missing">`;
+            html += `필수 컬럼 누락: `;
+            html += missing.map(k => `<strong>${App.esc(KEY_LABELS[k] || k)}</strong>`).join(', ');
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    // ── 파일 파싱 (공통 진입점) ──
 
     async function handleFile(file) {
-        const status = document.getElementById('bulk-file-status');
-        status.style.display = '';
-        status.innerHTML = `<span class="text-muted">파일 읽는 중: ${App.esc(file.name)}...</span>`;
+        hideDownstreamSections();
+
+        // 파일 크기 체크
+        if (file.size > MAX_FILE_SIZE) {
+            showStatus(`<span class="text-danger">파일 크기 초과: ${(file.size / 1024 / 1024).toFixed(1)}MB (최대 5MB)</span>`);
+            return;
+        }
+
+        // 확장자 체크
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+            showStatus(`<span class="text-danger">지원하지 않는 파일 형식입니다: .${App.esc(ext)}<br>xlsx, xls, csv 파일만 업로드 가능합니다.</span>`);
+            return;
+        }
+
+        showStatus(`<span class="text-muted">파일 읽는 중: ${App.esc(file.name)}...</span>`);
 
         try {
-            const ext = file.name.split('.').pop().toLowerCase();
-            let rows;
-
+            let result;
             if (ext === 'csv') {
-                rows = await parseCsv(file);
-            } else if (ext === 'xlsx' || ext === 'xls') {
+                result = await parseCsv(file);
+            } else {
                 if (typeof XLSX === 'undefined') {
-                    status.innerHTML = '<span class="text-danger">Excel 라이브러리가 로드되지 않았습니다.</span>';
+                    showStatus(`<span class="text-danger">Excel 라이브러리가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.</span>`);
                     return;
                 }
-                rows = await parseXlsx(file);
-            } else {
-                status.innerHTML = '<span class="text-danger">지원하지 않는 파일 형식입니다.</span>';
-                return;
+                result = await parseXlsx(file);
             }
 
-            if (!rows || rows.length === 0) {
-                status.innerHTML = '<span class="text-danger">데이터가 없습니다.</span>';
-                return;
-            }
-
-            status.innerHTML = `<span class="text-success">${App.esc(file.name)} - ${rows.length}행 파싱 완료</span>`;
-            parsedRows = rows;
-            await validateRows();
+            finalizeParsing(result, file.name);
         } catch (e) {
-            status.innerHTML = `<span class="text-danger">파일 읽기 오류: ${App.esc(e.message)}</span>`;
+            showStatus(`<span class="text-danger">파일 읽기 오류: ${App.esc(e.message)}</span>`);
         }
     }
+
+    /**
+     * 파싱 결과를 검증하고 상태를 표시하는 공통 함수
+     * @param {{ rows: object[], headerResult: object }} result
+     * @param {string} source  출처 이름 (파일명 or '붙여넣기')
+     */
+    async function finalizeParsing(result, source) {
+        const { rows, headerResult } = result;
+        let statusHtml = renderHeaderReport(headerResult, source);
+
+        // 필수 헤더 누락 → 중단
+        if (headerResult.missing.length > 0) {
+            const missingNames = headerResult.missing.map(k => KEY_LABELS[k] || k).join(', ');
+            statusHtml += `<div class="bulk-parse-error">필수 컬럼이 없습니다: <strong>${App.esc(missingNames)}</strong><br>템플릿을 다운로드하여 헤더를 확인해주세요.</div>`;
+            showStatus(statusHtml);
+            return;
+        }
+
+        // 데이터 없음
+        if (rows.length === 0) {
+            statusHtml += `<div class="bulk-parse-error">데이터 행이 없습니다. 헤더 아래에 데이터를 입력해주세요.</div>`;
+            showStatus(statusHtml);
+            return;
+        }
+
+        // 행 수 초과 경고 (서버에서도 차단하지만 미리 안내)
+        if (rows.length > MAX_ROWS) {
+            statusHtml += `<div class="bulk-parse-error">데이터가 ${rows.length}행입니다. 한 번에 최대 ${MAX_ROWS}명까지 등록 가능합니다.<br>파일을 나누어 업로드해주세요.</div>`;
+            showStatus(statusHtml);
+            return;
+        }
+
+        // 성공
+        statusHtml += `<div class="bulk-parse-ok">${App.esc(source)} — <strong>${rows.length}명</strong> 파싱 완료</div>`;
+        showStatus(statusHtml);
+
+        parsedRows = rows;
+        await validateRows();
+    }
+
+    // ── CSV 파싱 ──
 
     function parseCsv(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const text = e.target.result;
-                    const lines = text.split(/\r?\n/).filter(l => l.trim());
-                    if (lines.length < 2) { resolve([]); return; }
+                    let text = e.target.result;
 
-                    const headerLine = lines[0];
-                    // CSV 구분자 감지 (탭 or 쉼표)
-                    const sep = headerLine.includes('\t') ? '\t' : ',';
-                    const headers = headerLine.split(sep).map(h => h.trim().replace(/^["']|["']$/g, ''));
-                    const keyMap = mapHeaders(headers);
-
-                    const rows = [];
-                    for (let i = 1; i < lines.length; i++) {
-                        const vals = parseCsvLine(lines[i], sep);
-                        if (vals.every(v => v.trim() === '')) continue;
-                        const row = {};
-                        headers.forEach((h, idx) => {
-                            const key = keyMap[h];
-                            if (key) row[key] = (vals[idx] || '').trim();
-                        });
-                        if (row.real_name || row.nickname) rows.push(row);
+                    // EUC-KR 감지: UTF-8 BOM 없고 한글이 깨져 보이면 EUC-KR로 재시도
+                    if (!text.startsWith('\uFEFF') && /[\uFFFD]/.test(text.substring(0, 500))) {
+                        // fallback을 위해 reject하면 handleFile에서 재시도
+                        reader.onerror = null;
+                        const eucReader = new FileReader();
+                        eucReader.onload = (e2) => {
+                            try {
+                                resolve(parseCsvText(e2.target.result));
+                            } catch (err) { reject(err); }
+                        };
+                        eucReader.onerror = reject;
+                        eucReader.readAsText(file, 'EUC-KR');
+                        return;
                     }
-                    resolve(rows);
+
+                    // BOM 제거
+                    if (text.startsWith('\uFEFF')) text = text.substring(1);
+
+                    resolve(parseCsvText(text));
                 } catch (err) { reject(err); }
             };
-            reader.onerror = reject;
+            reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
             reader.readAsText(file, 'UTF-8');
         });
     }
 
+    function parseCsvText(text) {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length === 0) {
+            return { rows: [], headerResult: { mapped: {}, matched: [], ignored: [], missing: [...REQUIRED_KEYS], mappedKeys: new Set() } };
+        }
+
+        // 구분자 감지: 탭 > 쉼표
+        const sep = lines[0].includes('\t') ? '\t' : ',';
+        const rawHeaders = parseCsvLine(lines[0], sep).map(h => h.trim().replace(/^["']+|["']+$/g, ''));
+        const headerResult = mapHeaders(rawHeaders);
+
+        if (lines.length < 2) {
+            return { rows: [], headerResult };
+        }
+
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const vals = parseCsvLine(lines[i], sep);
+            if (vals.every(v => v.trim() === '')) continue; // 빈 행 무시
+
+            const row = {};
+            rawHeaders.forEach((h, idx) => {
+                const key = headerResult.mapped[h];
+                if (key) row[key] = String(vals[idx] || '').trim();
+            });
+
+            // 최소 하나의 값이라도 있어야 유효 행
+            if (Object.values(row).some(v => v !== '' && v !== undefined)) {
+                rows.push(row);
+            }
+        }
+
+        return { rows, headerResult };
+    }
+
     function parseCsvLine(line, sep) {
         if (sep === '\t') return line.split('\t');
-        // Handle quoted CSV fields
         const result = [];
         let current = '';
         let inQuotes = false;
@@ -311,46 +457,73 @@ const BulkRegisterApp = (() => {
         return result;
     }
 
+    // ── XLSX 파싱 ──
+
     function parseXlsx(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const wb = XLSX.read(e.target.result, { type: 'array', cellText: true, cellDates: false });
                     const ws = wb.Sheets[wb.SheetNames[0]];
-                    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-                    if (data.length < 2) { resolve([]); return; }
 
-                    const headers = data[0].map(h => String(h).trim());
-                    const keyMap = mapHeaders(headers);
+                    // raw: true로 원본 값을 가져오되, 전화번호는 문자열로 보정
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+
+                    if (data.length === 0) {
+                        resolve({ rows: [], headerResult: { mapped: {}, matched: [], ignored: [], missing: [...REQUIRED_KEYS], mappedKeys: new Set() } });
+                        return;
+                    }
+
+                    const rawHeaders = data[0].map(h => String(h).trim());
+                    const headerResult = mapHeaders(rawHeaders);
+
+                    if (data.length < 2) {
+                        resolve({ rows: [], headerResult });
+                        return;
+                    }
+
+                    // 전화번호 컬럼 인덱스 찾기 (숫자→문자열 보정용)
+                    const phoneColIdx = rawHeaders.findIndex(h => headerResult.mapped[h] === 'phone');
 
                     const rows = [];
                     for (let i = 1; i < data.length; i++) {
                         const vals = data[i];
-                        if (vals.every(v => String(v).trim() === '')) continue;
+                        if (!Array.isArray(vals)) continue;
+                        if (vals.every(v => String(v).trim() === '')) continue; // 빈 행 무시
+
                         const row = {};
-                        headers.forEach((h, idx) => {
-                            const key = keyMap[h];
-                            if (key) row[key] = String(vals[idx] || '').trim();
+                        rawHeaders.forEach((h, idx) => {
+                            const key = headerResult.mapped[h];
+                            if (!key) return;
+
+                            let val = vals[idx];
+
+                            // 전화번호 숫자 보정: Excel에서 01012345678이 숫자 1012345678로 읽힐 수 있음
+                            if (key === 'phone' && typeof val === 'number') {
+                                val = String(val);
+                                // 10자리 숫자이고 0으로 시작하지 않으면 앞에 0 붙이기
+                                if (val.length === 10 && !val.startsWith('0')) {
+                                    val = '0' + val;
+                                }
+                            }
+
+                            row[key] = String(val ?? '').trim();
                         });
-                        if (row.real_name || row.nickname) rows.push(row);
+
+                        if (Object.values(row).some(v => v !== '' && v !== undefined)) {
+                            rows.push(row);
+                        }
                     }
-                    resolve(rows);
-                } catch (err) { reject(err); }
+
+                    resolve({ rows, headerResult });
+                } catch (err) {
+                    reject(new Error('Excel 파일을 읽을 수 없습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.'));
+                }
             };
-            reader.onerror = reject;
+            reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
             reader.readAsArrayBuffer(file);
         });
-    }
-
-    function mapHeaders(headers) {
-        const map = {};
-        headers.forEach(h => {
-            const lower = h.toLowerCase().trim();
-            const key = HEADER_KEY_MAP[h] || HEADER_KEY_MAP[lower];
-            if (key) map[h] = key;
-        });
-        return map;
     }
 
     // ── 복붙 처리 ──
@@ -359,38 +532,33 @@ const BulkRegisterApp = (() => {
         const text = document.getElementById('bulk-paste-area').value.trim();
         if (!text) { Toast.warning('데이터를 붙여넣기 해주세요.'); return; }
 
+        hideDownstreamSections();
+
         const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) { Toast.warning('헤더 + 최소 1행의 데이터가 필요합니다.'); return; }
-
-        // 탭 우선, 쉼표 폴백
-        const sep = lines[0].includes('\t') ? '\t' : ',';
-        const headers = lines[0].split(sep).map(h => h.trim());
-        const keyMap = mapHeaders(headers);
-
-        if (!Object.values(keyMap).includes('real_name') && !Object.values(keyMap).includes('nickname')) {
-            Toast.error('헤더에 "이름" 또는 "닉네임" 컬럼이 필요합니다.');
+        if (lines.length === 0) {
+            showStatus('<div class="bulk-parse-error">데이터가 없습니다.</div>');
             return;
         }
+
+        const sep = lines[0].includes('\t') ? '\t' : ',';
+        const rawHeaders = lines[0].split(sep).map(h => h.trim());
+        const headerResult = mapHeaders(rawHeaders);
 
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
             const vals = lines[i].split(sep);
             if (vals.every(v => v.trim() === '')) continue;
             const row = {};
-            headers.forEach((h, idx) => {
-                const key = keyMap[h];
+            rawHeaders.forEach((h, idx) => {
+                const key = headerResult.mapped[h];
                 if (key) row[key] = (vals[idx] || '').trim();
             });
-            if (row.real_name || row.nickname) rows.push(row);
+            if (Object.values(row).some(v => v !== '' && v !== undefined)) {
+                rows.push(row);
+            }
         }
 
-        if (rows.length === 0) { Toast.warning('유효한 데이터가 없습니다.'); return; }
-
-        const status = document.getElementById('bulk-file-status');
-        status.style.display = '';
-        status.innerHTML = `<span class="text-success">붙여넣기 - ${rows.length}행 파싱 완료</span>`;
-        parsedRows = rows;
-        await validateRows();
+        await finalizeParsing({ rows, headerResult }, '붙여넣기');
     }
 
     // ── 서버 검증 ──
@@ -420,11 +588,9 @@ const BulkRegisterApp = (() => {
         sec.style.display = '';
 
         const s = validationResult.summary;
-        const hasErrors = s.error > 0;
-        const hasWarnings = s.warnings > 0;
 
         body.innerHTML = `
-            <div class="bulk-summary ${hasErrors ? 'has-error' : 'all-ok'}">
+            <div class="bulk-summary ${s.error > 0 ? 'has-error' : 'all-ok'}">
                 <div class="bulk-summary-item">
                     <span class="summary-num">${s.total}</span>
                     <span class="summary-label">전체</span>
@@ -438,7 +604,7 @@ const BulkRegisterApp = (() => {
                     <span class="summary-num">${s.error}</span>
                     <span class="summary-label">오류</span>
                 </div>` : ''}
-                ${hasWarnings ? `
+                ${s.warnings > 0 ? `
                 <div class="bulk-summary-item warning">
                     <span class="summary-num">${s.warnings}</span>
                     <span class="summary-label">경고</span>
@@ -449,7 +615,7 @@ const BulkRegisterApp = (() => {
                 <h4>오류 목록</h4>
                 <ul>
                     ${validationResult.errors.map(e =>
-                        `<li><strong>${e.row_num}행</strong> ${App.esc(e.real_name || '(이름없음)')} - ${e.errors.map(App.esc).join(', ')}</li>`
+                        `<li><strong>${e.row_num}행</strong> ${App.esc(e.real_name || '(이름없음)')} — ${e.errors.map(App.esc).join(', ')}</li>`
                     ).join('')}
                 </ul>
             </div>` : ''}
@@ -511,7 +677,6 @@ const BulkRegisterApp = (() => {
             </div>
         `;
 
-        // 등록 버튼 활성화
         const regSec = document.getElementById('bulk-register-section');
         const regBtn = document.getElementById('bulk-register-btn');
         regSec.style.display = '';
@@ -576,15 +741,10 @@ const BulkRegisterApp = (() => {
             </div>
         `;
         document.getElementById('bulk-done-btn').onclick = () => {
-            // 회원 관리 탭으로 이동
             const memberTab = document.querySelector('[data-hash="members"]');
             if (memberTab) memberTab.click();
         };
-        document.getElementById('bulk-more-btn').onclick = () => {
-            parsedRows = [];
-            validationResult = null;
-            render();
-        };
+        document.getElementById('bulk-more-btn').onclick = resetState;
     }
 
     return { init };
