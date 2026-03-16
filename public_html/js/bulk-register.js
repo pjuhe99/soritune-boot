@@ -3,6 +3,7 @@ const BulkRegisterApp = (() => {
     let container = null;
     let parsedRows = [];
     let validationResult = null;
+    let uploadSource = '';  // 파일명 또는 '붙여넣기'
 
     const REQUIRED_KEYS = ['real_name', 'nickname'];
     const HEADER_KEY_MAP = {
@@ -125,9 +126,21 @@ const BulkRegisterApp = (() => {
                 <div class="bulk-section" id="bulk-register-section" style="display:none">
                     <div class="bulk-section-body" id="bulk-register-body"></div>
                 </div>
+
+                <!-- 업로드 이력 -->
+                <div class="bulk-section">
+                    <div class="bulk-section-header">
+                        <span class="bulk-step-badge" style="background:var(--text-secondary,#6b7280)">&#128203;</span>
+                        <span>업로드 이력</span>
+                    </div>
+                    <div class="bulk-section-body" id="bulk-logs-area">
+                        <div class="text-muted" style="font-size:0.88rem">로딩 중...</div>
+                    </div>
+                </div>
             </div>
         `;
         bindEvents();
+        loadImportLogs();
     }
 
     function bindEvents() {
@@ -324,6 +337,7 @@ const BulkRegisterApp = (() => {
      * @param {string} source  출처 이름 (파일명 or '붙여넣기')
      */
     async function finalizeParsing(result, source) {
+        uploadSource = source;
         const { rows, headerResult } = result;
         let statusHtml = renderHeaderReport(headerResult, source);
 
@@ -819,7 +833,13 @@ const BulkRegisterApp = (() => {
             stage_no: m.stage_no,
         }));
 
-        const r = await App.post('/api/admin.php?action=member_bulk_register', { members });
+        const r = await App.post('/api/admin.php?action=member_bulk_register', {
+            members,
+            file_name: uploadSource,
+            total_count: validationResult.summary.total,
+            error_count: validationResult.summary.error,
+            duplicate_count: validationResult.summary.duplicates || 0,
+        });
         App.hideLoading();
 
         if (r.success) {
@@ -828,6 +848,65 @@ const BulkRegisterApp = (() => {
         } else {
             Toast.error(r.error || '등록 실패');
         }
+    }
+
+    // ── 업로드 이력 ──
+
+    async function loadImportLogs() {
+        const el = document.getElementById('bulk-logs-area');
+        if (!el) return;
+
+        const r = await App.get('/api/admin.php?action=member_bulk_logs');
+        if (!r.success || !r.logs || r.logs.length === 0) {
+            el.innerHTML = '<div class="text-muted" style="font-size:0.88rem">업로드 이력이 없습니다.</div>';
+            return;
+        }
+
+        el.innerHTML = `
+            <div class="bulk-preview-scroll">
+                <table class="data-table bulk-logs-table">
+                    <thead>
+                        <tr>
+                            <th>일시</th>
+                            <th>관리자</th>
+                            <th>기수</th>
+                            <th>파일</th>
+                            <th>전체</th>
+                            <th>성공</th>
+                            <th>오류</th>
+                            <th>중복</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${r.logs.map(log => `
+                        <tr>
+                            <td class="log-date">${formatLogDate(log.created_at)}</td>
+                            <td>${App.esc(log.admin_name)}</td>
+                            <td>${App.esc(log.cohort_name)}</td>
+                            <td class="log-file" title="${App.esc(log.file_name || '')}">${App.esc(truncate(log.file_name || '-', 20))}</td>
+                            <td>${log.total_count}</td>
+                            <td class="text-success"><strong>${log.success_count}</strong></td>
+                            <td>${log.error_count > 0 ? `<span class="text-danger">${log.error_count}</span>` : '0'}</td>
+                            <td>${log.duplicate_count > 0 ? `<span style="color:#be185d">${log.duplicate_count}</span>` : '0'}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function formatLogDate(dt) {
+        if (!dt) return '-';
+        const d = new Date(dt);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        return `${mm}/${dd} ${hh}:${mi}`;
+    }
+
+    function truncate(str, max) {
+        return str.length > max ? str.substring(0, max - 1) + '…' : str;
     }
 
     function renderSuccess(insertedCount) {

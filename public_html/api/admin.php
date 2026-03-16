@@ -1146,6 +1146,11 @@ case 'member_bulk_register':
     if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
     $cohortId = (int)$cohortRow['id'];
 
+    $fileName   = trim($input['file_name'] ?? '') ?: null;
+    $totalCount = (int)($input['total_count'] ?? count($members));
+    $errorCount = (int)($input['error_count'] ?? 0);
+    $dupCount   = (int)($input['duplicate_count'] ?? 0);
+
     // 최종 등록 전 재검증
     $validation = validateBulkMembers($members, $cohortId);
     if ($validation['summary']['error'] > 0) {
@@ -1153,11 +1158,31 @@ case 'member_bulk_register':
     }
 
     try {
-        $result = insertBulkMembers($validation['valid'], $cohortId, $admin['admin_id']);
+        $result = insertBulkMembers($validation['valid'], $cohortId, $admin['admin_id'], [
+            'admin_name'      => $admin['admin_name'],
+            'cohort_name'     => $cohort,
+            'file_name'       => $fileName,
+            'total_count'     => $totalCount,
+            'error_count'     => $errorCount,
+            'duplicate_count' => $dupCount,
+        ]);
         jsonSuccess($result, "{$result['inserted']}명이 등록되었습니다.");
     } catch (\Exception $e) {
         jsonError('등록 중 오류가 발생했습니다: ' . $e->getMessage(), 500);
     }
+    break;
+
+case 'member_bulk_logs':
+    $admin = requireAdmin(['operation']);
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT id, admin_name, cohort_name, file_name, total_count, success_count, error_count, duplicate_count, created_at
+        FROM member_import_logs
+        ORDER BY created_at DESC
+        LIMIT 50
+    ");
+    $stmt->execute();
+    jsonSuccess(['logs' => $stmt->fetchAll()]);
     break;
 
 case 'member_bulk_template':

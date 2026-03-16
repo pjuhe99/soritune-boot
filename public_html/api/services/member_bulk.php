@@ -267,7 +267,13 @@ function fetchColumnSet(PDO $db, string $sql, array $params): array {
 
 // ── 일괄 등록 ────────────────────────────────────────────────
 
-function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
+/**
+ * @param array  $members   검증 통과한 회원 목록
+ * @param int    $cohortId
+ * @param int    $adminId
+ * @param array  $logMeta   이력 메타: file_name, total_count, error_count, duplicate_count, admin_name, cohort_name
+ */
+function insertBulkMembers(array $members, int $cohortId, int $adminId, array $logMeta = []): array {
     $db = getDB();
     $ids = [];
 
@@ -284,11 +290,32 @@ function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
             ]);
             $ids[] = $newId;
         }
+
+        // 이력 저장
+        $logStmt = $db->prepare("
+            INSERT INTO member_import_logs
+                (admin_id, admin_name, cohort_id, cohort_name, file_name, total_count, success_count, error_count, duplicate_count, member_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $logStmt->execute([
+            $adminId,
+            $logMeta['admin_name'] ?? '',
+            $cohortId,
+            $logMeta['cohort_name'] ?? '',
+            $logMeta['file_name'] ?? null,
+            $logMeta['total_count'] ?? count($members),
+            count($ids),
+            $logMeta['error_count'] ?? 0,
+            $logMeta['duplicate_count'] ?? 0,
+            json_encode($ids),
+        ]);
+        $logId = (int)$db->lastInsertId();
+
         $db->commit();
     } catch (\Exception $e) {
         $db->rollBack();
         throw $e;
     }
 
-    return ['inserted' => count($ids), 'ids' => $ids];
+    return ['inserted' => count($ids), 'ids' => $ids, 'log_id' => $logId];
 }

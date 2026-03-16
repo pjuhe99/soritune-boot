@@ -146,6 +146,12 @@
 .text-corrected { color: #2563eb; font-size: 0.8rem; }
 .val-corrected { border-bottom: 1px dashed #2563eb; color: #2563eb; cursor: help; }
 
+/* Import logs */
+.bulk-logs-table { font-size: 0.83rem; }
+.bulk-logs-table th { white-space: nowrap; }
+.bulk-logs-table .log-date { white-space: nowrap; color: var(--text-secondary, #6b7280); font-size: 0.8rem; }
+.bulk-logs-table .log-file { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Badge styles (reuse existing where possible) */
 .badge-success { background: #ecfdf5; color: #059669; }
 .badge-warning { background: #fffbeb; color: #d97706; }
