@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/study.css?v=20260313a">
     <link rel="stylesheet" href="/css/lecture.css?v=20260313">
-    <link rel="stylesheet" href="/css/member.css?v=20260316">
+    <link rel="stylesheet" href="/css/member.css?v=20260316b">
     <link rel="stylesheet" href="/css/member-tabs.css?v=20260315">
     <link rel="stylesheet" href="/css/member-calendar.css?v=20260315">
     <link rel="stylesheet" href="/css/member-assignments.css?v=20260316">
@@ -31,7 +31,7 @@
     <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
     <script src="/js/member-utils.js?v=20260315"></script>
     <script src="/js/member-tabs.js?v=20260315"></script>
-    <script src="/js/member-home.js?v=20260316"></script>
+    <script src="/js/member-home.js?v=20260316b"></script>
     <script src="/js/member-shortcuts.js?v=20260316"></script>
     <script src="/js/member-calendar-detail.js?v=20260315"></script>
     <script src="/js/member-calendar.js?v=20260315"></script>
@@ -39,7 +39,7 @@
     <script src="/js/member-assignments.js?v=20260316"></script>
     <script src="/js/member-progress.js?v=20260315"></script>
     <script src="/js/member-bootees.js?v=20260315"></script>
-    <script src="/js/member.js?v=20260315"></script>
+    <script src="/js/member.js?v=20260316b"></script>
     <script>
         MemberApp.init();
         if ('serviceWorker' in navigator) {

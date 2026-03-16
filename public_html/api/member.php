@@ -15,29 +15,18 @@ switch ($action) {
 case 'login':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $input = getJsonInput();
-    $name      = trim($input['name'] ?? '');
-    $phoneLast = trim($input['phone_last4'] ?? '');
+    $phoneRaw = trim($input['phone'] ?? '');
 
-    if (!$name || !$phoneLast) jsonError('이름과 전화번호 뒷자리를 입력해주세요.');
-    if (strlen($phoneLast) !== 4 || !ctype_digit($phoneLast)) jsonError('전화번호 뒷자리 4자리를 입력해주세요.');
+    if (!$phoneRaw) jsonError('휴대폰번호를 입력해주세요.');
+    $phone = normalizePhone($phoneRaw);
+    if (strlen($phone) < 10 || strlen($phone) > 11) jsonError('올바른 휴대폰번호를 입력해주세요. (10~11자리)');
 
     $db = getDB();
-    $stmt = $db->prepare("
-        SELECT bm.*, c.cohort,
-               COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
-               bg.name AS group_name
-        FROM bootcamp_members bm
-        JOIN cohorts c ON bm.cohort_id = c.id
-        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
-        WHERE bm.real_name = ? AND RIGHT(bm.phone, 4) = ? AND bm.is_active = 1
-        LIMIT 1
-    ");
-    $stmt->execute([$name, $phoneLast]);
-    $member = $stmt->fetch();
+    $member = findMemberByPhone($db, $phone);
 
-    if (!$member) jsonError('일치하는 회원 정보가 없습니다.');
+    if (!$member) jsonError('등록되지 않은 휴대폰번호입니다.');
 
-    loginMember($member['id'], $member['real_name'], $member['cohort']);
+    loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
 
     // Get current score + coin
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
@@ -59,6 +48,7 @@ case 'login':
             'kakao_link'  => $member['kakao_link'] ?: null,
             'score'       => $score,
             'coin'        => $coin,
+            'needs_nickname' => !hasNickname($member['nickname']),
         ],
     ], '로그인 성공');
     break;
@@ -99,6 +89,7 @@ case 'check_session':
                     'kakao_link'  => $member['kakao_link'] ?: null,
                     'score'       => $score,
                     'coin'        => $coin,
+                    'needs_nickname' => !hasNickname($member['nickname']),
                 ],
             ]);
         }
@@ -135,6 +126,24 @@ case 'dashboard':
     $member['score'] = $score;
     $member['coin'] = $coin;
     jsonSuccess(['member' => $member]);
+    break;
+
+case 'save_nickname':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = requireMember();
+    $input = getJsonInput();
+    $nickname = trim($input['nickname'] ?? '');
+
+    if ($nickname === '') jsonError('닉네임을 입력해주세요.');
+    if (mb_strlen($nickname) > 20) jsonError('닉네임은 20자 이내로 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare('UPDATE bootcamp_members SET nickname = ? WHERE id = ?');
+    $stmt->execute([$nickname, $s['member_id']]);
+
+    updateMemberNickname($nickname);
+
+    jsonSuccess(['nickname' => $nickname], '닉네임이 저장되었습니다.');
     break;
 
 default:

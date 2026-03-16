@@ -21,7 +21,7 @@ const MemberHome = (() => {
     function render(headerEl, member) {
         headerEl.innerHTML = `
             <div class="member-info-card">
-                <div class="member-nickname">${App.esc(member.nickname)}</div>
+                <div class="member-nickname">${App.esc(member.nickname || member.member_name)}</div>
                 <div class="member-realname">${App.esc(member.member_name)}${member.group_name ? ` · ${App.esc(member.group_name)}` : ''}</div>
                 <div class="member-stats">
                     <div class="member-stat">

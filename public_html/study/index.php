@@ -22,7 +22,7 @@ require_once __DIR__ . '/../config.php';
     <script src="/js/toast.js?v=20260227"></script>
     <script src="/js/common.js?v=20260313c"></script>
     <script src="/js/calendar.js?v=20260312"></script>
-    <script src="/js/study.js?v=20260313"></script>
+    <script src="/js/study.js?v=20260316b"></script>
     <script>StudyApp.init();</script>
 </body>
 </html>

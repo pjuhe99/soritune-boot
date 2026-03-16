@@ -35,12 +35,11 @@ const StudyApp = (() => {
                     <p class="login-subtitle">복습클래스</p>
                     <form id="login-form">
                         <div class="form-group">
-                            <label class="form-label">이름</label>
-                            <input type="text" class="form-input" id="login-name" placeholder="홍길동" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">전화번호 뒤 4자리</label>
-                            <input type="tel" class="form-input" id="login-phone" placeholder="5678" maxlength="4" pattern="[0-9]{4}" required>
+                            <label class="form-label">휴대폰번호</label>
+                            <input type="tel" class="form-input" id="login-phone"
+                                   placeholder="01012345678" maxlength="11"
+                                   inputmode="numeric" pattern="[0-9]*" required>
+                            <p class="form-hint" style="color:var(--color-text-sub);font-size:var(--text-xs);margin-top:var(--space-1);">하이픈(-) 없이 숫자만 입력해주세요</p>
                         </div>
                         <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
                     </form>
@@ -49,12 +48,16 @@ const StudyApp = (() => {
         `;
         document.getElementById('login-form').onsubmit = async (e) => {
             e.preventDefault();
-            const name = document.getElementById('login-name').value.trim();
-            const phoneLast4 = document.getElementById('login-phone').value.trim();
-            if (!name || !phoneLast4) return;
+            const phoneRaw = document.getElementById('login-phone').value.trim();
+            const phone = phoneRaw.replace(/[^0-9]/g, '');
+            if (!phone) return;
+            if (phone.length < 10 || phone.length > 11) {
+                Toast.error('올바른 휴대폰번호를 입력해주세요.');
+                return;
+            }
 
             App.showLoading();
-            const r = await App.post('/api/member.php?action=login', { name, phone_last4: phoneLast4 });
+            const r = await App.post('/api/member.php?action=login', { phone });
             App.hideLoading();
 
             if (r.success) {
@@ -73,7 +76,7 @@ const StudyApp = (() => {
                 <div class="study-header">
                     <div class="study-header-left">
                         <div class="study-header-title">복습클래스</div>
-                        <span class="study-header-user">${App.esc(member.nickname)}</span>
+                        <span class="study-header-user">${App.esc(member.nickname || member.member_name)}</span>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
                         <button class="btn btn-primary btn-sm" id="btn-create-study">복습클래스 예약</button>

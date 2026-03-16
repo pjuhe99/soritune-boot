@@ -59,12 +59,13 @@ function destroySession(string $tier): void {
 
 // ── Member Session ─────────────────────────────────────────
 
-function loginMember(int $id, string $name, string $cohort): void {
+function loginMember(int $id, string $name, string $cohort, ?string $nickname = null): void {
     startSessionFor('member');
     session_regenerate_id(true);
     $_SESSION['member_id']   = $id;
     $_SESSION['member_name'] = $name;
     $_SESSION['cohort']      = $cohort;
+    $_SESSION['nickname']    = $nickname;
     session_write_close();   // flush to disk + release lock before response
 }
 
@@ -78,6 +79,7 @@ function getMemberSession(): ?array {
         'member_id'   => $_SESSION['member_id'],
         'member_name' => $_SESSION['member_name'],
         'cohort'      => $_SESSION['cohort'],
+        'nickname'    => $_SESSION['nickname'] ?? null,
     ];
     session_write_close();   // release lock so parallel requests don't block
     return $data;
@@ -153,4 +155,52 @@ function getEffectiveCohort(array $session): ?string {
         return getSetting('current_cohort');
     }
     return $session['cohort'];
+}
+
+// ── Phone Normalization ───────────────────────────────────
+
+/**
+ * 전화번호 정규화: 숫자만 남김
+ */
+function normalizePhone(string $phone): string {
+    return preg_replace('/[^0-9]/', '', $phone);
+}
+
+/**
+ * 전화번호로 활성 회원 조회
+ */
+function findMemberByPhone(PDO $db, string $phone): ?array {
+    $normalized = normalizePhone($phone);
+    if (!$normalized) return null;
+
+    $stmt = $db->prepare("
+        SELECT bm.*, c.cohort,
+               COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
+               bg.name AS group_name
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ? AND bm.is_active = 1
+        LIMIT 1
+    ");
+    $stmt->execute([$normalized]);
+    return $stmt->fetch() ?: null;
+}
+
+// ── Nickname Helpers ──────────────────────────────────────
+
+/**
+ * 닉네임이 설정되어 있는지 확인
+ */
+function hasNickname(?string $nickname): bool {
+    return $nickname !== null && trim($nickname) !== '';
+}
+
+/**
+ * 세션의 닉네임 갱신
+ */
+function updateMemberNickname(string $nickname): void {
+    startSessionFor('member');
+    $_SESSION['nickname'] = $nickname;
+    session_write_close();
 }

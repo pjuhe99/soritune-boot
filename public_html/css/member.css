@@ -31,7 +31,41 @@
     text-align: center;
     color: var(--color-text-sub);
     font-size: var(--text-md);
+    margin-bottom: var(--space-4);
+}
+
+.member-login .login-desc {
+    text-align: center;
+    color: var(--color-text-sub);
+    font-size: var(--text-sm);
     margin-bottom: var(--space-8);
+}
+
+.member-login .login-subtitle:last-of-type {
+    margin-bottom: var(--space-8);
+}
+
+.member-login .form-hint {
+    color: var(--color-text-sub);
+    font-size: var(--text-xs);
+    margin-top: var(--space-1);
+}
+
+/* ── Nickname Confirm Modal ─────────────────────────────── */
+.nickname-confirm-msg {
+    text-align: center;
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-6);
+    padding: var(--space-4) 0;
+}
+
+.nickname-confirm-actions {
+    display: flex;
+    gap: var(--space-3);
+}
+
+.nickname-confirm-actions .btn {
+    flex: 1;
 }
 
 /* ── Dashboard ─────────────────────────────────────────────── */
