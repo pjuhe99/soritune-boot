@@ -264,6 +264,18 @@ case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
 // ── Curriculum (진도) ──────────────────────────────────────────
 case 'curriculum_today':    handleCurriculumToday(); break;
 
+// ── System Contents (시스템 콘텐츠) ────────────────────────────
+case 'system_content':
+    requireMember();
+    $key = trim($_GET['key'] ?? '');
+    if (!$key) jsonError('key 필요');
+    $db = getDB();
+    $stmt = $db->prepare("SELECT content_markdown FROM system_contents WHERE content_key = ? LIMIT 1");
+    $stmt->execute([$key]);
+    $row = $stmt->fetch();
+    jsonSuccess(['content' => $row ? $row['content_markdown'] : null]);
+    break;
+
 // ── Member Page (사용자 페이지 전용) ──────────────────────────
 case 'member_checks':            handleMemberChecks(); break;
 case 'member_checks_summary':    handleMemberChecksSummary(); break;

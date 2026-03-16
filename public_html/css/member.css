@@ -69,6 +69,7 @@
 
 /* ── Info Card ─────────────────────────────────────────────── */
 .member-info-card {
+    position: relative;
     background: var(--color-bg);
     border-radius: var(--radius-xl);
     padding: var(--space-8) var(--space-5);
@@ -121,6 +122,116 @@
     font-size: var(--text-sm);
     color: var(--color-text-sub);
     margin-top: var(--space-1);
+}
+
+/* ── Score/Coin Guide Button ──────────────────────────────── */
+.score-coin-guide-btn {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-gray-300);
+    background: var(--color-bg);
+    cursor: pointer;
+    padding: 0;
+    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.score-coin-guide-btn:hover,
+.score-coin-guide-btn:active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-50);
+}
+
+.score-coin-guide-icon {
+    font-size: 14px;
+    font-weight: var(--font-bold);
+    font-style: italic;
+    color: var(--color-gray-400);
+    line-height: 1;
+    transition: color var(--transition-fast);
+}
+
+.score-coin-guide-btn:hover .score-coin-guide-icon,
+.score-coin-guide-btn:active .score-coin-guide-icon {
+    color: var(--color-primary);
+}
+
+/* ── Score/Coin Guide Modal Content ──────────────────────── */
+.score-coin-guide-content h1 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
+    margin: var(--space-4) 0 var(--space-2);
+}
+
+.score-coin-guide-content h1:first-child {
+    margin-top: 0;
+}
+
+.score-coin-guide-content h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-bold);
+    color: var(--color-text);
+    margin: var(--space-4) 0 var(--space-2);
+}
+
+.score-coin-guide-content h2:first-child {
+    margin-top: 0;
+}
+
+.score-coin-guide-content h3 {
+    font-size: var(--text-md);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+    margin: var(--space-3) 0 var(--space-1);
+}
+
+.score-coin-guide-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-2);
+}
+
+.score-coin-guide-content li {
+    position: relative;
+    padding-left: var(--space-4);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text);
+    margin-bottom: var(--space-1);
+}
+
+.score-coin-guide-content li::before {
+    content: '•';
+    position: absolute;
+    left: var(--space-1);
+    color: var(--color-primary);
+    font-weight: var(--font-bold);
+}
+
+.score-coin-guide-content p {
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text);
+    margin: 0 0 var(--space-1);
+}
+
+.score-coin-guide-content strong {
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+}
+
+.score-coin-guide-empty {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    text-align: center;
+    padding: var(--space-6) 0;
 }
 
 /* ── Curriculum Card (오늘의 진도 & 할 일) ─────────────────── */

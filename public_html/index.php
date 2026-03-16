@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/css/calendar.css?v=20260313">
     <link rel="stylesheet" href="/css/study.css?v=20260313a">
     <link rel="stylesheet" href="/css/lecture.css?v=20260313">
-    <link rel="stylesheet" href="/css/member.css?v=20260315">
+    <link rel="stylesheet" href="/css/member.css?v=20260316">
     <link rel="stylesheet" href="/css/member-tabs.css?v=20260315">
     <link rel="stylesheet" href="/css/member-calendar.css?v=20260315">
     <link rel="stylesheet" href="/css/member-assignments.css?v=20260316">

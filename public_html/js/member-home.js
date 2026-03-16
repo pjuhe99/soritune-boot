@@ -49,10 +49,15 @@ const MemberHome = (() => {
                         <div class="member-coin-label">코인</div>
                     </div>
                 </div>
+                <button class="score-coin-guide-btn" id="score-coin-guide-btn" title="점수와 코인은 어떻게 얻나요?">
+                    <span class="score-coin-guide-icon">i</span>
+                </button>
             </div>
             <div id="member-curriculum-section"></div>
             <div id="member-shortcuts-section"></div>
         `;
+
+        document.getElementById('score-coin-guide-btn').onclick = showScoreCoinGuide;
 
         loadCurriculumToday();
         MemberShortcuts.render(document.getElementById('member-shortcuts-section'), member);
@@ -114,6 +119,51 @@ const MemberHome = (() => {
                 <div class="cur-help-desc">${descHtml}</div>
             </div>
         `);
+    }
+
+    // ── 점수/코인 안내 팝업 ──
+
+    function renderMarkdown(md) {
+        if (!md) return '';
+        const lines = md.split('\n');
+        let html = '';
+        let inList = false;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+
+            if (trimmed.startsWith('- ')) {
+                if (!inList) { html += '<ul>'; inList = true; }
+                html += '<li>' + trimmed.slice(2) + '</li>';
+                continue;
+            }
+
+            if (inList) { html += '</ul>'; inList = false; }
+
+            if (trimmed.startsWith('### ')) { html += '<h3>' + trimmed.slice(4) + '</h3>'; }
+            else if (trimmed.startsWith('## ')) { html += '<h2>' + trimmed.slice(3) + '</h2>'; }
+            else if (trimmed.startsWith('# ')) { html += '<h1>' + trimmed.slice(2) + '</h1>'; }
+            else if (trimmed === '') { html += '<br>'; }
+            else { html += '<p>' + trimmed + '</p>'; }
+        }
+        if (inList) html += '</ul>';
+
+        return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    }
+
+    let guideCache = null;
+
+    async function showScoreCoinGuide() {
+        if (guideCache === undefined || guideCache === null) {
+            const r = await App.get(API + 'system_content', { key: 'score_coin_guide' });
+            guideCache = r.success ? r.content : null;
+        }
+
+        const html = guideCache
+            ? `<div class="score-coin-guide-content">${renderMarkdown(guideCache)}</div>`
+            : '<p class="score-coin-guide-empty">점수와 코인 안내가 준비되지 않았습니다.</p>';
+
+        App.openModal('점수 / 코인 안내', html);
     }
 
     return { render };
