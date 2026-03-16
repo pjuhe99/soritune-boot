@@ -146,21 +146,4 @@ function handleMemberDelete($method) {
     jsonSuccess([], '회원이 삭제되었습니다.');
 }
 
-/**
- * 참여 횟수 계산: 다른 cohort에 같은 phone 또는 user_id가 있는 수 + 1
- */
-function calcParticipationCount($db, $phone, $userId, $cohortId) {
-    if (!$phone && !$userId) return 1;
-
-    $conds = [];
-    $params = [];
-    if ($phone) { $conds[] = "(bm.phone = ? AND bm.phone != '')"; $params[] = $phone; }
-    if ($userId) { $conds[] = "(bm.user_id = ? AND bm.user_id != '')"; $params[] = $userId; }
-    $params[] = $cohortId;
-
-    $stmt = $db->prepare(
-        "SELECT COUNT(DISTINCT bm.cohort_id) AS cnt FROM bootcamp_members bm WHERE (" . implode(' OR ', $conds) . ") AND bm.cohort_id != ?"
-    );
-    $stmt->execute($params);
-    return (int)$stmt->fetchColumn() + 1;
-}
+// calcParticipationCount()는 member_create.php에서 공통 정의됨
