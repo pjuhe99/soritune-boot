@@ -127,25 +127,75 @@ const MemberHome = (() => {
         const lines = md.split('\n');
         let html = '';
         let inList = false;
+        let inBlockquote = false;
+        let inTable = false;
+        let tableHeaderDone = false;
+
+        function closeOpen() {
+            if (inList) { html += '</ul>'; inList = false; }
+            if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
+            if (inTable) { html += '</tbody></table>'; inTable = false; tableHeaderDone = false; }
+        }
 
         for (const line of lines) {
             const trimmed = line.trim();
 
+            // 테이블 구분선 (|---|---|) — 건너뜀
+            if (/^\|[\s\-:|]+\|$/.test(trimmed)) {
+                tableHeaderDone = true;
+                continue;
+            }
+
+            // 테이블 행
+            if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                if (inList) { html += '</ul>'; inList = false; }
+                if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
+                const cells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+                if (!inTable) {
+                    html += '<table class="guide-table"><thead><tr>';
+                    cells.forEach(c => { html += '<th>' + c + '</th>'; });
+                    html += '</tr></thead><tbody>';
+                    inTable = true;
+                    tableHeaderDone = false;
+                } else {
+                    html += '<tr>';
+                    cells.forEach(c => { html += '<td>' + c + '</td>'; });
+                    html += '</tr>';
+                }
+                continue;
+            }
+
+            // 테이블이 끝남
+            if (inTable) { html += '</tbody></table>'; inTable = false; tableHeaderDone = false; }
+
+            // 리스트
             if (trimmed.startsWith('- ')) {
+                if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
                 if (!inList) { html += '<ul>'; inList = true; }
                 html += '<li>' + trimmed.slice(2) + '</li>';
                 continue;
             }
-
             if (inList) { html += '</ul>'; inList = false; }
 
+            // 인용구
+            if (trimmed.startsWith('> ')) {
+                if (!inBlockquote) { html += '<blockquote>'; inBlockquote = true; }
+                html += '<p>' + trimmed.slice(2) + '</p>';
+                continue;
+            }
+            if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
+
+            // 구분선
+            if (/^---+$/.test(trimmed)) { html += '<hr>'; continue; }
+
+            // 제목
             if (trimmed.startsWith('### ')) { html += '<h3>' + trimmed.slice(4) + '</h3>'; }
             else if (trimmed.startsWith('## ')) { html += '<h2>' + trimmed.slice(3) + '</h2>'; }
             else if (trimmed.startsWith('# ')) { html += '<h1>' + trimmed.slice(2) + '</h1>'; }
-            else if (trimmed === '') { html += '<br>'; }
+            else if (trimmed === '') { /* 빈 줄 무시 */ }
             else { html += '<p>' + trimmed + '</p>'; }
         }
-        if (inList) html += '</ul>';
+        closeOpen();
 
         return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     }

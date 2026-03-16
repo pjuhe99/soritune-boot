@@ -194,6 +194,56 @@
     color: var(--color-text);
 }
 
+.score-coin-guide-content blockquote {
+    background: var(--color-primary-50);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+}
+
+.score-coin-guide-content blockquote p {
+    margin: 0 0 var(--space-1);
+}
+
+.score-coin-guide-content blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.score-coin-guide-content hr {
+    border: none;
+    border-top: 1px solid var(--color-gray-200);
+    margin: var(--space-4) 0;
+}
+
+.score-coin-guide-content .guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+    margin: var(--space-3) 0;
+}
+
+.score-coin-guide-content .guide-table th {
+    background: var(--color-gray-50);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+    padding: var(--space-2) var(--space-2);
+    border-bottom: 2px solid var(--color-gray-200);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.score-coin-guide-content .guide-table td {
+    padding: var(--space-2) var(--space-2);
+    border-bottom: 1px solid var(--color-gray-100);
+    color: var(--color-text);
+    vertical-align: top;
+}
+
+.score-coin-guide-content .guide-table tr:last-child td {
+    border-bottom: none;
+}
+
 .score-coin-guide-empty {
     font-size: var(--text-sm);
     color: var(--color-text-sub);
