@@ -53,35 +53,18 @@ function handleMemberCreate($method) {
     if (!$cohortId || !$nickname) jsonError('cohort_id, nickname 필요');
 
     $db = getDB();
-    $phone = trim($input['phone'] ?? '') ?: null;
-    $userId = $input['user_id'] ?? null;
-    $participationCount = calcParticipationCount($db, $phone, $userId, $cohortId);
-
-    $stmt = $db->prepare("
-        INSERT INTO bootcamp_members (user_id, cohort_id, group_id, nickname, real_name, phone, cafe_member_key, member_role, stage_no, joined_at, participation_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([
-        $userId,
-        $cohortId,
-        $input['group_id'] ?? null,
-        $nickname,
-        trim($input['real_name'] ?? '') ?: null,
-        $phone,
-        trim($input['cafe_member_key'] ?? '') ?: null,
-        $input['member_role'] ?? 'member',
-        (int)($input['stage_no'] ?? 1),
-        $input['joined_at'] ?? date('Y-m-d'),
-        $participationCount,
+    $newId = createMember($db, [
+        'cohort_id'       => $cohortId,
+        'nickname'        => $nickname,
+        'real_name'       => trim($input['real_name'] ?? '') ?: null,
+        'phone'           => trim($input['phone'] ?? '') ?: null,
+        'user_id'         => $input['user_id'] ?? null,
+        'group_id'        => $input['group_id'] ?? null,
+        'cafe_member_key' => trim($input['cafe_member_key'] ?? '') ?: null,
+        'member_role'     => $input['member_role'] ?? 'member',
+        'stage_no'        => (int)($input['stage_no'] ?? 1),
+        'joined_at'       => $input['joined_at'] ?? date('Y-m-d'),
     ]);
-    $newId = (int)$db->lastInsertId();
-
-    // member_scores, member_coin_balances 초기화
-    $db->prepare("INSERT INTO member_scores (member_id, current_score) VALUES (?, ?)")->execute([$newId, SCORE_START]);
-    $db->prepare("INSERT INTO member_coin_balances (member_id, current_coin) VALUES (?, 0)")->execute([$newId]);
-
-    // 집계 테이블 갱신
-    refreshMemberStats($db, $phone, $userId);
 
     jsonSuccess(['id' => $newId], '회원이 추가되었습니다.');
 }

@@ -384,33 +384,21 @@ case 'member_create':
     if (!$realName || !$nickname) jsonError('이름과 닉네임을 입력해주세요.');
 
     $db = getDB();
-    // Resolve cohort name to cohort_id
     $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
     $stmt->execute([$cohort]);
     $cohortRow = $stmt->fetch();
     if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
-    $cohortId = (int)$cohortRow['id'];
 
-    // Calculate participation_count
-    $participationCount = 1;
-    if (($phone && $phone !== '') || ($userId && $userId !== '')) {
-        $conds = [];
-        $cParams = [];
-        if ($phone && $phone !== '') { $conds[] = "(bm.phone = ? AND bm.phone != '')"; $cParams[] = $phone; }
-        if ($userId && $userId !== '') { $conds[] = "(bm.user_id = ? AND bm.user_id != '')"; $cParams[] = $userId; }
-        $cParams[] = $cohortId;
-        $pcStmt = $db->prepare("SELECT COUNT(DISTINCT bm.cohort_id) AS cnt FROM bootcamp_members bm WHERE (" . implode(' OR ', $conds) . ") AND bm.cohort_id != ?");
-        $pcStmt->execute($cParams);
-        $participationCount = (int)$pcStmt->fetchColumn() + 1;
-    }
+    $newId = createMember($db, [
+        'cohort_id' => (int)$cohortRow['id'],
+        'nickname'  => $nickname,
+        'real_name' => $realName,
+        'phone'     => $phone,
+        'user_id'   => $userId,
+        'group_id'  => $groupId,
+    ]);
 
-    $stmt = $db->prepare('INSERT INTO bootcamp_members (real_name, nickname, phone, user_id, cohort_id, group_id, participation_count) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$realName, $nickname, $phone ?: null, $userId, $cohortId, $groupId, $participationCount]);
-
-    // 집계 테이블 갱신
-    refreshMemberStats($db, $phone ?: null, $userId);
-
-    jsonSuccess(['id' => (int)$db->lastInsertId()], '회원이 추가되었습니다.');
+    jsonSuccess(['id' => $newId], '회원이 추가되었습니다.');
     break;
 
 case 'member_update':

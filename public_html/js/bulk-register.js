@@ -800,7 +800,14 @@ const BulkRegisterApp = (() => {
         const validMembers = validationResult.valid;
         if (validMembers.length === 0) return;
 
-        const confirmed = await App.confirm(`${validMembers.length}명을 등록하시겠습니까?\n\n(조 배정은 등록 후 별도로 진행됩니다)`);
+        const errorCount = validationResult.summary.error;
+        let msg = `${validMembers.length}명을 등록하시겠습니까?`;
+        if (errorCount > 0) {
+            msg += `\n\n(오류 ${errorCount}건은 제외됩니다)`;
+        }
+        msg += '\n\n조 배정은 등록 후 별도로 진행됩니다.';
+
+        const confirmed = await App.confirm(msg);
         if (!confirmed) return;
 
         App.showLoading();
@@ -823,23 +830,47 @@ const BulkRegisterApp = (() => {
         }
     }
 
-    function renderSuccess(count) {
+    function renderSuccess(insertedCount) {
+        const s = validationResult.summary;
+        const excludedCount = s.error;
+
         container.innerHTML = `
             <div class="bulk-register">
                 <div class="bulk-success">
                     <div class="bulk-success-icon">&#10003;</div>
-                    <h3>${count}명이 등록되었습니다</h3>
-                    <p>조 배정은 "조 배정" 탭에서 진행해주세요.</p>
+                    <h3>등록 완료</h3>
+
+                    <div class="bulk-success-summary">
+                        <div class="success-stat">
+                            <span class="success-stat-num">${s.total}</span>
+                            <span class="success-stat-label">전체 업로드</span>
+                        </div>
+                        <div class="success-stat ok">
+                            <span class="success-stat-num">${insertedCount}</span>
+                            <span class="success-stat-label">등록 완료</span>
+                        </div>
+                        ${excludedCount > 0 ? `
+                        <div class="success-stat error">
+                            <span class="success-stat-num">${excludedCount}</span>
+                            <span class="success-stat-label">오류 제외</span>
+                        </div>` : ''}
+                    </div>
+
+                    <p class="bulk-success-note">모든 회원은 <strong>조 미배정</strong> 상태로 등록되었습니다.<br>"조 배정" 탭에서 조를 배정해주세요.</p>
+
                     <div class="bulk-btn-row mt-md">
-                        <button class="btn btn-primary" id="bulk-done-btn">확인</button>
+                        <button class="btn btn-primary" id="bulk-done-btn">회원 관리로 이동</button>
                         <button class="btn btn-secondary" id="bulk-more-btn">추가 등록</button>
                     </div>
                 </div>
             </div>
         `;
         document.getElementById('bulk-done-btn').onclick = () => {
-            const memberTab = document.querySelector('[data-hash="members"]');
-            if (memberTab) memberTab.click();
+            // 회원 관리 탭의 loaded 플래그 초기화하여 목록 새로고침
+            const memberTab = document.getElementById('tab-members');
+            if (memberTab) memberTab.dataset.loaded = '';
+            const memberBtn = document.querySelector('[data-hash="members"]');
+            if (memberBtn) memberBtn.click();
         };
         document.getElementById('bulk-more-btn').onclick = resetState;
     }

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
 
 // Services
+require_once __DIR__ . '/services/member_create.php';
 require_once __DIR__ . '/services/member.php';
 require_once __DIR__ . '/services/member_stats.php';
 require_once __DIR__ . '/services/check.php';

@@ -4,23 +4,7 @@
  * 회원 일괄 등록: 검증 + 등록 처리
  */
 
-require_once __DIR__ . '/member_stats.php';
-
-if (!function_exists('calcParticipationCount')) {
-    function calcParticipationCount($db, $phone, $userId, $cohortId) {
-        if (!$phone && !$userId) return 1;
-        $conds = [];
-        $params = [];
-        if ($phone) { $conds[] = "(bm.phone = ? AND bm.phone != '')"; $params[] = $phone; }
-        if ($userId) { $conds[] = "(bm.user_id = ? AND bm.user_id != '')"; $params[] = $userId; }
-        $params[] = $cohortId;
-        $stmt = $db->prepare(
-            "SELECT COUNT(DISTINCT bm.cohort_id) AS cnt FROM bootcamp_members bm WHERE (" . implode(' OR ', $conds) . ") AND bm.cohort_id != ?"
-        );
-        $stmt->execute($params);
-        return (int)$stmt->fetchColumn() + 1;
-    }
-}
+require_once __DIR__ . '/member_create.php';
 
 // ── 단계 값 정규화 ──────────────────────────────────────────
 
@@ -279,44 +263,26 @@ function fetchColumnSet(PDO $db, string $sql, array $params): array {
     return array_flip($values);
 }
 
+// ── 공통 회원 생성 ───────────────────────────────────────────
+
 // ── 일괄 등록 ────────────────────────────────────────────────
 
 function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
     $db = getDB();
     $ids = [];
 
-    $insertStmt = $db->prepare("
-        INSERT INTO bootcamp_members (cohort_id, group_id, user_id, nickname, real_name, phone, member_role, stage_no, joined_at, participation_count)
-        VALUES (?, NULL, ?, ?, ?, ?, 'member', ?, CURDATE(), ?)
-    ");
-    $scoreStmt = $db->prepare("INSERT INTO member_scores (member_id, current_score) VALUES (?, ?)");
-    $coinStmt  = $db->prepare("INSERT INTO member_coin_balances (member_id, current_coin) VALUES (?, 0)");
-
-    $scoreStart = defined('SCORE_START') ? SCORE_START : 0;
-
     $db->beginTransaction();
     try {
         foreach ($members as $m) {
-            $phone  = $m['phone'] ?: null;
-            $userId = !empty($m['user_id']) ? $m['user_id'] : null;
-            $participationCount = calcParticipationCount($db, $phone, $userId, $cohortId);
-
-            $insertStmt->execute([
-                $cohortId,
-                $userId,
-                $m['nickname'],
-                $m['real_name'],
-                $phone,
-                $m['stage_no'],
-                $participationCount,
+            $newId = createMember($db, [
+                'cohort_id' => $cohortId,
+                'nickname'  => $m['nickname'],
+                'real_name' => $m['real_name'],
+                'phone'     => $m['phone'] ?: null,
+                'user_id'   => !empty($m['user_id']) ? $m['user_id'] : null,
+                'stage_no'  => $m['stage_no'],
             ]);
-            $newId = (int)$db->lastInsertId();
             $ids[] = $newId;
-
-            $scoreStmt->execute([$newId, $scoreStart]);
-            $coinStmt->execute([$newId]);
-
-            refreshMemberStats($db, $phone, $userId);
         }
         $db->commit();
     } catch (\Exception $e) {
