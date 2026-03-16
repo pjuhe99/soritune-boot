@@ -5,28 +5,12 @@
 const MemberHome = (() => {
     const API = '/api/bootcamp.php?action=';
 
-    // ── 설명 팝업 데이터 ──
-    const CURRICULUM_HELP = {
-        malkka_mission: {
-            title: '말까미션이란?',
-            description: '말까미션은 매일 30초~1분 동안 또박또박 발음하며 말을 깨끗하게 하는 연습입니다.\n\n목표 문장을 읽고 녹음하여 카페에 인증해주세요.',
-            images: ['/images/help/malkka_mission.png'],
-        },
-        naemat33_mission: {
-            title: '내맛33미션이란?',
-            description: '내 맛을 33번 반복하여 체화하는 미션입니다.\n\n지정된 연습 문장을 33번 반복하고 카페에 인증해주세요.',
-            images: ['/images/help/naemat33_mission.png'],
-        },
-        zoom_or_daily_mission: {
-            title: '줌 강의 / 데일리미션이란?',
-            description: '줌 강의가 있는 날은 줌 강의에 참석하고, 줌 강의가 없는 날은 데일리미션을 수행합니다.\n\n줌 강의 참석 또는 데일리미션 완료 후 카페에 인증해주세요.',
-            images: ['/images/help/zoom_or_daily_mission.png'],
-        },
-        hamummal: {
-            title: '하멈말이란?',
-            description: '하루를 멈추고 말하기 — 하루를 돌아보며 짧게 말해보는 시간입니다.\n\n오늘 하루를 한 문장으로 정리하여 카페에 인증해주세요.',
-            images: ['/images/help/hamummal.png'],
-        },
+    // ── 커리큘럼 도움말 키 매핑 (task_type → system_contents key) ──
+    const CURRICULUM_HELP_KEYS = {
+        malkka_mission: 'help_malkka_mission',
+        naemat33_mission: 'help_naemat33_mission',
+        zoom_or_daily_mission: 'help_zoom_or_daily_mission',
+        hamummal: 'help_hamummal',
     };
 
     /**
@@ -82,8 +66,8 @@ const MemberHome = (() => {
 
         const taskHtml = taskItems.map(item => {
             const note = item.note ? `<span class="cur-note">${App.esc(item.note)}</span>` : '';
-            const helpBtn = CURRICULUM_HELP[item.task_type]
-                ? `<button class="cur-help-btn" data-task-type="${App.esc(item.task_type)}">?</button>`
+            const helpBtn = CURRICULUM_HELP_KEYS[item.task_type]
+                ? `<button class="cur-help-btn" data-guide="${App.esc(CURRICULUM_HELP_KEYS[item.task_type])}">?</button>`
                 : '';
             return `<div class="cur-item"><span class="cur-label">${App.esc(item.task_type_label)}</span>${helpBtn}${note}</div>`;
         }).join('');
@@ -97,30 +81,12 @@ const MemberHome = (() => {
             </div>
         `;
 
-        sec.querySelectorAll('.cur-help-btn').forEach(btn => {
-            btn.onclick = () => showCurriculumHelp(btn.dataset.taskType);
+        sec.querySelectorAll('.cur-help-btn[data-guide]').forEach(btn => {
+            btn.onclick = () => showGuide(btn.dataset.guide);
         });
     }
 
-    function showCurriculumHelp(taskType) {
-        const help = CURRICULUM_HELP[taskType];
-        if (!help) return;
-
-        const imagesHtml = (help.images || []).map(url =>
-            `<img src="${App.esc(url)}" class="cur-help-img" alt="" onerror="this.style.display='none'">`
-        ).join('');
-
-        const descHtml = App.esc(help.description || '').replace(/\n/g, '<br>');
-
-        App.openModal(help.title, `
-            <div class="cur-help-body">
-                ${imagesHtml}
-                <div class="cur-help-desc">${descHtml}</div>
-            </div>
-        `);
-    }
-
-    // ── 점수/코인 안내 팝업 ──
+    // ── 안내 팝업 (점수/코인 + 커리큘럼 공용) ──
 
     function renderMarkdown(md) {
         if (!md) return '';
@@ -132,7 +98,7 @@ const MemberHome = (() => {
         let tableHeaderDone = false;
 
         function closeOpen() {
-            if (inList) { html += '</ul>'; inList = false; }
+            if (inList) { html += inList === 'ol' ? '</ol>' : '</ul>'; inList = false; }
             if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
             if (inTable) { html += '</tbody></table>'; inTable = false; tableHeaderDone = false; }
         }
@@ -168,14 +134,24 @@ const MemberHome = (() => {
             // 테이블이 끝남
             if (inTable) { html += '</tbody></table>'; inTable = false; tableHeaderDone = false; }
 
-            // 리스트
+            // 비순서 리스트
             if (trimmed.startsWith('- ')) {
                 if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
-                if (!inList) { html += '<ul>'; inList = true; }
+                if (inList !== 'ul') { if (inList) html += inList === 'ol' ? '</ol>' : '</ul>'; html += '<ul>'; inList = 'ul'; }
                 html += '<li>' + trimmed.slice(2) + '</li>';
                 continue;
             }
-            if (inList) { html += '</ul>'; inList = false; }
+
+            // 순서 리스트
+            const olMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+            if (olMatch) {
+                if (inBlockquote) { html += '</blockquote>'; inBlockquote = false; }
+                if (inList !== 'ol') { if (inList) html += inList === 'ul' ? '</ul>' : '</ol>'; html += '<ol>'; inList = 'ol'; }
+                html += '<li>' + olMatch[2] + '</li>';
+                continue;
+            }
+
+            if (inList) { html += inList === 'ol' ? '</ol>' : '</ul>'; inList = false; }
 
             // 인용구
             if (trimmed.startsWith('> ')) {
@@ -197,12 +173,18 @@ const MemberHome = (() => {
         }
         closeOpen();
 
-        return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        return html
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`(.+?)`/g, '<code>$1</code>');
     }
 
     const GUIDE_TITLES = {
         score_guide: '점수 안내',
         coin_guide: '코인 안내',
+        help_malkka_mission: '말까 미션 안내',
+        help_naemat33_mission: '내맛33 미션 안내',
+        help_zoom_or_daily_mission: '줌 특강 / 데일리 미션 안내',
+        help_hamummal: '하멈말 안내',
     };
 
     const guideCache = {};
