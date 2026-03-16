@@ -34,13 +34,13 @@ const BulkRegisterApp = (() => {
                         <span>템플릿 다운로드</span>
                     </div>
                     <div class="bulk-section-body">
-                        <p class="bulk-desc">아래 템플릿을 다운로드하여 데이터를 입력한 후 업로드해주세요.</p>
+                        <p class="bulk-desc">아래 템플릿을 다운로드한 뒤, 회원 데이터를 입력하여 업로드하세요.</p>
                         <div class="bulk-template-info">
                             <table class="data-table bulk-template-table">
                                 <thead>
                                     <tr>
-                                        <th>이름 <span class="required">*</span></th>
-                                        <th>닉네임 <span class="required">*</span></th>
+                                        <th>이름 <span class="required">*필수</span></th>
+                                        <th>닉네임 <span class="required">*필수</span></th>
                                         <th>아이디</th>
                                         <th>전화번호</th>
                                         <th>단계</th>
@@ -59,21 +59,41 @@ const BulkRegisterApp = (() => {
                                         <td>Bella</td>
                                         <td></td>
                                         <td>01098765432</td>
-                                        <td>1</td>
+                                        <td></td>
                                     </tr>
                                 </tbody>
                             </table>
-                            <ul class="bulk-notes">
-                                <li><span class="required">*</span> <strong>이름, 닉네임</strong>은 필수입니다.</li>
-                                <li><strong>아이디</strong>: 카페/외부 서비스 구분용 (없으면 비워두세요)</li>
-                                <li><strong>전화번호</strong>: 하이픈 포함/미포함 모두 가능 (자동 정규화). 로그인에 사용됩니다.</li>
-                                <li><strong>단계</strong>: 1 또는 2 (미입력 시 1단계)</li>
-                                <li>조 배정은 등록 후 별도로 진행합니다.</li>
-                            </ul>
+
+                            <div class="bulk-guide">
+                                <div class="bulk-guide-title">컬럼별 작성 안내</div>
+                                <dl class="bulk-guide-list">
+                                    <dt>이름 <span class="required">*필수</span></dt>
+                                    <dd>실명을 입력합니다. 비어 있으면 등록할 수 없습니다.</dd>
+                                    <dt>닉네임 <span class="required">*필수</span></dt>
+                                    <dd>부트캠프에서 사용할 이름입니다. 비어 있으면 등록할 수 없습니다.</dd>
+                                    <dt>아이디</dt>
+                                    <dd>카페 ID 등 외부 서비스 구분용입니다. 없으면 비워두세요.</dd>
+                                    <dt>전화번호</dt>
+                                    <dd>회원 로그인에 사용됩니다. 하이픈(-), 공백, 점(.) 포함 가능 (자동 제거).<br>없으면 비워둘 수 있지만, <strong>로그인이 불가</strong>합니다.</dd>
+                                    <dt>단계</dt>
+                                    <dd>1 또는 2를 입력합니다. 비워두면 자동으로 <strong>1단계</strong>가 됩니다.<br>"1단계", "stage2" 같은 표현도 자동 변환됩니다.</dd>
+                                </dl>
+                            </div>
+
+                            <div class="bulk-caution">
+                                <div class="bulk-caution-title">업로드 전 확인사항</div>
+                                <ul>
+                                    <li>첫 번째 행은 반드시 <strong>헤더</strong>여야 합니다 (이름, 닉네임, ...)</li>
+                                    <li>같은 기수에 <strong>전화번호 또는 아이디가 이미 등록된 회원</strong>은 중복으로 제외됩니다</li>
+                                    <li>같은 파일 안에 <strong>동일한 전화번호/아이디</strong>가 있으면 중복 오류가 됩니다</li>
+                                    <li>조 배정은 등록 후 <strong>"조 배정" 탭</strong>에서 별도로 진행합니다</li>
+                                    <li>한 번에 최대 <strong>${MAX_ROWS}명</strong>까지 등록 가능합니다</li>
+                                </ul>
+                            </div>
                         </div>
                         <div class="bulk-btn-row">
-                            <button class="btn btn-secondary btn-sm" id="bulk-dl-csv">CSV 다운로드</button>
-                            <button class="btn btn-secondary btn-sm" id="bulk-dl-xlsx">Excel 다운로드</button>
+                            <button class="btn btn-secondary btn-sm" id="bulk-dl-csv">CSV 템플릿 다운로드</button>
+                            <button class="btn btn-secondary btn-sm" id="bulk-dl-xlsx">Excel 템플릿 다운로드</button>
                         </div>
                     </div>
                 </div>
@@ -92,16 +112,15 @@ const BulkRegisterApp = (() => {
                         <div class="bulk-upload-area" id="bulk-upload-file">
                             <div class="bulk-dropzone" id="bulk-dropzone">
                                 <div class="dropzone-icon">&#128196;</div>
-                                <p>파일을 여기에 끌어다 놓거나</p>
+                                <p>파일을 여기에 끌어다 놓거나 버튼을 클릭하세요</p>
                                 <button class="btn btn-primary btn-sm" id="bulk-file-btn">파일 선택</button>
                                 <input type="file" id="bulk-file-input" accept=".xlsx,.xls,.csv" style="display:none">
-                                <p class="bulk-file-hint">xlsx, xls, csv 지원 (최대 ${MAX_ROWS}명, 5MB)</p>
+                                <p class="bulk-file-hint">Excel(.xlsx, .xls) 또는 CSV 파일 / 최대 ${MAX_ROWS}명, 5MB</p>
                             </div>
                         </div>
                         <div class="bulk-upload-area" id="bulk-upload-paste" style="display:none">
-                            <p class="bulk-desc">구글시트나 엑셀에서 데이터를 복사한 뒤 아래에 붙여넣기 하세요.</p>
-                            <p class="bulk-desc" style="color:var(--text-muted)">첫 행은 헤더(이름, 닉네임, 아이디, 전화번호, 단계)로 인식됩니다.</p>
-                            <textarea id="bulk-paste-area" class="form-input bulk-paste-textarea" placeholder="이름&#9;닉네임&#9;아이디&#9;전화번호&#9;단계&#10;홍길동&#9;길동이&#9;4114325139@n&#9;010-1234-5678&#9;1" rows="8"></textarea>
+                            <p class="bulk-desc">구글시트 또는 엑셀에서 <strong>헤더 포함</strong>하여 범위를 선택 → 복사(Ctrl+C) → 아래에 붙여넣기(Ctrl+V) 하세요.</p>
+                            <textarea id="bulk-paste-area" class="form-input bulk-paste-textarea" placeholder="이름&#9;닉네임&#9;아이디&#9;전화번호&#9;단계&#10;홍길동&#9;길동이&#9;4114325139@n&#9;010-1234-5678&#9;1&#10;김철수&#9;Bella&#9;&#9;01098765432&#9;1" rows="8"></textarea>
                             <button class="btn btn-primary btn-sm mt-sm" id="bulk-paste-btn">데이터 적용</button>
                         </div>
                         <div id="bulk-file-status" class="bulk-file-status" style="display:none"></div>
@@ -935,11 +954,18 @@ const BulkRegisterApp = (() => {
                         </div>` : ''}
                     </div>
 
-                    <p class="bulk-success-note">모든 회원은 <strong>조 미배정</strong> 상태로 등록되었습니다.<br>"조 배정" 탭에서 조를 배정해주세요.</p>
+                    <div class="bulk-success-next">
+                        <div class="bulk-success-next-title">다음 단계</div>
+                        <ol class="bulk-success-steps">
+                            <li><strong>회원 관리</strong> 탭에서 등록된 회원을 확인하세요</li>
+                            <li><strong>조 배정</strong> 탭에서 회원들을 조에 배정하세요</li>
+                        </ol>
+                        <p class="bulk-success-note">모든 회원은 조 미배정 상태로 등록되었습니다.</p>
+                    </div>
 
                     <div class="bulk-btn-row mt-md">
-                        <button class="btn btn-primary" id="bulk-done-btn">회원 관리로 이동</button>
-                        <button class="btn btn-secondary" id="bulk-more-btn">추가 등록</button>
+                        <button class="btn btn-primary" id="bulk-done-btn">회원 관리 탭으로 이동</button>
+                        <button class="btn btn-secondary" id="bulk-more-btn">추가 등록하기</button>
                     </div>
                 </div>
             </div>

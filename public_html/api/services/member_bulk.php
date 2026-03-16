@@ -108,19 +108,19 @@ function validateBulkMembers(array $rows, int $cohortId): array {
 
         // ── 1. 필수값 검증 ──
         if ($realName === '') {
-            $rowErrors[] = '이름이 비어 있습니다.';
+            $rowErrors[] = '필수값 누락: 이름이 비어 있습니다';
         } elseif (mb_strlen($realName) > 50) {
-            $rowErrors[] = '이름이 50자를 초과합니다.';
+            $rowErrors[] = '입력값 초과: 이름은 50자 이내로 입력해주세요';
         }
 
         if ($nickname === '') {
-            $rowErrors[] = '닉네임이 비어 있습니다.';
+            $rowErrors[] = '필수값 누락: 닉네임이 비어 있습니다';
         } elseif (mb_strlen($nickname) > 50) {
-            $rowErrors[] = '닉네임이 50자를 초과합니다.';
+            $rowErrors[] = '입력값 초과: 닉네임은 50자 이내로 입력해주세요';
         }
 
         if ($userId !== '' && mb_strlen($userId) > 100) {
-            $rowErrors[] = '아이디가 100자를 초과합니다.';
+            $rowErrors[] = '입력값 초과: 아이디는 100자 이내로 입력해주세요';
         }
 
         // ── 2. 전화번호 정규화 + 검증 ──
@@ -128,27 +128,27 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         $phoneNormalized = $phoneResult['value'];
 
         if ($phoneResult['corrected'] && $phoneNormalized !== '') {
-            $corrections[] = "전화번호: '{$phoneResult['original']}' → '{$phoneNormalized}'";
+            $corrections[] = "전화번호: {$phoneResult['original']} → {$phoneNormalized}";
         }
 
         if ($phoneNormalized !== '') {
             $len = strlen($phoneNormalized);
             if ($len < 10 || $len > 11) {
-                $rowErrors[] = "전화번호 형식 오류: '{$phoneResult['original']}' (정규화 후 {$len}자리, 10~11자리 필요)";
+                $rowErrors[] = "전화번호 형식이 올바르지 않습니다: {$phoneResult['original']} ({$len}자리 → 10~11자리 필요)";
             } elseif ($phoneNormalized[0] !== '0') {
-                $rowErrors[] = "전화번호가 0으로 시작하지 않습니다: '{$phoneNormalized}'";
+                $rowErrors[] = "전화번호 형식이 올바르지 않습니다: 0으로 시작해야 합니다";
             }
         } elseif ($phoneRaw !== '') {
-            $rowErrors[] = "전화번호에 숫자가 없습니다: '{$phoneRaw}'";
+            $rowErrors[] = "전화번호 형식이 올바르지 않습니다: 숫자를 확인해주세요";
         }
 
         // ── 3. 단계 값 정규화 + 검증 ──
         $stageResult = normalizeStageNo($stageRaw);
 
         if ($stageResult['value'] === null) {
-            $rowErrors[] = "단계 값 오류: '{$stageResult['original']}' (1, 2, 1단계, 2단계 등 허용)";
+            $rowErrors[] = "단계 값이 올바르지 않습니다: '{$stageResult['original']}' → 1 또는 2만 가능";
         } else if ($stageResult['corrected']) {
-            $corrections[] = "단계: '{$stageResult['original']}' → {$stageResult['value']}";
+            $corrections[] = "단계: {$stageResult['original']} → {$stageResult['value']}단계";
         }
 
         $stageNo = $stageResult['value'] ?? 1;
@@ -157,26 +157,26 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         $isDuplicate = false;
         if ($phoneNormalized !== '') {
             if (isset($existingPhoneSet[$phoneNormalized])) {
-                $rowErrors[] = "이미 등록된 전화번호입니다 (같은 기수): {$phoneNormalized}";
+                $rowErrors[] = "이미 등록된 전화번호입니다 (같은 기수 기존 회원과 중복)";
                 $isDuplicate = true;
             }
             if (isset($seenPhones[$phoneNormalized])) {
-                $rowErrors[] = "파일 내 전화번호 중복 ({$seenPhones[$phoneNormalized]}행과 동일)";
+                $rowErrors[] = "같은 파일 내 중복된 전화번호입니다 ({$seenPhones[$phoneNormalized]}행과 동일)";
                 $isDuplicate = true;
             }
             if (isset($otherCohortPhones[$phoneNormalized]) && !isset($existingPhoneSet[$phoneNormalized])) {
-                $rowWarnings[] = "다른 기수에서 참여 이력이 있습니다 (재참여)";
+                $rowWarnings[] = "재참여 회원: 다른 기수에서 참여한 이력이 있습니다";
             }
         }
 
         // ── 5. 아이디 중복 체크 ──
         if ($userId !== '') {
             if (isset($existingUserIdSet[$userId])) {
-                $rowErrors[] = "이미 등록된 아이디입니다 (같은 기수): {$userId}";
+                $rowErrors[] = "이미 등록된 아이디입니다 (같은 기수 기존 회원과 중복)";
                 $isDuplicate = true;
             }
             if (isset($seenUserIds[$userId])) {
-                $rowErrors[] = "파일 내 아이디 중복 ({$seenUserIds[$userId]}행과 동일)";
+                $rowErrors[] = "같은 파일 내 중복된 아이디입니다 ({$seenUserIds[$userId]}행과 동일)";
                 $isDuplicate = true;
             }
         }
@@ -184,21 +184,21 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         // ── 6. 닉네임 중복 (경고) ──
         if ($nickname !== '') {
             if (isset($existingNicknameSet[$nickname])) {
-                $rowWarnings[] = "같은 닉네임이 기존 회원에 있습니다";
+                $rowWarnings[] = "닉네임 참고: 기존 회원 중 같은 닉네임이 있습니다 (등록은 가능)";
             }
             if (isset($seenNicknames[$nickname])) {
-                $rowWarnings[] = "파일 내 닉네임 중복 ({$seenNicknames[$nickname]}행과 동일)";
+                $rowWarnings[] = "닉네임 참고: 파일 내 {$seenNicknames[$nickname]}행과 같은 닉네임입니다 (등록은 가능)";
             }
         }
 
         // ── 7. 전화번호/아이디 모두 없음 (경고) ──
         if ($phoneNormalized === '' && $userId === '') {
-            $rowWarnings[] = '전화번호·아이디 모두 없음 (로그인 불가, 재참여 추적 불가)';
+            $rowWarnings[] = '전화번호와 아이디가 모두 없습니다 → 로그인 불가, 재참여 추적 불가';
         } elseif ($phoneNormalized === '') {
-            $rowWarnings[] = '전화번호 없음 (로그인 불가)';
+            $rowWarnings[] = '전화번호가 없습니다 → 로그인 불가';
         }
 
-        // ── 자동 보정 있으면 경고로 표시 ──
+        // ── 자동 보정 기록 ──
         if (!empty($corrections)) {
             foreach ($corrections as $c) {
                 $rowWarnings[] = "자동 보정: {$c}";
