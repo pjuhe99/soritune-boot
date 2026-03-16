@@ -28,7 +28,7 @@ if (!function_exists('calcParticipationCount')) {
 
 /**
  * 일괄 등록용 검증
- * @param array $rows  [['real_name'=>..., 'nickname'=>..., 'phone'=>..., 'stage_no'=>...], ...]
+ * @param array $rows  [['real_name'=>..., 'nickname'=>..., 'user_id'=>..., 'phone'=>..., 'stage_no'=>...], ...]
  * @param int $cohortId
  * @return array ['valid'=>[...], 'errors'=>[...], 'warnings'=>[...], 'summary'=>[...]]
  */
@@ -50,9 +50,16 @@ function validateBulkMembers(array $rows, int $cohortId): array {
     $existingNicknames = array_column($stmt2->fetchAll(), 'nickname');
     $existingNicknameSet = array_flip($existingNicknames);
 
+    // 기존 DB user_id 목록 (같은 cohort)
+    $stmt3 = $db->prepare("SELECT user_id FROM bootcamp_members WHERE cohort_id = ? AND user_id IS NOT NULL AND user_id != ''");
+    $stmt3->execute([$cohortId]);
+    $existingUserIds = array_column($stmt3->fetchAll(), 'user_id');
+    $existingUserIdSet = array_flip($existingUserIds);
+
     // 업로드 내부 중복 추적
     $seenPhones = [];
     $seenNicknames = [];
+    $seenUserIds = [];
 
     foreach ($rows as $idx => $row) {
         $rowNum = $idx + 1;
@@ -61,6 +68,7 @@ function validateBulkMembers(array $rows, int $cohortId): array {
 
         $realName = trim($row['real_name'] ?? '');
         $nickname = trim($row['nickname'] ?? '');
+        $userId   = trim($row['user_id'] ?? '');
         $phone    = trim($row['phone'] ?? '');
         $stageNo  = trim($row['stage_no'] ?? '1');
 
@@ -75,14 +83,19 @@ function validateBulkMembers(array $rows, int $cohortId): array {
             $rowErrors[] = '닉네임이 비어 있습니다.';
         }
 
+        // 이름 길이
+        if ($realName !== '' && mb_strlen($realName) > 50) {
+            $rowErrors[] = '이름이 50자를 초과합니다.';
+        }
+
         // 닉네임 길이
         if ($nickname !== '' && mb_strlen($nickname) > 50) {
             $rowErrors[] = '닉네임이 50자를 초과합니다.';
         }
 
-        // 이름 길이
-        if ($realName !== '' && mb_strlen($realName) > 50) {
-            $rowErrors[] = '이름이 50자를 초과합니다.';
+        // 아이디 길이
+        if ($userId !== '' && mb_strlen($userId) > 100) {
+            $rowErrors[] = '아이디가 100자를 초과합니다.';
         }
 
         // 전화번호 형식 검증
@@ -109,6 +122,16 @@ function validateBulkMembers(array $rows, int $cohortId): array {
             $rowErrors[] = "파일 내 전화번호 중복 ({$seenPhones[$phoneNormalized]}행과 동일)";
         }
 
+        // 아이디 중복: DB 기존 데이터
+        if ($userId !== '' && isset($existingUserIdSet[$userId])) {
+            $rowErrors[] = "이미 등록된 아이디입니다: {$userId}";
+        }
+
+        // 아이디 중복: 업로드 파일 내부
+        if ($userId !== '' && isset($seenUserIds[$userId])) {
+            $rowErrors[] = "파일 내 아이디 중복 ({$seenUserIds[$userId]}행과 동일)";
+        }
+
         // 닉네임 중복: DB 기존 데이터
         if ($nickname !== '' && isset($existingNicknameSet[$nickname])) {
             $rowWarnings[] = "같은 닉네임이 기존 회원에 있습니다: '{$nickname}'";
@@ -127,11 +150,13 @@ function validateBulkMembers(array $rows, int $cohortId): array {
         // 추적
         if ($phoneNormalized !== '') $seenPhones[$phoneNormalized] = $rowNum;
         if ($nickname !== '') $seenNicknames[$nickname] = $rowNum;
+        if ($userId !== '') $seenUserIds[$userId] = $rowNum;
 
         $processed = [
             'row_num'    => $rowNum,
             'real_name'  => $realName,
             'nickname'   => $nickname,
+            'user_id'    => $userId,
             'phone'      => $phoneNormalized,
             'stage_no'   => (int)$stageNo,
             'errors'     => $rowErrors,
@@ -175,8 +200,8 @@ function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
     $ids = [];
 
     $insertStmt = $db->prepare("
-        INSERT INTO bootcamp_members (cohort_id, group_id, nickname, real_name, phone, member_role, stage_no, joined_at, participation_count)
-        VALUES (?, NULL, ?, ?, ?, 'member', ?, CURDATE(), ?)
+        INSERT INTO bootcamp_members (cohort_id, group_id, user_id, nickname, real_name, phone, member_role, stage_no, joined_at, participation_count)
+        VALUES (?, NULL, ?, ?, ?, ?, 'member', ?, CURDATE(), ?)
     ");
     $scoreStmt = $db->prepare("INSERT INTO member_scores (member_id, current_score) VALUES (?, ?)");
     $coinStmt  = $db->prepare("INSERT INTO member_coin_balances (member_id, current_coin) VALUES (?, 0)");
@@ -186,11 +211,13 @@ function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
     $db->beginTransaction();
     try {
         foreach ($members as $m) {
-            $phone = $m['phone'] ?: null;
-            $participationCount = calcParticipationCount($db, $phone, null, $cohortId);
+            $phone  = $m['phone'] ?: null;
+            $userId = !empty($m['user_id']) ? $m['user_id'] : null;
+            $participationCount = calcParticipationCount($db, $phone, $userId, $cohortId);
 
             $insertStmt->execute([
                 $cohortId,
+                $userId,
                 $m['nickname'],
                 $m['real_name'],
                 $phone,
@@ -204,7 +231,7 @@ function insertBulkMembers(array $members, int $cohortId, int $adminId): array {
             $coinStmt->execute([$newId]);
 
             // 집계 테이블 갱신
-            refreshMemberStats($db, $phone, null);
+            refreshMemberStats($db, $phone, $userId);
         }
         $db->commit();
     } catch (\Exception $e) {

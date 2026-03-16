@@ -1174,11 +1174,11 @@ case 'member_bulk_register':
 
 case 'member_bulk_template':
     $admin = requireAdmin(['operation']);
-    // 템플릿 컬럼 정보 반환
     jsonSuccess([
         'columns' => [
             ['key' => 'real_name', 'label' => '이름', 'required' => true, 'example' => '홍길동'],
             ['key' => 'nickname', 'label' => '닉네임', 'required' => true, 'example' => '길동이'],
+            ['key' => 'user_id', 'label' => '아이디', 'required' => false, 'example' => '4114325139@n'],
             ['key' => 'phone', 'label' => '전화번호', 'required' => false, 'example' => '010-1234-5678'],
             ['key' => 'stage_no', 'label' => '단계', 'required' => false, 'example' => '1'],
         ],

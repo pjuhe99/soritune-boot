@@ -5,10 +5,11 @@ const BulkRegisterApp = (() => {
     let validationResult = null; // 서버 검증 결과
     let templateColumns = [];
 
-    const EXPECTED_HEADERS = ['이름', '닉네임', '전화번호', '단계'];
+    const EXPECTED_HEADERS = ['이름', '닉네임', '아이디', '전화번호', '단계'];
     const HEADER_KEY_MAP = {
         '이름': 'real_name', 'real_name': 'real_name', 'name': 'real_name',
         '닉네임': 'nickname', 'nickname': 'nickname',
+        '아이디': 'user_id', 'user_id': 'user_id', 'id': 'user_id',
         '전화번호': 'phone', 'phone': 'phone', '연락처': 'phone', '휴대폰': 'phone',
         '단계': 'stage_no', 'stage_no': 'stage_no', 'stage': 'stage_no',
     };
@@ -37,6 +38,7 @@ const BulkRegisterApp = (() => {
                                     <tr>
                                         <th>이름 <span class="required">*</span></th>
                                         <th>닉네임 <span class="required">*</span></th>
+                                        <th>아이디</th>
                                         <th>전화번호</th>
                                         <th>단계</th>
                                     </tr>
@@ -45,14 +47,23 @@ const BulkRegisterApp = (() => {
                                     <tr class="example-row">
                                         <td>홍길동</td>
                                         <td>길동이</td>
+                                        <td>4114325139@n</td>
                                         <td>010-1234-5678</td>
+                                        <td>1</td>
+                                    </tr>
+                                    <tr class="example-row">
+                                        <td>김철수</td>
+                                        <td>Bella</td>
+                                        <td></td>
+                                        <td>01098765432</td>
                                         <td>1</td>
                                     </tr>
                                 </tbody>
                             </table>
                             <ul class="bulk-notes">
-                                <li><strong>이름, 닉네임</strong>은 필수입니다.</li>
-                                <li><strong>전화번호</strong>: 하이픈 포함/미포함 모두 가능 (자동 정규화)</li>
+                                <li><span class="required">*</span> <strong>이름, 닉네임</strong>은 필수입니다.</li>
+                                <li><strong>아이디</strong>: 카페/외부 서비스 구분용 (없으면 비워두세요)</li>
+                                <li><strong>전화번호</strong>: 하이픈 포함/미포함 모두 가능 (자동 정규화). 로그인에 사용됩니다.</li>
                                 <li><strong>단계</strong>: 1 또는 2 (미입력 시 1단계)</li>
                                 <li>조 배정은 등록 후 별도로 진행합니다.</li>
                             </ul>
@@ -86,8 +97,8 @@ const BulkRegisterApp = (() => {
                         </div>
                         <div class="bulk-upload-area" id="bulk-upload-paste" style="display:none">
                             <p class="bulk-desc">구글시트나 엑셀에서 데이터를 복사한 뒤 아래에 붙여넣기 하세요.</p>
-                            <p class="bulk-desc" style="color:var(--text-muted)">첫 행은 헤더(이름, 닉네임, 전화번호, 단계)로 인식됩니다.</p>
-                            <textarea id="bulk-paste-area" class="form-input bulk-paste-textarea" placeholder="이름&#9;닉네임&#9;전화번호&#9;단계&#10;홍길동&#9;길동이&#9;010-1234-5678&#9;1" rows="8"></textarea>
+                            <p class="bulk-desc" style="color:var(--text-muted)">첫 행은 헤더(이름, 닉네임, 아이디, 전화번호, 단계)로 인식됩니다.</p>
+                            <textarea id="bulk-paste-area" class="form-input bulk-paste-textarea" placeholder="이름&#9;닉네임&#9;아이디&#9;전화번호&#9;단계&#10;홍길동&#9;길동이&#9;4114325139@n&#9;010-1234-5678&#9;1" rows="8"></textarea>
                             <button class="btn btn-primary btn-sm mt-sm" id="bulk-paste-btn">데이터 적용</button>
                         </div>
                         <div id="bulk-file-status" class="bulk-file-status" style="display:none"></div>
@@ -171,23 +182,29 @@ const BulkRegisterApp = (() => {
 
     function downloadCsvTemplate() {
         const bom = '\uFEFF';
-        const csv = bom + '이름,닉네임,전화번호,단계\n홍길동,길동이,010-1234-5678,1\n';
+        const csv = bom + '이름,닉네임,아이디,전화번호,단계\n홍길동,길동이,4114325139@n,010-1234-5678,1\n김철수,Bella,,01098765432,1\n';
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
         downloadBlob(blob, '회원등록_템플릿.csv');
     }
 
     function downloadXlsxTemplate() {
-        // SheetJS가 없으면 CSV fallback
         if (typeof XLSX === 'undefined') {
             Toast.warning('Excel 라이브러리 로딩 중... CSV로 대체합니다.');
             downloadCsvTemplate();
             return;
         }
         const ws = XLSX.utils.aoa_to_sheet([
-            ['이름', '닉네임', '전화번호', '단계'],
-            ['홍길동', '길동이', '010-1234-5678', 1],
+            ['이름', '닉네임', '아이디', '전화번호', '단계'],
+            ['홍길동', '길동이', '4114325139@n', '010-1234-5678', 1],
+            ['김철수', 'Bella', '', '010-9876-5432', 1],
         ]);
-        ws['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 8 }];
+        ws['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 8 }];
+        // 전화번호 컬럼을 텍스트 서식으로 설정 (엑셀에서 앞의 0이 잘리는 것 방지)
+        const phoneCol = 3; // D열 (0-indexed)
+        for (let r = 1; r <= 2; r++) {
+            const addr = XLSX.utils.encode_cell({ r, c: phoneCol });
+            if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
+        }
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '회원등록');
         XLSX.writeFile(wb, '회원등록_템플릿.xlsx');
@@ -465,6 +482,7 @@ const BulkRegisterApp = (() => {
                             <th>상태</th>
                             <th>이름</th>
                             <th>닉네임</th>
+                            <th>아이디</th>
                             <th>전화번호</th>
                             <th>단계</th>
                             <th>비고</th>
@@ -477,6 +495,7 @@ const BulkRegisterApp = (() => {
                             <td>${statusBadge(row.status)}</td>
                             <td>${App.esc(row.real_name || '')}</td>
                             <td>${App.esc(row.nickname || '')}</td>
+                            <td>${App.esc(row.user_id || '-')}</td>
                             <td>${App.esc(row.phone || '-')}</td>
                             <td>${row.stage_no || '-'}</td>
                             <td class="bulk-note-cell">${
@@ -526,6 +545,7 @@ const BulkRegisterApp = (() => {
         const members = validMembers.map(m => ({
             real_name: m.real_name,
             nickname: m.nickname,
+            user_id: m.user_id || '',
             phone: m.phone,
             stage_no: m.stage_no,
         }));
