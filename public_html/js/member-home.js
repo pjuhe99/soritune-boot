@@ -42,22 +42,21 @@ const MemberHome = (() => {
                 <div class="member-stats">
                     <div class="member-stat">
                         <div class="member-point">${member.score ?? 0}</div>
-                        <div class="member-point-label">점수</div>
+                        <div class="member-point-label">점수 <button class="cur-help-btn" data-guide="score_guide">?</button></div>
                     </div>
                     <div class="member-stat">
                         <div class="member-coin">${member.coin ?? 0}</div>
-                        <div class="member-coin-label">코인</div>
+                        <div class="member-coin-label">코인 <button class="cur-help-btn" data-guide="coin_guide">?</button></div>
                     </div>
                 </div>
-                <button class="score-coin-guide-btn" id="score-coin-guide-btn" title="점수와 코인은 어떻게 얻나요?">
-                    <span class="score-coin-guide-icon">i</span>
-                </button>
             </div>
             <div id="member-curriculum-section"></div>
             <div id="member-shortcuts-section"></div>
         `;
 
-        document.getElementById('score-coin-guide-btn').onclick = showScoreCoinGuide;
+        headerEl.querySelectorAll('.cur-help-btn[data-guide]').forEach(btn => {
+            btn.onclick = () => showGuide(btn.dataset.guide);
+        });
 
         loadCurriculumToday();
         MemberShortcuts.render(document.getElementById('member-shortcuts-section'), member);
@@ -151,19 +150,25 @@ const MemberHome = (() => {
         return html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     }
 
-    let guideCache = null;
+    const GUIDE_TITLES = {
+        score_guide: '점수 안내',
+        coin_guide: '코인 안내',
+    };
 
-    async function showScoreCoinGuide() {
-        if (guideCache === undefined || guideCache === null) {
-            const r = await App.get(API + 'system_content', { key: 'score_coin_guide' });
-            guideCache = r.success ? r.content : null;
+    const guideCache = {};
+
+    async function showGuide(key) {
+        if (!(key in guideCache)) {
+            const r = await App.get(API + 'system_content', { key });
+            guideCache[key] = r.success ? r.content : null;
         }
 
-        const html = guideCache
-            ? `<div class="score-coin-guide-content">${renderMarkdown(guideCache)}</div>`
-            : '<p class="score-coin-guide-empty">점수와 코인 안내가 준비되지 않았습니다.</p>';
+        const title = GUIDE_TITLES[key] || '안내';
+        const html = guideCache[key]
+            ? `<div class="score-coin-guide-content">${renderMarkdown(guideCache[key])}</div>`
+            : '<p class="score-coin-guide-empty">안내가 준비되지 않았습니다.</p>';
 
-        App.openModal('점수 / 코인 안내', html);
+        App.openModal(title, html);
     }
 
     return { render };

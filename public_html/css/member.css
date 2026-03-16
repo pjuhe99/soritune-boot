@@ -69,7 +69,6 @@
 
 /* ── Info Card ─────────────────────────────────────────────── */
 .member-info-card {
-    position: relative;
     background: var(--color-bg);
     border-radius: var(--radius-xl);
     padding: var(--space-8) var(--space-5);
@@ -107,6 +106,9 @@
 }
 
 .member-point-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--text-sm);
     color: var(--color-text-sub);
     margin-top: var(--space-1);
@@ -119,47 +121,12 @@
 }
 
 .member-coin-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--text-sm);
     color: var(--color-text-sub);
     margin-top: var(--space-1);
-}
-
-/* ── Score/Coin Guide Button ──────────────────────────────── */
-.score-coin-guide-btn {
-    position: absolute;
-    top: var(--space-3);
-    right: var(--space-3);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: 1.5px solid var(--color-gray-300);
-    background: var(--color-bg);
-    cursor: pointer;
-    padding: 0;
-    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
-}
-
-.score-coin-guide-btn:hover,
-.score-coin-guide-btn:active {
-    border-color: var(--color-primary);
-    background: var(--color-primary-50);
-}
-
-.score-coin-guide-icon {
-    font-size: 14px;
-    font-weight: var(--font-bold);
-    font-style: italic;
-    color: var(--color-gray-400);
-    line-height: 1;
-    transition: color var(--transition-fast);
-}
-
-.score-coin-guide-btn:hover .score-coin-guide-icon,
-.score-coin-guide-btn:active .score-coin-guide-icon {
-    color: var(--color-primary);
 }
 
 /* ── Score/Coin Guide Modal Content ──────────────────────── */
