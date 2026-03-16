@@ -1175,6 +1175,7 @@ const BootcampApp = (() => {
                 <label class="form-label">이름</label>
                 <input type="text" class="form-input" id="mf-realname" value="${App.esc(data.real_name || '')}">
             </div>
+            ${isEdit ? `
             <div class="form-group">
                 <label class="form-label">조</label>
                 <select class="form-select" id="mf-group">
@@ -1182,6 +1183,12 @@ const BootcampApp = (() => {
                     ${groups.map(g => `<option value="${g.id}" ${parseInt(data.group_id) === parseInt(g.id) ? 'selected' : ''}>${App.esc(g.name)}</option>`).join('')}
                 </select>
             </div>
+            ` : `
+            <div class="form-group">
+                <label class="form-label">조</label>
+                <div class="form-help">조 배정은 [조 배정 관리] 탭에서 진행합니다.</div>
+            </div>
+            `}
             <div class="form-group">
                 <label class="form-label">단계</label>
                 <select class="form-select" id="mf-stage">
@@ -1211,10 +1218,15 @@ const BootcampApp = (() => {
             const payload = {
                 nickname,
                 real_name: document.getElementById('mf-realname').value.trim(),
-                group_id: parseInt(document.getElementById('mf-group').value) || null,
                 stage_no: parseInt(document.getElementById('mf-stage').value),
                 member_role: document.getElementById('mf-role').value,
             };
+
+            // 수정 모드에서만 group_id 포함
+            const groupEl = document.getElementById('mf-group');
+            if (groupEl) {
+                payload.group_id = parseInt(groupEl.value) || null;
+            }
 
             if (isEdit) {
                 payload.id = data.id;
@@ -1824,6 +1836,9 @@ const BootcampApp = (() => {
     }
 
     // ── Public API ──
+    function _getCohorts() { return cohorts; }
+    function _getSelectedCohortId() { return selectedCohortId; }
+
     return {
         init,
         initForCoach,
@@ -1833,5 +1848,7 @@ const BootcampApp = (() => {
         _coinAction, _coinLogs,
         _editGroup, _deleteGroup,
         showWarningNoteForm,
+        _getCohorts,
+        _getSelectedCohortId,
     };
 })();

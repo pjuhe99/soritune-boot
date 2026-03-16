@@ -23,9 +23,10 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="/js/memberTable.js?v=20260313"></script>
-    <script src="/js/bootcamp.js?v=20260313b"></script>
+    <script src="/js/bootcamp.js?v=20260316"></script>
+    <script src="/js/group-assignment.js?v=20260316"></script>
     <script src="/js/curriculum.js?v=20260313"></script>
-    <script src="/js/admin.js?v=20260313e"></script>
+    <script src="/js/admin.js?v=20260316"></script>
     <script src="/js/coin.js?v=20260313"></script>
     <script src="/js/calendar.js?v=20260312"></script>
     <script src="/js/lecture.js?v=20260313a"></script>

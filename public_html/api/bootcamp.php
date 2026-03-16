@@ -23,6 +23,7 @@ require_once __DIR__ . '/services/curriculum.php';
 require_once __DIR__ . '/services/member_page.php';
 require_once __DIR__ . '/services/issue_report.php';
 require_once __DIR__ . '/services/dashboard.php';
+require_once __DIR__ . '/services/group_assignment.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -294,6 +295,21 @@ case 'issue_detail':        handleIssueDetail(); break;
 case 'issue_admin_list':    handleIssueAdminList(); break;
 case 'issue_status_update': handleIssueStatusUpdate($method); break;
 case 'issue_admin_note':    handleIssueAdminNote($method); break;
+
+// ── Group Assignment (조 배정) ──────────────────────────────
+
+case 'leader_candidates':    handleLeaderCandidates(); break;
+case 'leader_assign':        handleLeaderAssign($method); break;
+case 'leader_unassign':      handleLeaderUnassign($method); break;
+case 'groups_with_stats':    handleGroupsWithStats(); break;
+case 'group_create_ext':     handleGroupCreateExtended($method); break;
+case 'group_update_ext':     handleGroupUpdateExtended($method); break;
+case 'assignment_preview':   handleAssignmentPreview(); break;
+case 'assignment_confirm':   handleAssignmentConfirm($method); break;
+case 'assignment_reset':     handleAssignmentReset($method); break;
+case 'member_move':          handleMemberMove($method); break;
+case 'group_members':        handleGroupMembers(); break;
+case 'assignment_summary':   handleAssignmentSummary(); break;
 
 // ──────────────────────────────────────────────────────────────
 

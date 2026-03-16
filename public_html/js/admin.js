@@ -124,6 +124,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-calendar-mgmt" data-hash="calendar">캘린더 관리</button>
                             <button class="tab" data-tab="#tab-lectures" data-hash="lectures">강의 관리</button>
                             <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
+                            <button class="tab" data-tab="#tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
                             <button class="tab" data-tab="#tab-coin-cycles" data-hash="coins">코인 Cycle</button>
                             <button class="tab" data-tab="#tab-cohorts-mgmt" data-hash="cohorts">기수 관리</button>
@@ -137,6 +138,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-lectures"></div>
                         <div class="tab-content" id="tab-members"></div>
+                        <div class="tab-content" id="tab-group-assign"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
                         <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
                         <div class="tab-content" id="tab-cohorts-mgmt"></div>
@@ -159,6 +161,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
+                            <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
@@ -169,6 +172,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-coins"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
+                        <div class="tab-content" id="bc-tab-group-assign"></div>
                     </div>
                     </div>
                     ` : (role === 'leader' || role === 'subleader') ? `
@@ -195,6 +199,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
+                            <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">강의 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                         </div>
@@ -205,6 +210,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-coins"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
+                        <div class="tab-content" id="bc-tab-group-assign"></div>
                         <div class="tab-content" id="tab-head-lectures"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
                     </div>
@@ -290,6 +296,23 @@ const AdminApp = (() => {
                 }
             }
 
+            // Group Assignment 탭 lazy load (operation)
+            if (typeof GroupAssignmentApp !== 'undefined') {
+                const gaTab = document.getElementById('tab-group-assign');
+                if (gaTab) {
+                    const gaObserver = new MutationObserver(() => {
+                        if (gaTab.classList.contains('active') && !gaTab.dataset.loaded) {
+                            gaTab.dataset.loaded = '1';
+                            const cohorts = typeof BootcampApp !== 'undefined' && BootcampApp._getCohorts ? BootcampApp._getCohorts() : [];
+                            const activeCohort = cohorts.find(c => c.is_active) || cohorts[0];
+                            GroupAssignmentApp.init(admin, role, cohorts, activeCohort ? parseInt(activeCohort.id) : 0);
+                            GroupAssignmentApp.renderTab(gaTab);
+                        }
+                    });
+                    gaObserver.observe(gaTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
             // Issue Reports 탭 lazy load
             if (typeof AdminIssues !== 'undefined') {
                 const issueTab = document.getElementById('tab-issues');
@@ -330,6 +353,25 @@ const AdminApp = (() => {
                     });
                     obs.observe(lecEl, { attributes: true, attributeFilter: ['class'] });
                 }
+            }
+        }
+
+        // Group Assignment 탭 lazy load (head/coach 공통)
+        if (!isOperation() && typeof GroupAssignmentApp !== 'undefined') {
+            const gaTabId = 'bc-tab-group-assign';
+            const gaEl = document.getElementById(gaTabId);
+            if (gaEl) {
+                const gaObs = new MutationObserver(async () => {
+                    if (gaEl.classList.contains('active') && !gaEl.dataset.loaded) {
+                        gaEl.dataset.loaded = '1';
+                        const rCohorts = await App.get('/api/bootcamp.php?action=cohorts');
+                        const cohorts = rCohorts.cohorts || [];
+                        const activeCohort = cohorts.find(c => c.is_active) || cohorts[0];
+                        GroupAssignmentApp.init(admin, role, cohorts, activeCohort ? parseInt(activeCohort.id) : 0);
+                        GroupAssignmentApp.renderTab(gaEl);
+                    }
+                });
+                gaObs.observe(gaEl, { attributes: true, attributeFilter: ['class'] });
             }
         }
 
