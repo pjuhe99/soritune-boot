@@ -61,6 +61,67 @@ case 'login':
     ], '로그인 성공');
     break;
 
+case 'login_phone':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $phone = trim($input['phone'] ?? '');
+    if (!$phone) jsonError('휴대폰 번호를 입력해주세요.');
+
+    $normalized = normalizePhone($phone);
+    $db = getDB();
+
+    // Find active bootcamp_member with leader/subleader role by phone
+    $stmt = $db->prepare("
+        SELECT bm.*, c.cohort
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ?
+          AND bm.is_active = 1
+          AND bm.member_role IN ('leader', 'subleader')
+        LIMIT 1
+    ");
+    $stmt->execute([$normalized]);
+    $member = $stmt->fetch();
+
+    if (!$member) {
+        jsonError('등록된 조장/부조장 정보를 찾을 수 없습니다.');
+    }
+
+    // Find matching admin record
+    $stmt = $db->prepare('SELECT * FROM admins WHERE bootcamp_group_id = ? AND is_active = 1 LIMIT 1');
+    $stmt->execute([$member['group_id']]);
+    $admin = $stmt->fetch();
+
+    if (!$admin) {
+        jsonError('관리자 계정이 연결되어 있지 않습니다. 운영팀에 문의해주세요.');
+    }
+
+    // Fetch roles
+    $stmt = $db->prepare('SELECT role FROM admin_roles WHERE admin_id = ?');
+    $stmt->execute([$admin['id']]);
+    $roles = array_column($stmt->fetchAll(), 'role');
+
+    if (empty($roles)) {
+        jsonError('할당된 역할이 없습니다. 관리자에게 문의해주세요.');
+    }
+
+    $db->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
+    $bcGroupId = $admin['bootcamp_group_id'] ? (int)$admin['bootcamp_group_id'] : null;
+    loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort'], $bcGroupId);
+
+    jsonSuccess([
+        'admin' => [
+            'admin_id'    => $admin['id'],
+            'admin_name'  => $admin['name'],
+            'admin_roles' => $roles,
+            'cohort'      => $admin['cohort'],
+            'team'        => $admin['team'],
+            'class_time'  => $admin['class_time'],
+            'bootcamp_group_id' => $bcGroupId,
+        ],
+    ], '로그인 성공');
+    break;
+
 case 'logout':
     logoutAdmin();
     jsonSuccess([], '로그아웃 되었습니다.');

@@ -44,48 +44,88 @@ const AdminApp = (() => {
     // ── Login ──
     function showLoginForm() {
         const pageLabel = (PAGE_ROLES[role] || [role]).map(r => ROLE_LABELS[r] || r).join(' / ');
-        root.innerHTML = `
-            <div class="admin-login">
-                <div class="login-box">
-                    <div class="login-title">소리튠 부트캠프</div>
-                    <p class="login-subtitle"><span class="badge badge-primary">${App.esc(pageLabel)}</span></p>
-                    <form id="login-form">
-                        <div class="form-group">
-                            <label class="form-label">아이디</label>
-                            <input type="text" class="form-input" id="login-id" autocomplete="username" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">비밀번호</label>
-                            <input type="password" class="form-input" id="login-pw" autocomplete="current-password" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
-                    </form>
+        const isLeaderPage = (role === 'leader');
+
+        if (isLeaderPage) {
+            root.innerHTML = `
+                <div class="admin-login">
+                    <div class="login-box">
+                        <div class="login-title">소리튠 부트캠프</div>
+                        <p class="login-subtitle"><span class="badge badge-primary">${App.esc(pageLabel)}</span></p>
+                        <form id="login-form">
+                            <div class="form-group">
+                                <label class="form-label">휴대폰 번호</label>
+                                <input type="tel" class="form-input" id="login-phone" placeholder="01012345678" autocomplete="tel" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
+                        </form>
+                    </div>
                 </div>
-            </div>
-        `;
-        document.getElementById('login-form').onsubmit = async (e) => {
-            e.preventDefault();
-            const loginId = document.getElementById('login-id').value.trim();
-            const password = document.getElementById('login-pw').value;
-            if (!loginId || !password) return;
+            `;
+            document.getElementById('login-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const phone = document.getElementById('login-phone').value.trim();
+                if (!phone) return;
 
-            App.showLoading();
-            const r = await App.post('/api/admin.php?action=login', { login_id: loginId, password });
-            App.hideLoading();
+                App.showLoading();
+                const r = await App.post('/api/admin.php?action=login_phone', { phone });
+                App.hideLoading();
 
-            if (r.success) {
-                // Check if admin has a role compatible with this page
-                const pageAllowed = (PAGE_ROLES[role] || []);
-                const hasAccess = r.admin.admin_roles.some(ar => pageAllowed.includes(ar));
-                if (!hasAccess) {
-                    Toast.error('이 페이지에 접근 권한이 없습니다.');
-                    return;
+                if (r.success) {
+                    const pageAllowed = (PAGE_ROLES[role] || []);
+                    const hasAccess = r.admin.admin_roles.some(ar => pageAllowed.includes(ar));
+                    if (!hasAccess) {
+                        Toast.error('이 페이지에 접근 권한이 없습니다.');
+                        return;
+                    }
+                    admin = r.admin;
+                    Toast.success(r.message);
+                    showDashboard();
                 }
-                admin = r.admin;
-                Toast.success(r.message);
-                showDashboard();
-            }
-        };
+            };
+        } else {
+            root.innerHTML = `
+                <div class="admin-login">
+                    <div class="login-box">
+                        <div class="login-title">소리튠 부트캠프</div>
+                        <p class="login-subtitle"><span class="badge badge-primary">${App.esc(pageLabel)}</span></p>
+                        <form id="login-form">
+                            <div class="form-group">
+                                <label class="form-label">아이디</label>
+                                <input type="text" class="form-input" id="login-id" autocomplete="username" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">비밀번호</label>
+                                <input type="password" class="form-input" id="login-pw" autocomplete="current-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block btn-lg mt-md">로그인</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.getElementById('login-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const loginId = document.getElementById('login-id').value.trim();
+                const password = document.getElementById('login-pw').value;
+                if (!loginId || !password) return;
+
+                App.showLoading();
+                const r = await App.post('/api/admin.php?action=login', { login_id: loginId, password });
+                App.hideLoading();
+
+                if (r.success) {
+                    const pageAllowed = (PAGE_ROLES[role] || []);
+                    const hasAccess = r.admin.admin_roles.some(ar => pageAllowed.includes(ar));
+                    if (!hasAccess) {
+                        Toast.error('이 페이지에 접근 권한이 없습니다.');
+                        return;
+                    }
+                    admin = r.admin;
+                    Toast.success(r.message);
+                    showDashboard();
+                }
+            };
+        }
     }
 
     // ── Dashboard ──
