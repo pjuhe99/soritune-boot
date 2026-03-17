@@ -286,3 +286,14 @@ const App = (() => {
         initTabs, esc, debounce,
     };
 })();
+
+// ── DEV Server Badge ──
+if (location.hostname.startsWith('dev-')) {
+    document.addEventListener('DOMContentLoaded', () => {
+        const badge = document.createElement('div');
+        badge.id = 'dev-badge';
+        badge.textContent = 'DEV';
+        badge.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;font-size:11px;font-weight:700;padding:2px 12px;border-radius:0 0 6px 6px;letter-spacing:1px;pointer-events:none;opacity:0.9;';
+        document.body.appendChild(badge);
+    });
+}
