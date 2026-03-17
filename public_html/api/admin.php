@@ -72,7 +72,7 @@ case 'login_phone':
 
     // Find active bootcamp_member with leader/subleader role by phone
     $stmt = $db->prepare("
-        SELECT bm.id, bm.name, bm.member_role, bm.group_id, bm.cohort_id, c.cohort,
+        SELECT bm.id, bm.real_name, bm.nickname, bm.member_role, bm.group_id, bm.cohort_id, c.cohort,
                bg.name AS group_name
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
@@ -92,14 +92,15 @@ case 'login_phone':
     // Map member_role to admin role
     $role = $member['member_role']; // 'leader' or 'subleader'
     $bcGroupId = $member['group_id'] ? (int)$member['group_id'] : null;
+    $displayName = $member['nickname'] ?: $member['real_name'];
 
     // Login directly using bootcamp_member info (no admins table needed)
-    loginAdmin($member['id'], $member['name'], [$role], $member['cohort'], $bcGroupId);
+    loginAdmin($member['id'], $displayName, [$role], $member['cohort'], $bcGroupId);
 
     jsonSuccess([
         'admin' => [
             'admin_id'    => $member['id'],
-            'admin_name'  => $member['name'],
+            'admin_name'  => $displayName,
             'admin_roles' => [$role],
             'cohort'      => $member['cohort'],
             'team'        => $member['group_name'],
