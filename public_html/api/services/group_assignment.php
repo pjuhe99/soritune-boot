@@ -167,6 +167,28 @@ function handleGroupsWithStats() {
     $stmt->execute($params);
     $groups = $stmt->fetchAll();
 
+    // 각 그룹에 배정된 코치 목록 추가
+    $groupIds = array_column($groups, 'id');
+    $coachMap = [];
+    if ($groupIds) {
+        $ph = implode(',', array_fill(0, count($groupIds), '?'));
+        $stmt3 = $db->prepare("
+            SELECT cga.group_id, a.id AS admin_id, a.name AS admin_name
+            FROM coach_group_assignments cga
+            JOIN admins a ON cga.admin_id = a.id AND a.is_active = 1
+            WHERE cga.group_id IN ({$ph})
+            ORDER BY a.name
+        ");
+        $stmt3->execute($groupIds);
+        foreach ($stmt3->fetchAll() as $row) {
+            $coachMap[(int)$row['group_id']][] = ['id' => (int)$row['admin_id'], 'name' => $row['admin_name']];
+        }
+    }
+    foreach ($groups as &$g) {
+        $g['coaches'] = $coachMap[(int)$g['id']] ?? [];
+    }
+    unset($g);
+
     // 미배정 인원 수
     $unWhere = ["bm.cohort_id = ?", "bm.group_id IS NULL", "bm.is_active = 1"];
     $unParams = [$cohortId];
@@ -178,9 +200,22 @@ function handleGroupsWithStats() {
     $stmt2->execute($unParams);
     $unassignedCount = (int)$stmt2->fetchColumn();
 
+    // 코치 목록 (조 배정용)
+    $stmtCoaches = $db->prepare("
+        SELECT a.id, a.name
+        FROM admins a
+        JOIN admin_roles ar ON ar.admin_id = a.id
+        WHERE ar.role IN ('coach', 'sub_coach', 'head', 'subhead1', 'subhead2') AND a.is_active = 1
+        GROUP BY a.id
+        ORDER BY a.name
+    ");
+    $stmtCoaches->execute();
+    $coaches = $stmtCoaches->fetchAll();
+
     jsonSuccess([
         'groups' => $groups,
         'unassigned_count' => $unassignedCount,
+        'coaches' => $coaches,
     ]);
 }
 
@@ -326,7 +361,21 @@ function handleGroupUpdateExtended($method) {
         $subleaderChanged = true;
     }
 
-    if (!$fields && !$subleaderChanged) jsonError('수정할 내용 없음');
+    // 코치 배정 변경
+    $coachChanged = false;
+    if (array_key_exists('coach_ids', $input)) {
+        $coachIds = is_array($input['coach_ids']) ? array_map('intval', $input['coach_ids']) : [];
+        $db->prepare("DELETE FROM coach_group_assignments WHERE group_id = ?")->execute([$id]);
+        if ($coachIds) {
+            $ins = $db->prepare("INSERT IGNORE INTO coach_group_assignments (admin_id, group_id) VALUES (?, ?)");
+            foreach ($coachIds as $cid) {
+                $ins->execute([$cid, $id]);
+            }
+        }
+        $coachChanged = true;
+    }
+
+    if (!$fields && !$subleaderChanged && !$coachChanged) jsonError('수정할 내용 없음');
     if ($fields) {
         $params[] = $id;
         $db->prepare("UPDATE bootcamp_groups SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);

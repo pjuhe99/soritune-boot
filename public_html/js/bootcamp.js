@@ -1672,10 +1672,12 @@ const BootcampApp = (() => {
                 <th>조</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th>
             </tr></thead><tbody>`;
 
+        const myGroupIds = (admin && admin.assigned_group_ids) || [];
         for (const g of d.groups) {
+            const isMine = myGroupIds.includes(g.id);
             html += `
-                <tr class="db-group-row" data-group-id="${g.id}">
-                    <td><span class="db-chevron" id="chev-req-${g.id}">&#9654;</span> ${App.esc(g.name)}</td>
+                <tr class="db-group-row${isMine ? ' db-my-group' : ''}" data-group-id="${g.id}">
+                    <td><span class="db-chevron" id="chev-req-${g.id}">&#9654;</span> ${App.esc(g.name)}${isMine ? ' <span class="badge badge-primary badge-xs">MY</span>' : ''}</td>
                     <td>${g.member_count}</td>
                     <td>${g.zoom_daily_rate}%</td>
                     <td>${g.inner33_rate}%</td>
@@ -1705,9 +1707,10 @@ const BootcampApp = (() => {
 
         for (const g of d.groups) {
             const oa = g.optional_avg;
+            const isMine2 = myGroupIds.includes(g.id);
             html += `
-                <tr class="db-group-row" data-group-id="opt-${g.id}">
-                    <td><span class="db-chevron" id="chev-opt-${g.id}">&#9654;</span> ${App.esc(g.name)}</td>
+                <tr class="db-group-row${isMine2 ? ' db-my-group' : ''}" data-group-id="opt-${g.id}">
+                    <td><span class="db-chevron" id="chev-opt-${g.id}">&#9654;</span> ${App.esc(g.name)}${isMine2 ? ' <span class="badge badge-primary badge-xs">MY</span>' : ''}</td>
                     <td>${g.member_count}</td>
                     <td>${oa.bookclub_open}회</td>
                     <td>${oa.bookclub_join}회</td>

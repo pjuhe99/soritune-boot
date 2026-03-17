@@ -312,7 +312,7 @@ const GroupAssignmentApp = (() => {
             <div class="ga-table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr><th>조 이름</th><th>단계</th><th>조장</th><th>부조장</th><th>인원</th><th>신규</th><th>재수강</th><th></th></tr>
+                        <tr><th>조 이름</th><th>단계</th><th>조장</th><th>부조장</th><th>코치</th><th>인원</th><th>신규</th><th>재수강</th><th></th></tr>
                     </thead>
                     <tbody>
                         ${groups.map(g => `
@@ -321,6 +321,7 @@ const GroupAssignmentApp = (() => {
                                 <td><span class="badge badge-neutral">${g.stage_no}단계</span></td>
                                 <td>${App.esc(g.leader_nickname || g.leader_real_name || '-')}</td>
                                 <td>${App.esc(g.subleader_nickname || '-')}</td>
+                                <td>${(g.coaches || []).map(c => App.esc(c.name)).join(', ') || '-'}</td>
                                 <td>${g.total_members}</td>
                                 <td>${g.new_members}</td>
                                 <td>${g.returning_members}</td>
@@ -441,7 +442,9 @@ const GroupAssignmentApp = (() => {
         if (!group) return Toast.error('조를 찾을 수 없습니다.');
 
         const allCandidates = r2.candidates || [];
+        const allCoaches = r.coaches || [];
         const stageNo = parseInt(group.stage_no);
+        const currentCoachIds = (group.coaches || []).map(c => parseInt(c.id));
 
         // 조장 후보: 미배정 조장 + 현재 이 조의 조장
         const leaders = allCandidates.filter(c =>
@@ -479,6 +482,18 @@ const GroupAssignmentApp = (() => {
                 </select>
             </div>
             <div class="form-group">
+                <label class="form-label">담당 코치</label>
+                <div class="checkbox-group" id="gef-coaches">
+                    ${allCoaches.map(c => `
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="${c.id}" ${currentCoachIds.includes(parseInt(c.id)) ? 'checked' : ''}>
+                            ${App.esc(c.name)}
+                        </label>
+                    `).join('')}
+                    ${allCoaches.length === 0 ? '<span class="text-muted">등록된 코치가 없습니다.</span>' : ''}
+                </div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">카카오톡 링크</label>
                 <input type="text" class="form-input" id="gef-kakao" value="${App.esc(group.kakao_link || '')}">
             </div>
@@ -491,11 +506,13 @@ const GroupAssignmentApp = (() => {
 
         document.getElementById('gef-save').onclick = async () => {
             const subleaderVal = document.getElementById('gef-subleader').value;
+            const coachIds = [...document.querySelectorAll('#gef-coaches input:checked')].map(cb => parseInt(cb.value));
             const payload = {
                 id: groupId,
                 name: document.getElementById('gef-name').value.trim(),
                 leader_member_id: parseInt(document.getElementById('gef-leader').value) || null,
                 subleader_member_id: subleaderVal ? parseInt(subleaderVal) : null,
+                coach_ids: coachIds,
                 kakao_link: document.getElementById('gef-kakao').value.trim(),
             };
             App.showLoading();

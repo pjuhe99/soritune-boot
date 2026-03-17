@@ -1,3 +1,9 @@
+/* ── Checkbox Group (modal forms) ───────────────────── */
+.checkbox-group { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.checkbox-label { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm, 14px); cursor: pointer; padding: 4px 8px; border: 1px solid var(--color-gray-200, #e5e7eb); border-radius: var(--radius-sm, 4px); }
+.checkbox-label:has(input:checked) { background: var(--color-primary-50, #eff6ff); border-color: var(--color-primary, #3b82f6); }
+.checkbox-label input[type="checkbox"] { margin: 0; }
+
 /* ══════════════════════════════════════════════════════════════
    Admin Dashboard
    공통 토큰/컴포넌트 기반 — 페이지 고유 스타일만 정의

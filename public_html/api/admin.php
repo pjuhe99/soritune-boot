@@ -156,6 +156,10 @@ case 'check_session':
             $s['bootcamp_group_id'] = $row['bootcamp_group_id'] ? (int)$row['bootcamp_group_id'] : null;
             $_SESSION['bootcamp_group_id'] = $s['bootcamp_group_id'];
         }
+        // 코치 담당 그룹 ID 목록
+        $stmt2 = $db->prepare('SELECT group_id FROM coach_group_assignments WHERE admin_id = ?');
+        $stmt2->execute([$s['admin_id']]);
+        $s['assigned_group_ids'] = array_map('intval', array_column($stmt2->fetchAll(), 'group_id'));
         jsonSuccess(['logged_in' => true, 'admin' => $s]);
     } else {
         jsonSuccess(['logged_in' => false]);

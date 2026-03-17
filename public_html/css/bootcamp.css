@@ -509,6 +509,8 @@
 .db-group-table th:first-child { text-align: left; }
 .db-group-row { cursor: pointer; transition: background var(--transition-fast); }
 .db-group-row:hover { background: var(--color-gray-50); }
+.db-group-row.db-my-group { background: var(--color-primary-50, #eff6ff); font-weight: var(--font-bold); }
+.db-group-row.db-my-group:hover { background: var(--color-primary-100, #dbeafe); }
 
 /* Accordion Members */
 .db-member-panel { display: none; }
