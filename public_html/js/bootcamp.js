@@ -1156,12 +1156,13 @@ const BootcampApp = (() => {
             return;
         }
 
-        body.innerHTML = MemberTable.render(members, {
+        body.innerHTML = MemberTable.searchBarHtml(members.length) + MemberTable.render(members, {
             mode: 'bootcamp',
             editFn: 'BootcampApp._editMember',
             deleteFn: 'BootcampApp._deleteMember',
         });
         MemberTable.bindToggle(body);
+        MemberTable.bindSearch(body);
     }
 
     function showMemberForm(data = {}) {

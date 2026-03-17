@@ -61,13 +61,14 @@ const MemberTable = (() => {
 
         const headerCols = `
             <th class="mt-col-name">이름</th>
+            <th class="mt-col-userid">아이디</th>
             ${showGroup ? '<th class="mt-col-group">조</th>' : ''}
             <th class="mt-col-hist">이력</th>
             <th class="mt-col-bravo">등급</th>
             <th class="mt-col-score">점수</th>
             <th class="mt-col-status">상태</th>
         `;
-        const colCount = showGroup ? 6 : 5;
+        const colCount = (showGroup ? 6 : 5) + 1;
 
         const rows = members.map(m => {
             const pc = parseInt(m.participation_count);
@@ -85,6 +86,7 @@ const MemberTable = (() => {
                     <div class="mt-name-primary">${App.esc(m.nickname)} ${roleBadge} ${pcBadge}</div>
                     <div class="mt-name-sub">${App.esc(m.real_name || '')}</div>
                 </td>
+                <td class="mt-col-userid"><span class="mt-userid-text">${App.esc(m.user_id || '-')}</span></td>
                 ${showGroup ? `<td class="mt-col-group">${App.esc(m.group_name || '-')}</td>` : ''}
                 <td class="mt-col-hist">
                     <div class="mt-hist-summary">${historyHtml(m)}</div>
@@ -167,5 +169,42 @@ const MemberTable = (() => {
         });
     }
 
-    return { render, bindToggle, ROLE_LABELS };
+    /**
+     * 검색 바 HTML 생성
+     */
+    function searchBarHtml(count) {
+        return `<div class="mt-search-bar">
+            <input type="text" class="form-input mt-search-input" placeholder="이름 또는 아이디로 검색" id="mt-search">
+            <span class="mt-search-count" id="mt-search-count">${count}명</span>
+        </div>`;
+    }
+
+    /**
+     * 검색 이벤트 바인딩 — 테이블 행을 실시간 필터링
+     */
+    function bindSearch(container) {
+        const input = container.querySelector('#mt-search');
+        const countEl = container.querySelector('#mt-search-count');
+        if (!input) return;
+
+        input.addEventListener('input', App.debounce(() => {
+            const q = input.value.trim().toLowerCase();
+            let visible = 0;
+            container.querySelectorAll('.mt-row').forEach(row => {
+                const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
+                const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
+                const match = !q || name.includes(q) || userId.includes(q);
+                row.style.display = match ? '' : 'none';
+                const detail = container.querySelector(`.mt-detail[data-for="${row.dataset.id}"]`);
+                if (detail && !match) {
+                    detail.style.display = 'none';
+                    row.classList.remove('mt-row--open');
+                }
+                if (match) visible++;
+            });
+            if (countEl) countEl.textContent = visible + '명';
+        }, 150));
+    }
+
+    return { render, bindToggle, bindSearch, searchBarHtml, ROLE_LABELS };
 })();

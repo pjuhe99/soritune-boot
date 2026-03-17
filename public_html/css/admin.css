@@ -394,6 +394,30 @@
 }
 
 /* ── MemberTable (공통 회원 테이블) ────────────────────────── */
+.mt-search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+.mt-search-input {
+    flex: 1;
+    max-width: 300px;
+}
+.mt-search-count {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+.mt-col-userid {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    white-space: nowrap;
+}
+.mt-userid-text {
+    font-family: monospace;
+    font-size: 12px;
+}
 .mt-container { overflow-x: auto; }
 
 .mt-table { border-collapse: collapse; }

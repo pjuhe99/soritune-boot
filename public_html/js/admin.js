@@ -751,15 +751,18 @@ const AdminApp = (() => {
                 <span style="font-weight:600">회원 (${r.members.length}명)</span>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
-            <div id="op-members-table"></div>
+            <div id="op-members-table">
+                ${MemberTable.searchBarHtml(r.members.length)}
+                ${MemberTable.render(r.members, {
+                    mode: 'operation',
+                    editFn: 'AdminApp._editMember',
+                    deleteFn: 'AdminApp._deleteMember',
+                })}
+            </div>
         `;
         const tableEl = document.getElementById('op-members-table');
-        tableEl.innerHTML = MemberTable.render(r.members, {
-            mode: 'operation',
-            editFn: 'AdminApp._editMember',
-            deleteFn: 'AdminApp._deleteMember',
-        });
         MemberTable.bindToggle(tableEl);
+        MemberTable.bindSearch(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 
