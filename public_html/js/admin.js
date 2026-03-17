@@ -142,7 +142,7 @@ const AdminApp = (() => {
                     </div>
                     <div class="admin-header-right">
                         <span class="admin-name">${App.esc(admin.admin_name)}</span>
-                        <button class="btn-change-pw" id="btn-change-pw">비밀번호 변경</button>
+                        ${role !== 'leader' ? '<button class="btn-change-pw" id="btn-change-pw">비밀번호 변경</button>' : ''}
                         <button class="btn-logout" id="btn-logout">로그아웃</button>
                     </div>
                 </div>
@@ -269,7 +269,8 @@ const AdminApp = (() => {
             showLoginForm();
         };
 
-        document.getElementById('btn-change-pw').onclick = () => {
+        const btnChangePw = document.getElementById('btn-change-pw');
+        if (btnChangePw) btnChangePw.onclick = () => {
             const body = `
                 <div class="form-group">
                     <label class="form-label">현재 비밀번호</label>
