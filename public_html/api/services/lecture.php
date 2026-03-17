@@ -10,7 +10,7 @@
 
 /**
  * 코치 목록 (강의 생성 드롭다운용)
- * coach, head, subhead1, subhead2 역할을 가진 admin만 반환
+ * coach, sub_coach, head, subhead1, subhead2 역할을 가진 admin만 반환
  */
 function handleLectureCoaches() {
     requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
@@ -21,7 +21,7 @@ function handleLectureCoaches() {
         FROM admins a
         JOIN admin_roles ar ON a.id = ar.admin_id
         WHERE a.is_active = 1
-          AND ar.role IN ('coach', 'head', 'subhead1', 'subhead2')
+          AND ar.role IN ('coach', 'sub_coach', 'head', 'subhead1', 'subhead2')
         ORDER BY a.name
     ");
     jsonSuccess(['coaches' => $stmt->fetchAll()]);
@@ -76,7 +76,7 @@ function handleLectureScheduleCreate($method) {
         FROM admins a
         JOIN admin_roles ar ON a.id = ar.admin_id
         WHERE a.id = ? AND a.is_active = 1
-          AND ar.role IN ('coach', 'head', 'subhead1', 'subhead2')
+          AND ar.role IN ('coach', 'sub_coach', 'head', 'subhead1', 'subhead2')
         LIMIT 1
     ");
     $coachRow->execute([$coachAdminId]);
