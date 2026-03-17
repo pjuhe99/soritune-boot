@@ -742,6 +742,13 @@ const AdminApp = (() => {
                 <label class="form-label">전화번호</label>
                 <input type="tel" class="form-input" id="mf-phone" value="${App.esc(data.phone || '')}" placeholder="01012345678">
             </div>
+            <div class="form-group">
+                <label class="form-label">단계</label>
+                <select class="form-select" id="mf-stage">
+                    <option value="1" ${(data.stage_no || 1) == 1 ? 'selected' : ''}>1단계</option>
+                    <option value="2" ${data.stage_no == 2 ? 'selected' : ''}>2단계</option>
+                </select>
+            </div>
             ${isEdit ? `
             <div class="form-group">
                 <label class="form-label">상태</label>
@@ -762,6 +769,7 @@ const AdminApp = (() => {
                 real_name: document.getElementById('mf-name').value.trim(),
                 user_id: document.getElementById('mf-userid').value.trim(),
                 phone: document.getElementById('mf-phone').value.trim(),
+                stage_no: parseInt(document.getElementById('mf-stage').value),
             };
             if (isEdit) {
                 payload.id = data.id;

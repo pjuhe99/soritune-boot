@@ -409,6 +409,7 @@ case 'member_create':
     $userId   = trim($input['user_id'] ?? '') ?: null;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $groupId  = !empty($input['group_id']) ? (int)$input['group_id'] : null;
+    $stageNo  = isset($input['stage_no']) ? (int)$input['stage_no'] : 1;
 
     if (!$realName) jsonError('이름을 입력해주세요.');
     if (!$userId) jsonError('아이디를 입력해주세요.');
@@ -426,6 +427,7 @@ case 'member_create':
         'phone'     => $phone,
         'user_id'   => $userId,
         'group_id'  => $groupId,
+        'stage_no'  => $stageNo,
     ]);
 
     jsonSuccess(['id' => $newId], '회원이 추가되었습니다.');
