@@ -113,9 +113,7 @@ function validateBulkMembers(array $rows, int $cohortId): array {
             $rowErrors[] = '입력값 초과: 이름은 50자 이내로 입력해주세요';
         }
 
-        if ($nickname === '') {
-            $rowErrors[] = '필수값 누락: 닉네임이 비어 있습니다';
-        } elseif (mb_strlen($nickname) > 50) {
+        if ($nickname !== '' && mb_strlen($nickname) > 50) {
             $rowErrors[] = '입력값 초과: 닉네임은 50자 이내로 입력해주세요';
         }
 

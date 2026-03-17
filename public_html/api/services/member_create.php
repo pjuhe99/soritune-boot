@@ -32,7 +32,7 @@ if (!function_exists('calcParticipationCount')) {
  */
 function createMember(PDO $db, array $data): int {
     $cohortId      = (int)$data['cohort_id'];
-    $nickname      = $data['nickname'];
+    $nickname      = !empty($data['nickname']) ? $data['nickname'] : null;
     $realName      = $data['real_name'] ?? null;
     $phone         = !empty($data['phone']) ? $data['phone'] : null;
     $userId        = !empty($data['user_id']) ? $data['user_id'] : null;
