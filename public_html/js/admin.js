@@ -683,15 +683,15 @@ const AdminApp = (() => {
         const isEdit = !!data.id;
         const body = `
             <div class="form-group">
-                <label class="form-label">닉네임 *</label>
-                <input type="text" class="form-input" id="mf-nickname" value="${App.esc(data.nickname || '')}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">이름</label>
+                <label class="form-label">이름 *</label>
                 <input type="text" class="form-input" id="mf-name" value="${App.esc(data.real_name || '')}">
             </div>
             <div class="form-group">
-                <label class="form-label">아이디</label>
+                <label class="form-label">닉네임</label>
+                <input type="text" class="form-input" id="mf-nickname" value="${App.esc(data.nickname || '')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">아이디 *</label>
                 <input type="text" class="form-input" id="mf-userid" value="${App.esc(data.user_id || '')}">
             </div>
             <div class="form-group">
@@ -723,7 +723,8 @@ const AdminApp = (() => {
                 payload.id = data.id;
                 payload.is_active = parseInt(document.getElementById('mf-active').value);
             }
-            if (!payload.nickname) return Toast.warning('닉네임을 입력해주세요.');
+            if (!payload.real_name) return Toast.warning('이름을 입력해주세요.');
+            if (!payload.user_id) return Toast.warning('아이디를 입력해주세요.');
 
             App.showLoading();
             const r = await App.post(`/api/admin.php?action=${isEdit ? 'member_update' : 'member_create'}`, payload);

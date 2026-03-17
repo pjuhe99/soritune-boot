@@ -381,7 +381,8 @@ case 'member_create':
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $groupId  = !empty($input['group_id']) ? (int)$input['group_id'] : null;
 
-    if (!$realName || !$nickname) jsonError('이름과 닉네임을 입력해주세요.');
+    if (!$realName) jsonError('이름을 입력해주세요.');
+    if (!$userId) jsonError('아이디를 입력해주세요.');
 
     $db = getDB();
     $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
