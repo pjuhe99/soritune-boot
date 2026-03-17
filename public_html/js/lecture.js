@@ -45,7 +45,7 @@ const LectureApp = (() => {
             chipSelector: '.lec-chip',
             onChipClick: (e, chip) => openDetail(parseInt(chip.dataset.id)),
             headerHtml: canCreate
-                ? '<button class="btn btn-primary btn-sm" id="btn-lec-create">강의 스케줄 추가</button>'
+                ? '<button class="btn btn-primary btn-sm" id="btn-lec-create">특강 스케줄 추가</button>'
                 : '',
             renderChips(events) {
                 return events.map(s => {
@@ -210,7 +210,7 @@ const LectureApp = (() => {
 
     /**
      * openCreateModal()
-     * 강의 스케줄 추가 팝업을 열고,
+     * 특강 스케줄 추가 팝업을 열고,
      * 폼 렌더링 → 상태 관리 → 유효성 검사 → submit 을 처리한다.
      * onSuccess 시 달력을 자동 갱신한다.
      */
@@ -225,7 +225,7 @@ const LectureApp = (() => {
 
         // ── 2) 폼 HTML 렌더 ──
         const body = buildCreateFormHtml(coaches, cohorts);
-        App.openModal('강의 스케줄 추가', body);
+        App.openModal('특강 스케줄 추가', body);
 
         // ── 3) 이벤트 바인딩 ──
         bindCreateFormEvents(cohorts);
