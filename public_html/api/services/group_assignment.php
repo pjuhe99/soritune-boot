@@ -86,6 +86,48 @@ function handleLeaderUnassign($method) {
 }
 
 // ══════════════════════════════════════════════════════════
+// 부조장 관리
+// ══════════════════════════════════════════════════════════
+
+/**
+ * 부조장 지정 (member_role을 subleader로 변경)
+ */
+function handleSubleaderAssign($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+    $memberId = (int)($input['member_id'] ?? 0);
+    if (!$memberId) jsonError('member_id 필요');
+
+    $db = getDB();
+
+    // 이미 조장이면 부조장 지정 불가
+    $stmt = $db->prepare("SELECT member_role FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $stmt->execute([$memberId]);
+    $member = $stmt->fetch();
+    if (!$member) jsonError('회원을 찾을 수 없습니다.');
+    if ($member['member_role'] === 'leader') jsonError('조장은 부조장으로 지정할 수 없습니다.');
+
+    $db->prepare("UPDATE bootcamp_members SET member_role = 'subleader' WHERE id = ?")->execute([$memberId]);
+    jsonSuccess([], '부조장으로 지정되었습니다.');
+}
+
+/**
+ * 부조장 해제 (member_role을 member로 변경)
+ */
+function handleSubleaderUnassign($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+    $memberId = (int)($input['member_id'] ?? 0);
+    if (!$memberId) jsonError('member_id 필요');
+
+    $db = getDB();
+    $db->prepare("UPDATE bootcamp_members SET member_role = 'member' WHERE id = ? AND member_role = 'subleader'")->execute([$memberId]);
+    jsonSuccess([], '부조장이 해제되었습니다.');
+}
+
+// ══════════════════════════════════════════════════════════
 // 조 CRUD (단계별 확장)
 // ══════════════════════════════════════════════════════════
 
@@ -189,6 +231,17 @@ function handleGroupCreateExtended($method) {
     // 조장을 해당 조에 자동 배정
     $db->prepare("UPDATE bootcamp_members SET group_id = ?, group_assigned_at = NOW(), member_role = 'leader' WHERE id = ?")->execute([$groupId, $leaderMemberId]);
 
+    // 부조장이 있으면 함께 배정
+    $subleaderMemberId = (int)($input['subleader_member_id'] ?? 0);
+    if ($subleaderMemberId) {
+        $stmt = $db->prepare("SELECT id, stage_no, member_role FROM bootcamp_members WHERE id = ? AND cohort_id = ? AND is_active = 1");
+        $stmt->execute([$subleaderMemberId, $cohortId]);
+        $subleader = $stmt->fetch();
+        if ($subleader && $subleader['member_role'] === 'subleader' && (int)$subleader['stage_no'] === $stageNo) {
+            $db->prepare("UPDATE bootcamp_members SET group_id = ?, group_assigned_at = NOW() WHERE id = ?")->execute([$groupId, $subleaderMemberId]);
+        }
+    }
+
     jsonSuccess(['id' => $groupId], '조가 생성되었습니다.');
 }
 
@@ -254,20 +307,21 @@ function handleGroupUpdateExtended($method) {
     if (array_key_exists('subleader_member_id', $input)) {
         $newSubleaderId = $input['subleader_member_id'] ? (int)$input['subleader_member_id'] : null;
 
-        // 기존 부조장 해제
-        $db->prepare("UPDATE bootcamp_members SET member_role = 'member' WHERE group_id = ? AND member_role = 'subleader'")
+        // 기존 부조장을 조에서 해제 (group_id를 NULL로)
+        $db->prepare("UPDATE bootcamp_members SET group_id = NULL, group_assigned_at = NULL WHERE group_id = ? AND member_role = 'subleader'")
            ->execute([$id]);
 
-        // 새 부조장 지정
+        // 새 부조장을 조에 배정
         if ($newSubleaderId) {
-            // 해당 조 소속이고 조장이 아닌지 확인
-            $stmt = $db->prepare("SELECT id, member_role FROM bootcamp_members WHERE id = ? AND group_id = ? AND is_active = 1");
-            $stmt->execute([$newSubleaderId, $id]);
+            $stmt = $db->prepare("SELECT id, member_role, stage_no FROM bootcamp_members WHERE id = ? AND member_role = 'subleader' AND is_active = 1");
+            $stmt->execute([$newSubleaderId]);
             $subMember = $stmt->fetch();
-            if (!$subMember) jsonError('해당 조 소속 회원이 아닙니다.');
-            if ($subMember['member_role'] === 'leader') jsonError('조장은 부조장으로 지정할 수 없습니다.');
+            if (!$subMember) jsonError('유효하지 않은 부조장입니다. 먼저 부조장으로 지정해주세요.');
+            if ((int)$subMember['stage_no'] !== (int)$group['stage_no']) {
+                jsonError("{$group['stage_no']}단계 조에는 {$group['stage_no']}단계 부조장만 가능합니다.");
+            }
 
-            $db->prepare("UPDATE bootcamp_members SET member_role = 'subleader' WHERE id = ?")->execute([$newSubleaderId]);
+            $db->prepare("UPDATE bootcamp_members SET group_id = ?, group_assigned_at = NOW() WHERE id = ?")->execute([$id, $newSubleaderId]);
         }
         $subleaderChanged = true;
     }
@@ -381,7 +435,7 @@ function generateAssignment(PDO $db, int $cohortId, int $stageNo): array {
         SELECT id, nickname, real_name, participation_count, member_role
         FROM bootcamp_members
         WHERE cohort_id = ? AND stage_no = ? AND group_id IS NULL AND is_active = 1
-              AND member_role != 'leader'
+              AND member_role NOT IN ('leader', 'subleader')
         ORDER BY id
     ");
     $stmt->execute([$cohortId, $stageNo]);
@@ -523,7 +577,7 @@ function handleAssignmentReset($method) {
     $stmt = $db->prepare("
         UPDATE bootcamp_members
         SET group_id = NULL, group_assigned_at = NULL
-        WHERE cohort_id = ? AND stage_no = ? AND member_role != 'leader' AND is_active = 1
+        WHERE cohort_id = ? AND stage_no = ? AND member_role NOT IN ('leader', 'subleader') AND is_active = 1
     ");
     $stmt->execute([$cohortId, $stageNo]);
     $count = $stmt->rowCount();

@@ -45,7 +45,7 @@ const GroupAssignmentApp = (() => {
             </div>
             <div class="ga-subtabs">
                 <button class="ga-subtab active" data-sub="overview">현황</button>
-                <button class="ga-subtab" data-sub="leaders">조장 관리</button>
+                <button class="ga-subtab" data-sub="leaders">조장/부조장 관리</button>
                 <button class="ga-subtab" data-sub="groups">조 생성/관리</button>
                 <button class="ga-subtab" data-sub="auto">자동 배정</button>
                 <button class="ga-subtab" data-sub="manual">수동 이동</button>
@@ -157,7 +157,8 @@ const GroupAssignmentApp = (() => {
 
         const candidates = r.candidates || [];
         const leaders = candidates.filter(c => c.member_role === 'leader');
-        const nonLeaders = candidates.filter(c => c.member_role !== 'leader');
+        const subleaders = candidates.filter(c => c.member_role === 'subleader');
+        const members = candidates.filter(c => c.member_role === 'member');
 
         body.innerHTML = `
             <h3 class="ga-section-title">현재 조장 (${leaders.length}명)</h3>
@@ -182,25 +183,47 @@ const GroupAssignmentApp = (() => {
             </div>
             ` : '<div class="empty-state">지정된 조장이 없습니다.</div>'}
 
-            <h3 class="ga-section-title mt-lg">회원 목록 (${nonLeaders.length}명)</h3>
+            <h3 class="ga-section-title mt-lg">현재 부조장 (${subleaders.length}명)</h3>
+            ${subleaders.length ? `
+            <div class="ga-table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>닉네임</th><th>이름</th><th>단계</th><th>배정된 조</th><th></th></tr></thead>
+                    <tbody>
+                        ${subleaders.map(m => `
+                            <tr>
+                                <td><strong>${App.esc(m.nickname)}</strong></td>
+                                <td>${App.esc(m.real_name || '-')}</td>
+                                <td><span class="badge badge-neutral">${m.stage_no}단계</span></td>
+                                <td>${App.esc(m.group_name || '미배정')}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger-outline" onclick="GroupAssignmentApp._unassignSubleader(${m.id}, '${App.esc(m.nickname)}')">해제</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ` : '<div class="empty-state">지정된 부조장이 없습니다.</div>'}
+
+            <h3 class="ga-section-title mt-lg">회원 목록 (${members.length}명)</h3>
             <div class="ga-search-bar">
                 <input type="text" class="form-input" id="ga-leader-search" placeholder="닉네임/이름 검색...">
             </div>
             <div id="ga-leader-list">
-                ${renderLeaderList(nonLeaders)}
+                ${renderMemberList(members)}
             </div>
         `;
 
         document.getElementById('ga-leader-search').oninput = (e) => {
             const kw = e.target.value.toLowerCase();
-            const filtered = nonLeaders.filter(m =>
+            const filtered = members.filter(m =>
                 m.nickname.toLowerCase().includes(kw) || (m.real_name || '').toLowerCase().includes(kw)
             );
-            document.getElementById('ga-leader-list').innerHTML = renderLeaderList(filtered);
+            document.getElementById('ga-leader-list').innerHTML = renderMemberList(filtered);
         };
     }
 
-    function renderLeaderList(members) {
+    function renderMemberList(members) {
         if (!members.length) return '<div class="empty-state">회원이 없습니다.</div>';
         return `
             <div class="ga-table-wrap">
@@ -214,7 +237,8 @@ const GroupAssignmentApp = (() => {
                                 <td><span class="badge badge-neutral">${m.stage_no}단계</span></td>
                                 <td>${App.esc(m.group_name || '미배정')}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="GroupAssignmentApp._assignLeader(${m.id})">조장 지정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="GroupAssignmentApp._assignLeader(${m.id})">조장</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="GroupAssignmentApp._assignSubleader(${m.id})">부조장</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -238,6 +262,27 @@ const GroupAssignmentApp = (() => {
         if (!await App.confirm(`'${nickname}'의 조장을 해제하시겠습니까?`)) return;
         App.showLoading();
         const r = await App.post(API + 'leader_unassign', { member_id: memberId });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            loadSubTab('leaders');
+        }
+    }
+
+    async function _assignSubleader(memberId) {
+        App.showLoading();
+        const r = await App.post(API + 'subleader_assign', { member_id: memberId });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            loadSubTab('leaders');
+        }
+    }
+
+    async function _unassignSubleader(memberId, nickname) {
+        if (!await App.confirm(`'${nickname}'의 부조장을 해제하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'subleader_unassign', { member_id: memberId });
         App.hideLoading();
         if (r.success) {
             Toast.success(r.message);
@@ -294,12 +339,28 @@ const GroupAssignmentApp = (() => {
         document.getElementById('ga-add-group').onclick = () => showGroupCreateForm();
     }
 
+    function getAvailableCandidates(candidates, stageNo) {
+        const leaders = candidates.filter(c => c.member_role === 'leader' && parseInt(c.leader_group_count) === 0 && parseInt(c.stage_no) === stageNo);
+        const subleaders = candidates.filter(c => c.member_role === 'subleader' && !c.group_id && parseInt(c.stage_no) === stageNo);
+        return { leaders, subleaders };
+    }
+
+    function renderLeaderOptions(leaders) {
+        return '<option value="">선택하세요</option>' +
+            leaders.map(l => `<option value="${l.id}">${App.esc(l.nickname)}${l.real_name ? ' (' + App.esc(l.real_name) + ')' : ''}</option>`).join('');
+    }
+
+    function renderSubleaderOptions(subleaders) {
+        return '<option value="">없음</option>' +
+            subleaders.map(l => `<option value="${l.id}">${App.esc(l.nickname)}${l.real_name ? ' (' + App.esc(l.real_name) + ')' : ''}</option>`).join('');
+    }
+
     async function showGroupCreateForm() {
         const stageNo = selectedStageNo || 1;
 
-        // 조장 후보 로드
-        const r = await App.get(API + 'leader_candidates', { cohort_id: selectedCohortId, stage_no: stageNo });
-        const leaders = (r.candidates || []).filter(c => c.member_role === 'leader' && parseInt(c.leader_group_count) === 0);
+        const r = await App.get(API + 'leader_candidates', { cohort_id: selectedCohortId });
+        const allCandidates = r.candidates || [];
+        let { leaders, subleaders } = getAvailableCandidates(allCandidates, stageNo);
 
         const body = `
             <div class="form-group">
@@ -316,10 +377,16 @@ const GroupAssignmentApp = (() => {
             <div class="form-group">
                 <label class="form-label">조장 *</label>
                 <select class="form-select" id="gcf-leader">
-                    <option value="">선택하세요</option>
-                    ${leaders.map(l => `<option value="${l.id}">${App.esc(l.nickname)}${l.real_name ? ' (' + App.esc(l.real_name) + ')' : ''} - ${l.stage_no}단계</option>`).join('')}
+                    ${renderLeaderOptions(leaders)}
                 </select>
                 <div class="form-help" id="gcf-leader-help">${leaders.length === 0 ? '해당 단계에 미배정 조장이 없습니다. 먼저 조장을 지정해주세요.' : ''}</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">부조장</label>
+                <select class="form-select" id="gcf-subleader">
+                    ${renderSubleaderOptions(subleaders)}
+                </select>
+                <div class="form-help" id="gcf-subleader-help">${subleaders.length === 0 ? '해당 단계에 미배정 부조장이 없습니다.' : ''}</div>
             </div>
         `;
         const footer = `
@@ -328,21 +395,21 @@ const GroupAssignmentApp = (() => {
         `;
         App.openModal('조 생성', body, footer);
 
-        // 단계 변경 시 조장 후보 갱신
-        document.getElementById('gcf-stage').onchange = async (e) => {
+        // 단계 변경 시 조장/부조장 후보 갱신
+        document.getElementById('gcf-stage').onchange = (e) => {
             const st = parseInt(e.target.value);
-            const r2 = await App.get(API + 'leader_candidates', { cohort_id: selectedCohortId, stage_no: st });
-            const newLeaders = (r2.candidates || []).filter(c => c.member_role === 'leader' && parseInt(c.leader_group_count) === 0);
-            const sel = document.getElementById('gcf-leader');
-            sel.innerHTML = '<option value="">선택하세요</option>' +
-                newLeaders.map(l => `<option value="${l.id}">${App.esc(l.nickname)}${l.real_name ? ' (' + App.esc(l.real_name) + ')' : ''} - ${l.stage_no}단계</option>`).join('');
-            document.getElementById('gcf-leader-help').textContent = newLeaders.length === 0 ? '해당 단계에 미배정 조장이 없습니다.' : '';
+            const avail = getAvailableCandidates(allCandidates, st);
+            document.getElementById('gcf-leader').innerHTML = renderLeaderOptions(avail.leaders);
+            document.getElementById('gcf-leader-help').textContent = avail.leaders.length === 0 ? '해당 단계에 미배정 조장이 없습니다.' : '';
+            document.getElementById('gcf-subleader').innerHTML = renderSubleaderOptions(avail.subleaders);
+            document.getElementById('gcf-subleader-help').textContent = avail.subleaders.length === 0 ? '해당 단계에 미배정 부조장이 없습니다.' : '';
         };
 
         document.getElementById('gcf-save').onclick = async () => {
             const name = document.getElementById('gcf-name').value.trim();
             const stage = parseInt(document.getElementById('gcf-stage').value);
             const leaderId = parseInt(document.getElementById('gcf-leader').value);
+            const subleaderId = parseInt(document.getElementById('gcf-subleader').value) || null;
 
             if (!name) return Toast.warning('조 이름을 입력해주세요.');
             if (!leaderId) return Toast.warning('조장을 선택해주세요.');
@@ -353,6 +420,7 @@ const GroupAssignmentApp = (() => {
                 name,
                 stage_no: stage,
                 leader_member_id: leaderId,
+                subleader_member_id: subleaderId,
             });
             App.hideLoading();
             if (r.success) {
@@ -364,26 +432,29 @@ const GroupAssignmentApp = (() => {
     }
 
     async function _editGroup(groupId) {
-        // 조 정보 + 조 소속 멤버 로드
-        const [r, rMembers, r2] = await Promise.all([
+        const [r, r2] = await Promise.all([
             App.get(API + 'groups_with_stats', { cohort_id: selectedCohortId }),
-            App.get(API + 'group_members', { cohort_id: selectedCohortId }),
             App.get(API + 'leader_candidates', { cohort_id: selectedCohortId }),
         ]);
         if (!r.success) return;
         const group = (r.groups || []).find(g => parseInt(g.id) === groupId);
         if (!group) return Toast.error('조를 찾을 수 없습니다.');
 
-        // 조장 후보
-        const leaders = (r2.candidates || []).filter(c =>
-            c.member_role === 'leader' && (parseInt(c.leader_group_count) === 0 || parseInt(c.id) === parseInt(group.leader_member_id))
+        const allCandidates = r2.candidates || [];
+        const stageNo = parseInt(group.stage_no);
+
+        // 조장 후보: 미배정 조장 + 현재 이 조의 조장
+        const leaders = allCandidates.filter(c =>
+            c.member_role === 'leader' && parseInt(c.stage_no) === stageNo &&
+            (parseInt(c.leader_group_count) === 0 || parseInt(c.id) === parseInt(group.leader_member_id))
         );
 
-        // 부조장 후보: 해당 조 소속 멤버 중 조장 제외
-        const groupMembers = (rMembers.members || []).filter(m =>
-            parseInt(m.group_id) === groupId && m.member_role !== 'leader'
-        );
+        // 부조장 후보: 미배정 부조장 + 현재 이 조의 부조장
         const currentSubleaderId = group.subleader_member_id ? parseInt(group.subleader_member_id) : null;
+        const subleaders = allCandidates.filter(c =>
+            c.member_role === 'subleader' && parseInt(c.stage_no) === stageNo &&
+            (!c.group_id || parseInt(c.id) === currentSubleaderId)
+        );
 
         const body = `
             <div class="form-group">
@@ -404,7 +475,7 @@ const GroupAssignmentApp = (() => {
                 <label class="form-label">부조장</label>
                 <select class="form-select" id="gef-subleader">
                     <option value="">없음</option>
-                    ${groupMembers.map(m => `<option value="${m.id}" ${parseInt(m.id) === currentSubleaderId ? 'selected' : ''}>${App.esc(m.nickname)}${m.real_name ? ' (' + App.esc(m.real_name) + ')' : ''}</option>`).join('')}
+                    ${subleaders.map(m => `<option value="${m.id}" ${parseInt(m.id) === currentSubleaderId ? 'selected' : ''}>${App.esc(m.nickname)}${m.real_name ? ' (' + App.esc(m.real_name) + ')' : ''}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
@@ -637,6 +708,8 @@ const GroupAssignmentApp = (() => {
                 <div class="ga-group-card-body">
                     ${groupData.members.length ? groupData.members.map(m => {
                         const isLeader = m.member_role === 'leader';
+                        const isSubleader = m.member_role === 'subleader';
+                        const isFixed = isLeader || isSubleader;
                         const pc = parseInt(m.participation_count);
                         const pcBadge = pc > 1 ? `<span class="badge badge-info badge-xs">${pc}회차</span>` : '';
                         return `
@@ -644,9 +717,10 @@ const GroupAssignmentApp = (() => {
                                 <div class="ga-member-info">
                                     <span>${App.esc(m.nickname)}</span>
                                     ${isLeader ? '<span class="badge badge-primary badge-xs">조장</span>' : ''}
+                                    ${isSubleader ? '<span class="badge badge-secondary badge-xs">부조장</span>' : ''}
                                     ${pcBadge}
                                 </div>
-                                ${!isLeader ? `
+                                ${!isFixed ? `
                                 <select class="form-select form-select-sm ga-move-select" data-member-id="${m.id}" data-member-name="${App.esc(m.nickname)}" data-stage="${m.stage_no}">
                                     <option value="${m.group_id || ''}" selected>${isUnassigned ? '미배정' : App.esc(groupData.name)}</option>
                                     ${isUnassigned ? '' : '<option value="">미배정</option>'}
@@ -696,6 +770,8 @@ const GroupAssignmentApp = (() => {
         renderTab,
         _assignLeader,
         _unassignLeader,
+        _assignSubleader,
+        _unassignSubleader,
         _editGroup,
         _deleteGroup,
         _autoForStage,

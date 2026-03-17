@@ -302,6 +302,8 @@ case 'issue_admin_note':    handleIssueAdminNote($method); break;
 case 'leader_candidates':    handleLeaderCandidates(); break;
 case 'leader_assign':        handleLeaderAssign($method); break;
 case 'leader_unassign':      handleLeaderUnassign($method); break;
+case 'subleader_assign':     handleSubleaderAssign($method); break;
+case 'subleader_unassign':   handleSubleaderUnassign($method); break;
 case 'groups_with_stats':    handleGroupsWithStats(); break;
 case 'group_create_ext':     handleGroupCreateExtended($method); break;
 case 'group_update_ext':     handleGroupUpdateExtended($method); break;
