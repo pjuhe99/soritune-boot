@@ -102,6 +102,7 @@ const AdminApp = (() => {
                     </div>
                     <div class="admin-header-right">
                         <span class="admin-name">${App.esc(admin.admin_name)}</span>
+                        <button class="btn-change-pw" id="btn-change-pw">비밀번호 변경</button>
                         <button class="btn-logout" id="btn-logout">로그아웃</button>
                     </div>
                 </div>
@@ -226,6 +227,49 @@ const AdminApp = (() => {
             await App.post('/api/admin.php?action=logout');
             Toast.info('로그아웃 되었습니다.');
             showLoginForm();
+        };
+
+        document.getElementById('btn-change-pw').onclick = () => {
+            const body = `
+                <div class="form-group">
+                    <label class="form-label">현재 비밀번호</label>
+                    <input type="password" class="form-input" id="pw-current" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">새 비밀번호</label>
+                    <input type="password" class="form-input" id="pw-new" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">새 비밀번호 확인</label>
+                    <input type="password" class="form-input" id="pw-confirm" autocomplete="new-password">
+                </div>
+            `;
+            App.modal('비밀번호 변경', body, async () => {
+                const currentPw = document.getElementById('pw-current').value;
+                const newPw = document.getElementById('pw-new').value;
+                const confirmPw = document.getElementById('pw-confirm').value;
+
+                if (!currentPw || !newPw || !confirmPw) {
+                    Toast.warning('모든 항목을 입력해주세요.');
+                    return false;
+                }
+                if (newPw !== confirmPw) {
+                    Toast.warning('새 비밀번호가 일치하지 않습니다.');
+                    return false;
+                }
+                if (newPw.length < 4) {
+                    Toast.warning('새 비밀번호는 4자 이상이어야 합니다.');
+                    return false;
+                }
+
+                const r = await App.post('/api/admin.php?action=change_password', {
+                    current_password: currentPw,
+                    new_password: newPw,
+                    confirm_password: confirmPw,
+                });
+                if (!r.success) return false;
+                Toast.success('비밀번호가 변경되었습니다.');
+            });
         };
 
         const tabCtrl = App.initTabs(document.getElementById('sec-tabs'));

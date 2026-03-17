@@ -66,6 +66,35 @@ case 'logout':
     jsonSuccess([], '로그아웃 되었습니다.');
     break;
 
+case 'change_password':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = getAdminSession();
+    if (!$s) jsonError('로그인이 필요합니다.', 401);
+
+    $input = getJsonInput();
+    $currentPw = $input['current_password'] ?? '';
+    $newPw     = $input['new_password'] ?? '';
+    $confirmPw = $input['confirm_password'] ?? '';
+
+    if (!$currentPw || !$newPw || !$confirmPw) jsonError('모든 항목을 입력해주세요.');
+    if ($newPw !== $confirmPw) jsonError('새 비밀번호가 일치하지 않습니다.');
+    if (mb_strlen($newPw) < 4) jsonError('새 비밀번호는 4자 이상이어야 합니다.');
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT password_hash FROM admins WHERE id = ? AND is_active = 1');
+    $stmt->execute([$s['admin_id']]);
+    $admin = $stmt->fetch();
+
+    if (!$admin || !password_verify($currentPw, $admin['password_hash'])) {
+        jsonError('현재 비밀번호가 올바르지 않습니다.');
+    }
+
+    $newHash = password_hash($newPw, PASSWORD_DEFAULT);
+    $db->prepare('UPDATE admins SET password_hash = ? WHERE id = ?')->execute([$newHash, $s['admin_id']]);
+
+    jsonSuccess([], '비밀번호가 변경되었습니다.');
+    break;
+
 case 'check_session':
     $s = getAdminSession();
     if ($s) {
