@@ -110,6 +110,8 @@ function handleGroupsWithStats() {
         SELECT bg.*,
                lm.nickname AS leader_nickname,
                lm.real_name AS leader_real_name,
+               (SELECT sm.id FROM bootcamp_members sm WHERE sm.group_id = bg.id AND sm.member_role = 'subleader' AND sm.is_active = 1 LIMIT 1) AS subleader_member_id,
+               (SELECT sm.nickname FROM bootcamp_members sm WHERE sm.group_id = bg.id AND sm.member_role = 'subleader' AND sm.is_active = 1 LIMIT 1) AS subleader_nickname,
                COUNT(bm.id) AS total_members,
                SUM(CASE WHEN bm.participation_count = 1 THEN 1 ELSE 0 END) AS new_members,
                SUM(CASE WHEN bm.participation_count > 1 THEN 1 ELSE 0 END) AS returning_members
@@ -247,9 +249,34 @@ function handleGroupUpdateExtended($method) {
         }
     }
 
-    if (!$fields) jsonError('수정할 내용 없음');
-    $params[] = $id;
-    $db->prepare("UPDATE bootcamp_groups SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
+    // 부조장 변경
+    $subleaderChanged = false;
+    if (array_key_exists('subleader_member_id', $input)) {
+        $newSubleaderId = $input['subleader_member_id'] ? (int)$input['subleader_member_id'] : null;
+
+        // 기존 부조장 해제
+        $db->prepare("UPDATE bootcamp_members SET member_role = 'member' WHERE group_id = ? AND member_role = 'subleader'")
+           ->execute([$id]);
+
+        // 새 부조장 지정
+        if ($newSubleaderId) {
+            // 해당 조 소속이고 조장이 아닌지 확인
+            $stmt = $db->prepare("SELECT id, member_role FROM bootcamp_members WHERE id = ? AND group_id = ? AND is_active = 1");
+            $stmt->execute([$newSubleaderId, $id]);
+            $subMember = $stmt->fetch();
+            if (!$subMember) jsonError('해당 조 소속 회원이 아닙니다.');
+            if ($subMember['member_role'] === 'leader') jsonError('조장은 부조장으로 지정할 수 없습니다.');
+
+            $db->prepare("UPDATE bootcamp_members SET member_role = 'subleader' WHERE id = ?")->execute([$newSubleaderId]);
+        }
+        $subleaderChanged = true;
+    }
+
+    if (!$fields && !$subleaderChanged) jsonError('수정할 내용 없음');
+    if ($fields) {
+        $params[] = $id;
+        $db->prepare("UPDATE bootcamp_groups SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
+    }
 
     jsonSuccess([], '조 정보가 수정되었습니다.');
 }
@@ -614,6 +641,7 @@ function handleAssignmentSummary() {
     $stmt = $db->prepare("
         SELECT bg.id, bg.name, bg.stage_no, bg.leader_member_id,
                lm.nickname AS leader_nickname,
+               (SELECT sm.nickname FROM bootcamp_members sm WHERE sm.group_id = bg.id AND sm.member_role = 'subleader' AND sm.is_active = 1 LIMIT 1) AS subleader_nickname,
                COUNT(bm.id) AS member_count,
                SUM(CASE WHEN bm.participation_count = 1 THEN 1 ELSE 0 END) AS new_count,
                SUM(CASE WHEN bm.participation_count > 1 THEN 1 ELSE 0 END) AS returning_count

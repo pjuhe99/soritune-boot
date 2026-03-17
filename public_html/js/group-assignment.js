@@ -123,7 +123,7 @@ const GroupAssignmentApp = (() => {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>조</th><th>단계</th><th>조장</th><th>인원</th><th>신규</th><th>재수강</th>
+                            <th>조</th><th>단계</th><th>조장</th><th>부조장</th><th>인원</th><th>신규</th><th>재수강</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -132,6 +132,7 @@ const GroupAssignmentApp = (() => {
                                 <td><strong>${App.esc(g.name)}</strong></td>
                                 <td><span class="badge badge-neutral">${g.stage_no}단계</span></td>
                                 <td>${App.esc(g.leader_nickname || '-')}</td>
+                                <td>${App.esc(g.subleader_nickname || '-')}</td>
                                 <td>${g.member_count}</td>
                                 <td>${g.new_count}</td>
                                 <td>${g.returning_count}</td>
@@ -266,7 +267,7 @@ const GroupAssignmentApp = (() => {
             <div class="ga-table-wrap">
                 <table class="data-table">
                     <thead>
-                        <tr><th>조 이름</th><th>단계</th><th>조장</th><th>인원</th><th>신규</th><th>재수강</th><th></th></tr>
+                        <tr><th>조 이름</th><th>단계</th><th>조장</th><th>부조장</th><th>인원</th><th>신규</th><th>재수강</th><th></th></tr>
                     </thead>
                     <tbody>
                         ${groups.map(g => `
@@ -274,6 +275,7 @@ const GroupAssignmentApp = (() => {
                                 <td><strong>${App.esc(g.name)}</strong></td>
                                 <td><span class="badge badge-neutral">${g.stage_no}단계</span></td>
                                 <td>${App.esc(g.leader_nickname || g.leader_real_name || '-')}</td>
+                                <td>${App.esc(g.subleader_nickname || '-')}</td>
                                 <td>${g.total_members}</td>
                                 <td>${g.new_members}</td>
                                 <td>${g.returning_members}</td>
@@ -362,17 +364,26 @@ const GroupAssignmentApp = (() => {
     }
 
     async function _editGroup(groupId) {
-        // 조 정보 로드
-        const r = await App.get(API + 'groups_with_stats', { cohort_id: selectedCohortId });
+        // 조 정보 + 조 소속 멤버 로드
+        const [r, rMembers, r2] = await Promise.all([
+            App.get(API + 'groups_with_stats', { cohort_id: selectedCohortId }),
+            App.get(API + 'group_members', { cohort_id: selectedCohortId }),
+            App.get(API + 'leader_candidates', { cohort_id: selectedCohortId }),
+        ]);
         if (!r.success) return;
         const group = (r.groups || []).find(g => parseInt(g.id) === groupId);
         if (!group) return Toast.error('조를 찾을 수 없습니다.');
 
         // 조장 후보
-        const r2 = await App.get(API + 'leader_candidates', { cohort_id: selectedCohortId, stage_no: group.stage_no });
         const leaders = (r2.candidates || []).filter(c =>
             c.member_role === 'leader' && (parseInt(c.leader_group_count) === 0 || parseInt(c.id) === parseInt(group.leader_member_id))
         );
+
+        // 부조장 후보: 해당 조 소속 멤버 중 조장 제외
+        const groupMembers = (rMembers.members || []).filter(m =>
+            parseInt(m.group_id) === groupId && m.member_role !== 'leader'
+        );
+        const currentSubleaderId = group.subleader_member_id ? parseInt(group.subleader_member_id) : null;
 
         const body = `
             <div class="form-group">
@@ -390,6 +401,13 @@ const GroupAssignmentApp = (() => {
                 </select>
             </div>
             <div class="form-group">
+                <label class="form-label">부조장</label>
+                <select class="form-select" id="gef-subleader">
+                    <option value="">없음</option>
+                    ${groupMembers.map(m => `<option value="${m.id}" ${parseInt(m.id) === currentSubleaderId ? 'selected' : ''}>${App.esc(m.nickname)}${m.real_name ? ' (' + App.esc(m.real_name) + ')' : ''}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">카카오톡 링크</label>
                 <input type="text" class="form-input" id="gef-kakao" value="${App.esc(group.kakao_link || '')}">
             </div>
@@ -401,10 +419,12 @@ const GroupAssignmentApp = (() => {
         App.openModal('조 수정', body, footer);
 
         document.getElementById('gef-save').onclick = async () => {
+            const subleaderVal = document.getElementById('gef-subleader').value;
             const payload = {
                 id: groupId,
                 name: document.getElementById('gef-name').value.trim(),
                 leader_member_id: parseInt(document.getElementById('gef-leader').value) || null,
+                subleader_member_id: subleaderVal ? parseInt(subleaderVal) : null,
                 kakao_link: document.getElementById('gef-kakao').value.trim(),
             };
             App.showLoading();
