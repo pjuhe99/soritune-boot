@@ -685,7 +685,10 @@ case 'admin_delete':
     if ($id === $admin['admin_id']) jsonError('본인 계정은 삭제할 수 없습니다.');
 
     $db = getDB();
-    // admin_roles will be cascade-deleted
+    // 연결된 강의 세션 취소 처리
+    $db->prepare("UPDATE lecture_sessions SET status = 'cancelled' WHERE coach_admin_id = ? AND status = 'active'")->execute([$id]);
+    $db->prepare("UPDATE lecture_schedules SET status = 'cancelled' WHERE coach_admin_id = ? AND status = 'active'")->execute([$id]);
+    // admin_roles: CASCADE, lecture_schedules.coach_admin_id: SET NULL, tasks.assignee_admin_id: SET NULL
     $db->prepare('DELETE FROM admins WHERE id = ?')->execute([$id]);
     jsonSuccess([], '관리자가 삭제되었습니다.');
     break;
