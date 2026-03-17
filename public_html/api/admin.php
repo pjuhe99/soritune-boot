@@ -72,9 +72,11 @@ case 'login_phone':
 
     // Find active bootcamp_member with leader/subleader role by phone
     $stmt = $db->prepare("
-        SELECT bm.*, c.cohort
+        SELECT bm.id, bm.name, bm.member_role, bm.group_id, bm.cohort_id, c.cohort,
+               bg.name AS group_name
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ?
           AND bm.is_active = 1
           AND bm.member_role IN ('leader', 'subleader')
@@ -87,36 +89,21 @@ case 'login_phone':
         jsonError('등록된 조장/부조장 정보를 찾을 수 없습니다.');
     }
 
-    // Find matching admin record
-    $stmt = $db->prepare('SELECT * FROM admins WHERE bootcamp_group_id = ? AND is_active = 1 LIMIT 1');
-    $stmt->execute([$member['group_id']]);
-    $admin = $stmt->fetch();
+    // Map member_role to admin role
+    $role = $member['member_role']; // 'leader' or 'subleader'
+    $bcGroupId = $member['group_id'] ? (int)$member['group_id'] : null;
 
-    if (!$admin) {
-        jsonError('관리자 계정이 연결되어 있지 않습니다. 운영팀에 문의해주세요.');
-    }
-
-    // Fetch roles
-    $stmt = $db->prepare('SELECT role FROM admin_roles WHERE admin_id = ?');
-    $stmt->execute([$admin['id']]);
-    $roles = array_column($stmt->fetchAll(), 'role');
-
-    if (empty($roles)) {
-        jsonError('할당된 역할이 없습니다. 관리자에게 문의해주세요.');
-    }
-
-    $db->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
-    $bcGroupId = $admin['bootcamp_group_id'] ? (int)$admin['bootcamp_group_id'] : null;
-    loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort'], $bcGroupId);
+    // Login directly using bootcamp_member info (no admins table needed)
+    loginAdmin($member['id'], $member['name'], [$role], $member['cohort'], $bcGroupId);
 
     jsonSuccess([
         'admin' => [
-            'admin_id'    => $admin['id'],
-            'admin_name'  => $admin['name'],
-            'admin_roles' => $roles,
-            'cohort'      => $admin['cohort'],
-            'team'        => $admin['team'],
-            'class_time'  => $admin['class_time'],
+            'admin_id'    => $member['id'],
+            'admin_name'  => $member['name'],
+            'admin_roles' => [$role],
+            'cohort'      => $member['cohort'],
+            'team'        => $member['group_name'],
+            'class_time'  => null,
             'bootcamp_group_id' => $bcGroupId,
         ],
     ], '로그인 성공');
