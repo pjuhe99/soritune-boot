@@ -732,7 +732,7 @@ const GroupAssignmentApp = (() => {
                         return `
                             <div class="ga-member-row ${isLeader ? 'is-leader' : ''}">
                                 <div class="ga-member-info">
-                                    <span>${App.esc(m.nickname)}</span>
+                                    <span>${App.esc(m.nickname || '')}${m.real_name ? ' <small style="color:#888">(' + App.esc(m.real_name) + ')</small>' : ''}</span>
                                     ${isLeader ? '<span class="badge badge-primary badge-xs">조장</span>' : ''}
                                     ${isSubleader ? '<span class="badge badge-secondary badge-xs">부조장</span>' : ''}
                                     ${pcBadge}
