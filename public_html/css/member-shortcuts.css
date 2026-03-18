@@ -150,6 +150,16 @@
     transform: none;
 }
 
+/* ── 안내 힌트 ────────────────────────────────────────────── */
+.shortcut-hint {
+    display: block;
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--color-gray-400);
+    margin-top: calc(-1 * var(--space-1));
+    margin-bottom: var(--space-1);
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 640px) {
     .shortcuts-card {

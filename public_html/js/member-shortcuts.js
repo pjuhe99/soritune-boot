@@ -8,8 +8,8 @@ const MemberShortcuts = (() => {
     // url이 null이면 회원 DB에서 가져오는 동적 링크
     const SHORTCUTS = [
         { key: 'lecture',   label: '강의 들으러 가기',        url: 'https://www.sorimaster.com',                                    color: 'blue' },
-        { key: 'naemat33',  label: '내맛33미션 하러 가기',    url: 'https://m.cafe.naver.com/ca-fe/web/cafes/23243775/menus/322',   color: 'amber' },
         { key: 'daily',     label: '데일리 미션 하러 가기',   url: 'https://m.cafe.naver.com/ca-fe/web/cafes/23243775/menus/288',   color: 'green' },
+        { key: 'naemat33',  label: '내맛33미션 하러 가기',    url: 'https://m.cafe.naver.com/ca-fe/web/cafes/23243775/menus/322',   color: 'amber' },
         { key: 'malkka',    label: '말까 미션 하러 가기',     url: 'https://m.cafe.naver.com/ca-fe/web/cafes/23243775/menus/290',   color: 'violet' },
         { key: 'kakao',     label: '조별 카톡방 들어가기',    url: null,                                                            color: 'rose' },
     ];
@@ -31,9 +31,10 @@ const MemberShortcuts = (() => {
             const colorClass = ` shortcut-btn--${s.color}`;
 
             if (disabled) {
+                const hint = s.key === 'kakao' ? '<span class="shortcut-hint">조별 카톡방 링크는 목요일 중에 오픈됩니다</span>' : '';
                 return `<button class="shortcut-btn${disabledClass}" type="button"${disabledAttr}>
                     <span class="shortcut-label">${App.esc(s.label)}</span>
-                </button>`;
+                </button>${hint}`;
             }
 
             return `<a class="shortcut-btn${colorClass}" href="${App.esc(href)}" target="_blank" rel="noopener noreferrer">
