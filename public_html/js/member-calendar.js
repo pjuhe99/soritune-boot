@@ -34,6 +34,7 @@ const MemberCalendar = (() => {
                         <button class="filter-chip" data-stage="1">1단계</button>
                         <button class="filter-chip" data-stage="2">2단계</button>
                     </div>
+                    <a href="/study" class="btn btn-primary btn-sm" style="text-decoration:none;white-space:nowrap">복습클래스 관리 →</a>
                 </div>
                 <div id="member-cal-container"></div>
             </div>
