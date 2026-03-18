@@ -6,6 +6,7 @@ const CurriculumApp = (() => {
     let admin = null;
     let tabEl = null;
     let taskTypes = []; // [{key, label}]
+    let cachedItems = []; // 수정/삭제용 캐시
 
     // ── Public: init (lazy-load from AdminApp) ──
     async function initTab(containerEl, adminData) {
@@ -37,6 +38,7 @@ const CurriculumApp = (() => {
         if (!r.success) { tabEl.innerHTML = '<div class="empty-state">데이터를 불러올 수 없습니다.</div>'; return; }
 
         const items = r.items || [];
+        cachedItems = items;
 
         tabEl.innerHTML = `
             <div class="mgmt-toolbar mt-md">
@@ -47,6 +49,16 @@ const CurriculumApp = (() => {
         `;
 
         document.getElementById('btn-curriculum-add').onclick = () => showCreateModal();
+
+        tabEl.querySelectorAll('.btn-curriculum-edit').forEach(btn => {
+            btn.onclick = () => {
+                const item = cachedItems.find(i => String(i.id) === btn.dataset.id);
+                if (item) showEditModal(item);
+            };
+        });
+        tabEl.querySelectorAll('.btn-curriculum-delete').forEach(btn => {
+            btn.onclick = () => handleDelete(parseInt(btn.dataset.id));
+        });
     }
 
     function renderTable(items) {
@@ -59,6 +71,10 @@ const CurriculumApp = (() => {
                     <td><span class="badge badge-primary">${App.esc(item.task_type_label)}</span></td>
                     <td>${App.esc(item.note || '-')}</td>
                     <td style="white-space:nowrap;color:var(--color-gray)">${App.esc(createdAt)}</td>
+                    <td style="white-space:nowrap">
+                        <button class="btn btn-sm btn-secondary btn-curriculum-edit" data-id="${item.id}">수정</button>
+                        <button class="btn btn-sm btn-danger btn-curriculum-delete" data-id="${item.id}">삭제</button>
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -72,6 +88,7 @@ const CurriculumApp = (() => {
                             <th>할 일</th>
                             <th>비고</th>
                             <th>등록일</th>
+                            <th>관리</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -93,14 +110,35 @@ const CurriculumApp = (() => {
         App.openModal('진도 추가', body, footer);
 
         bindDateModeSwitch();
-        document.getElementById('cf-save').onclick = handleSave;
+        document.getElementById('cf-save').onclick = () => handleSave('create');
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Edit Modal (진도 수정 팝업)
+    // ══════════════════════════════════════════════════════════
+
+    function showEditModal(item) {
+        const body = buildForm(item);
+        const footer = `
+            <button class="btn btn-secondary" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="cf-save">저장</button>
+        `;
+        App.openModal('진도 수정', body, footer);
+
+        bindDateModeSwitch();
+        document.getElementById('cf-save').onclick = () => handleSave('update', item.id);
     }
 
     // ══════════════════════════════════════════════════════════
     // Form Builder
     // ══════════════════════════════════════════════════════════
 
-    function buildForm() {
+    function buildForm(item) {
+        const isEdit = !!item;
+        const dateVal = isEdit ? item.target_date : App.today();
+        const taskTypeVal = isEdit ? item.task_type : '';
+        const noteVal = isEdit ? (item.note || '') : '';
+
         // Date mode selector
         const dateModeSection = `
             <div class="form-group">
@@ -121,12 +159,12 @@ const CurriculumApp = (() => {
             <div id="cf-mode-direct" class="cf-date-section">
                 <div class="form-group">
                     <label class="form-label">날짜 *</label>
-                    <input type="date" class="form-input" id="cf-date" value="${App.today()}">
+                    <input type="date" class="form-input" id="cf-date" value="${dateVal}">
                 </div>
             </div>
         `;
 
-        // Week/day (task_create week 모드 UI 동일)
+        // Week/day
         const weekSection = `
             <div id="cf-mode-week" class="cf-date-section" style="display:none">
                 <div class="form-group">
@@ -151,7 +189,7 @@ const CurriculumApp = (() => {
 
         // Task type selector
         const typeOptions = taskTypes.map(t =>
-            `<option value="${App.esc(t.key)}">${App.esc(t.label)}</option>`
+            `<option value="${App.esc(t.key)}" ${t.key === taskTypeVal ? 'selected' : ''}>${App.esc(t.label)}</option>`
         ).join('');
 
         const typeSection = `
@@ -168,7 +206,7 @@ const CurriculumApp = (() => {
         const noteSection = `
             <div class="form-group">
                 <label class="form-label">비고</label>
-                <input type="text" class="form-input" id="cf-note" placeholder="선택 입력">
+                <input type="text" class="form-input" id="cf-note" placeholder="선택 입력" value="${App.esc(noteVal)}">
             </div>
         `;
 
@@ -211,10 +249,10 @@ const CurriculumApp = (() => {
     }
 
     // ══════════════════════════════════════════════════════════
-    // Save Handler
+    // Save Handler (추가 / 수정)
     // ══════════════════════════════════════════════════════════
 
-    async function handleSave() {
+    async function handleSave(mode, itemId) {
         const taskType = document.getElementById('cf-task-type').value;
         const note = document.getElementById('cf-note').value.trim();
 
@@ -229,12 +267,33 @@ const CurriculumApp = (() => {
             ...dateResult,
         };
 
+        if (mode === 'update') payload.id = itemId;
+
+        const action = mode === 'update' ? 'curriculum_update' : 'curriculum_create';
+
         App.showLoading();
-        const r = await App.post('/api/admin.php?action=curriculum_create', payload);
+        const r = await App.post('/api/admin.php?action=' + action, payload);
         App.hideLoading();
 
         if (r.success) {
             App.closeModal();
+            Toast.success(r.message);
+            loadTable();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Delete Handler (삭제)
+    // ══════════════════════════════════════════════════════════
+
+    async function handleDelete(id) {
+        if (!await App.confirm('이 진도를 삭제하시겠습니까?')) return;
+
+        App.showLoading();
+        const r = await App.post('/api/admin.php?action=curriculum_delete', { id });
+        App.hideLoading();
+
+        if (r.success) {
             Toast.success(r.message);
             loadTable();
         }

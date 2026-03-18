@@ -1139,6 +1139,75 @@ case 'curriculum_create':
     jsonSuccess(['id' => (int)$db->lastInsertId()], '진도가 추가되었습니다.');
     break;
 
+case 'curriculum_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $id         = (int)($input['id'] ?? 0);
+    $cohort     = getEffectiveCohort($admin);
+    $targetDate = trim($input['target_date'] ?? '');
+    $taskType   = trim($input['task_type'] ?? '');
+    $note       = trim($input['note'] ?? '') ?: null;
+    $sortOrder  = (int)($input['sort_order'] ?? 0);
+
+    $validTypes = ['progress', 'event', 'lecture', 'malkka_mission', 'naemat33_mission', 'zoom_or_daily_mission', 'hamummal'];
+
+    if (!$id) jsonError('ID가 필요합니다.');
+    if (!$targetDate) jsonError('날짜를 입력해주세요.');
+    if (!$taskType || !in_array($taskType, $validTypes)) jsonError('올바른 할 일 유형을 선택해주세요.');
+
+    // 주차/요일 모드 지원
+    if (empty($targetDate) || (!empty($input['week_number']) && isset($input['weekday']))) {
+        $weekNumber = (int)($input['week_number'] ?? 0);
+        $weekday    = (int)($input['weekday'] ?? -1);
+        if ($weekNumber < 1 || $weekday < 0 || $weekday > 6) jsonError('주차와 요일을 올바르게 입력해주세요.');
+
+        $db = getDB();
+        $stmt = $db->prepare('SELECT start_date FROM cohorts WHERE cohort = ?');
+        $stmt->execute([$cohort]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수의 시작일 정보가 없습니다.');
+
+        $cohortStart = new DateTime($cohortRow['start_date']);
+        $phpWeekday = $weekday === 0 ? 7 : $weekday;
+        $startDayOfWeek = (int)$cohortStart->format('N');
+        $weekMonday = clone $cohortStart;
+        $weekMonday->modify('-' . ($startDayOfWeek - 1) . ' days');
+        $weekMonday->modify('+' . ($weekNumber - 1) . ' weeks');
+        $targetDateObj = clone $weekMonday;
+        $targetDateObj->modify('+' . ($phpWeekday - 1) . ' days');
+        $targetDate = $targetDateObj->format('Y-m-d');
+    }
+
+    $db = getDB();
+    $stmt = $db->prepare('
+        UPDATE curriculum_items SET target_date = ?, task_type = ?, note = ?, sort_order = ?
+        WHERE id = ? AND cohort = ?
+    ');
+    $stmt->execute([$targetDate, $taskType, $note, $sortOrder, $id, $cohort]);
+
+    if ($stmt->rowCount() === 0) jsonError('해당 항목을 찾을 수 없습니다.');
+    jsonSuccess([], '진도가 수정되었습니다.');
+    break;
+
+case 'curriculum_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('ID가 필요합니다.');
+
+    $cohort = getEffectiveCohort($admin);
+    $db = getDB();
+    $stmt = $db->prepare('DELETE FROM curriculum_items WHERE id = ? AND cohort = ?');
+    $stmt->execute([$id, $cohort]);
+
+    if ($stmt->rowCount() === 0) jsonError('해당 항목을 찾을 수 없습니다.');
+    jsonSuccess([], '진도가 삭제되었습니다.');
+    break;
+
 // ── Member Event Logs (로그 대시보드) ─────────────────────────
 
 case 'member_event_stats':
