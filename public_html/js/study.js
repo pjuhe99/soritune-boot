@@ -288,7 +288,7 @@ const StudyApp = (() => {
 
         const cancelBtn = document.getElementById('btn-cancel-study');
         if (cancelBtn) {
-            cancelBtn.onclick = () => openCancelFlow(s.id, s.title);
+            cancelBtn.onclick = () => openCancelFlow(s.id, s.title, s.study_date, s.start_time);
         }
     }
 
@@ -357,7 +357,15 @@ const StudyApp = (() => {
     }
 
     // ── Cancel Flow ──
-    async function openCancelFlow(sessionId, title) {
+    async function openCancelFlow(sessionId, title, studyDate, startTime) {
+        // 시작 30분 전부터는 취소 불가
+        if (studyDate && startTime) {
+            const startDt = new Date(`${studyDate}T${startTime.substring(0, 5)}:00`);
+            if (startDt.getTime() - Date.now() < 30 * 60 * 1000) {
+                return Toast.warning('복습클래스 시작 30분 전부터는 취소할 수 없습니다.');
+            }
+        }
+
         App.closeModal();
         const body = `
             <p style="font-size:var(--md-font-size);line-height:1.6;margin-bottom:16px;">
@@ -582,6 +590,13 @@ const StudyApp = (() => {
             if (!state.hostMemberId) return Toast.warning('개설자를 선택해주세요.');
             if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
             if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
+
+            // 시작 3시간 전까지만 생성 가능
+            const startDt = new Date(`${studyDate}T${startTime}:00`);
+            const now = new Date();
+            if (startDt.getTime() - now.getTime() < 3 * 60 * 60 * 1000) {
+                return Toast.warning('복습클래스는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
+            }
 
             const slotStart = timeToMinutes(startTime);
             const overlap = (state.overlapSessions || []).find(s => {

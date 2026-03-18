@@ -190,6 +190,13 @@ function handleStudySessionCreate($method) {
         jsonError('과거 시간에는 복습클래스를 생성할 수 없습니다.');
     }
 
+    // 시작 3시간 전까지만 생성 가능
+    $minCreateAt = clone $now;
+    $minCreateAt->modify('+3 hours');
+    if ($startAt < $minCreateAt) {
+        jsonError('복습클래스는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
+    }
+
     // end_time = start_time + 1시간
     $endAt = clone $startAt;
     $endAt->modify('+1 hour');
@@ -371,11 +378,13 @@ function handleStudySessionCancel($method) {
         jsonError('비밀번호가 일치하지 않습니다.');
     }
 
-    // 시작 시각 이후 취소 불가
+    // 시작 30분 전까지만 취소 가능
     $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
     $startAt = new DateTime($session['study_date'] . ' ' . $session['start_time'], new DateTimeZone('Asia/Seoul'));
-    if ($now >= $startAt) {
-        jsonError('시작 시각 이후에는 취소할 수 없습니다.');
+    $cancelDeadline = clone $startAt;
+    $cancelDeadline->modify('-30 minutes');
+    if ($now >= $cancelDeadline) {
+        jsonError('복습클래스 시작 30분 전부터는 취소할 수 없습니다.');
     }
 
     // cancelled 처리 (hard delete 아님)
