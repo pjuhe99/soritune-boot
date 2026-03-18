@@ -1407,6 +1407,7 @@ const AdminApp = (() => {
             <div class="mgmt-toolbar mt-md">
                 <span style="font-weight:600">캘린더 (${r.calendar.length}개)</span>
                 <button class="btn btn-primary btn-sm" id="btn-add-cal">추가</button>
+                <a href="/study" class="btn btn-sm" style="margin-left:auto;background:#f0f0f0;color:#333;text-decoration:none">복습클래스 관리 →</a>
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
