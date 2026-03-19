@@ -548,6 +548,14 @@ const AdminApp = (() => {
     }
 
     // ── Guide Popup ──
+    const GUIDE_FILTERS = [
+        { key: 'all',       label: '전체',   roles: null },
+        { key: 'leader',    label: '조장',   roles: ['leader', 'subleader'] },
+        { key: 'coach',     label: '코치',   roles: ['coach', 'sub_coach'] },
+        { key: 'head',      label: '총괄',   roles: ['head', 'subhead1', 'subhead2'] },
+        { key: 'operation', label: '운영팀', roles: ['operation'] },
+    ];
+
     async function showGuidePopup() {
         App.showLoading();
         const r = await App.get('/api/admin.php?action=guide_list');
@@ -559,14 +567,30 @@ const AdminApp = (() => {
             return;
         }
 
+        const chips = GUIDE_FILTERS.map(f =>
+            `<button class="chip ${f.key === 'all' ? 'active' : ''}" data-guide-filter="${f.key}">${App.esc(f.label)}</button>`
+        ).join('');
+
         const list = r.guides.map(g => `
-            <a href="${App.esc(g.url)}" target="_blank" rel="noopener" class="list-item" style="display:block;text-decoration:none;color:inherit;">
+            <a href="${App.esc(g.url)}" target="_blank" rel="noopener" class="list-item guide-item" data-role="${App.esc(g.role)}" style="display:block;text-decoration:none;color:inherit;">
                 <div class="list-item-title">${App.esc(g.title)}</div>
                 ${g.note ? `<div class="list-item-subtitle">${App.esc(g.note)}</div>` : ''}
             </a>
         `).join('');
 
-        App.openModal('업무 가이드', list);
+        const html = `<div class="guide-filter-chips task-filter-chips" style="margin-bottom:var(--space-3)">${chips}</div><div class="guide-list">${list}</div>`;
+        App.openModal('업무 가이드', html);
+
+        document.querySelectorAll('[data-guide-filter]').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('[data-guide-filter]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const filter = GUIDE_FILTERS.find(f => f.key === btn.dataset.guideFilter);
+                document.querySelectorAll('.guide-item').forEach(item => {
+                    item.style.display = (!filter.roles || filter.roles.includes(item.dataset.role)) ? '' : 'none';
+                });
+            };
+        });
     }
 
     // ── Date Navigation ──
