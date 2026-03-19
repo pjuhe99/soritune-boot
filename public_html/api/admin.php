@@ -318,6 +318,45 @@ case 'toggle_task':
     jsonSuccess([], $completed ? '완료 처리되었습니다.' : '미완료로 변경되었습니다.');
     break;
 
+case 'all_tasks':
+    $admin = requireAdmin();
+    if (!hasRole($admin, 'operation')) jsonError('권한이 없습니다.', 403);
+    $cohort = getEffectiveCohort($admin);
+    $filterRole = $_GET['filter_role'] ?? '';
+    $adminId = $admin['admin_id'];
+
+    $db = getDB();
+    if ($filterRole === 'mine') {
+        $stmt = $db->prepare('
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.cohort = ? AND t.assignee_admin_id = ?
+            ORDER BY t.start_date DESC, t.title
+        ');
+        $stmt->execute([$cohort, $adminId]);
+    } elseif ($filterRole && $filterRole !== 'all') {
+        $stmt = $db->prepare('
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.cohort = ? AND t.role = ?
+            ORDER BY t.start_date DESC, t.title
+        ');
+        $stmt->execute([$cohort, $filterRole]);
+    } else {
+        $stmt = $db->prepare('
+            SELECT t.*, a.name AS assignee_name
+            FROM tasks t
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            WHERE t.cohort = ?
+            ORDER BY t.start_date DESC, t.title
+        ');
+        $stmt->execute([$cohort]);
+    }
+    jsonSuccess(['tasks' => $stmt->fetchAll()]);
+    break;
+
 // ── Guides ──────────────────────────────────────────────────
 
 case 'guide_list':

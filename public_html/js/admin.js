@@ -1068,25 +1068,34 @@ const AdminApp = (() => {
     }
 
     // ── Tasks Management ──
+    let taskMgmtFilter = 'all';
+
     async function loadTasksMgmt() {
         const sec = document.getElementById('tab-tasks-mgmt');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
 
-        const [rToday, rOverdue] = await Promise.all([
-            App.get('/api/admin.php?action=today_tasks', { date: App.today() }),
-            App.get('/api/admin.php?action=overdue_tasks'),
-        ]);
+        const r = await App.get('/api/admin.php?action=all_tasks', { filter_role: taskMgmtFilter });
+        const tasks = r.success ? (r.tasks || []) : [];
 
-        const seen = new Set();
-        const tasks = [];
-        for (const t of [...(rOverdue.tasks || []), ...(rToday.tasks || [])]) {
-            if (!seen.has(t.id)) { seen.add(t.id); tasks.push(t); }
-        }
+        const filters = [
+            { key: 'mine', label: '내 Task' },
+            { key: 'all', label: '전체' },
+            { key: 'coach', label: '메인강사' },
+            { key: 'sub_coach', label: '서브강사' },
+            { key: 'head', label: '총괄' },
+            { key: 'leader', label: '조장' },
+            { key: 'operation', label: '운영팀' },
+        ];
 
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
-                <span style="font-weight:600">Task 관리</span>
+                <span style="font-weight:600">Task 관리 <span class="count">${tasks.length}개</span></span>
                 <button class="btn btn-primary btn-sm" id="btn-add-task">추가</button>
+            </div>
+            <div class="task-filter-chips" id="task-mgmt-filter" style="margin-bottom:var(--space-3)">
+                ${filters.map(f => `
+                    <button class="chip ${taskMgmtFilter === f.key ? 'active' : ''}" data-mgmt-filter="${f.key}">${App.esc(f.label)}</button>
+                `).join('')}
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
@@ -1108,10 +1117,15 @@ const AdminApp = (() => {
                     </tbody>
                 </table>
             </div>
-            <p class="text-muted mt-sm" style="font-size:0.8rem">* 현재 오늘 날짜 기준 + 지연 Task만 표시됩니다.</p>
         `;
         if (!tasks.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Task가 없습니다.</td></tr>';
         document.getElementById('btn-add-task').onclick = () => showTaskForm();
+        document.getElementById('task-mgmt-filter').querySelectorAll('.chip').forEach(btn => {
+            btn.onclick = () => {
+                taskMgmtFilter = btn.dataset.mgmtFilter;
+                loadTasksMgmt();
+            };
+        });
     }
 
     const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -1294,12 +1308,9 @@ const AdminApp = (() => {
     }
 
     async function _editTask(id) {
-        const [r1, r2] = await Promise.all([
-            App.get('/api/admin.php?action=today_tasks', { date: App.today() }),
-            App.get('/api/admin.php?action=overdue_tasks'),
-        ]);
-        const all = [...(r1.tasks || []), ...(r2.tasks || [])];
-        const t = all.find(x => x.id == id);
+        const r = await App.get('/api/admin.php?action=all_tasks');
+        const tasks = r.success ? (r.tasks || []) : [];
+        const t = tasks.find(x => x.id == id);
         if (t) showTaskForm(t);
         else Toast.error('Task를 찾을 수 없습니다.');
     }
