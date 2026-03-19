@@ -365,34 +365,34 @@ case 'all_tasks':
 
     $db = getDB();
     if ($filterRole === 'mine') {
-        $stmt = $db->prepare('
+        $stmt = $db->prepare("
             SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
             FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN (\'leader\',\'subleader\')
-            LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN (\'leader\',\'subleader\')
-            WHERE t.cohort = ? AND t.assignee_admin_id = ?
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+            WHERE t.cohort = ? AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
             ORDER BY t.start_date DESC, t.title
-        ');
-        $stmt->execute([$cohort, $adminId]);
+        ");
+        $stmt->execute([$cohort, $adminId, $adminId]);
     } elseif ($filterRole && $filterRole !== 'all') {
-        $stmt = $db->prepare('
+        $stmt = $db->prepare("
             SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
             FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN (\'leader\',\'subleader\')
-            LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN (\'leader\',\'subleader\')
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
             WHERE t.cohort = ? AND t.role = ?
             ORDER BY t.start_date DESC, t.title
-        ');
+        ");
         $stmt->execute([$cohort, $filterRole]);
     } else {
-        $stmt = $db->prepare('
+        $stmt = $db->prepare("
             SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
             FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN (\'leader\',\'subleader\')
-            LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN (\'leader\',\'subleader\')
+            LEFT JOIN admins a ON t.assignee_admin_id = a.id
+            LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
             WHERE t.cohort = ?
             ORDER BY t.start_date DESC, t.title
-        ');
+        ");
         $stmt->execute([$cohort]);
     }
     jsonSuccess(['tasks' => $stmt->fetchAll()]);
