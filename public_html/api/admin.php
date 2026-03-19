@@ -194,8 +194,8 @@ case 'today_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                   AND t.assignee_admin_id = ?
                 ORDER BY t.completed, t.end_date, t.title
@@ -206,8 +206,8 @@ case 'today_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                   AND t.role = ?
                 ORDER BY t.completed, t.end_date, t.title
@@ -218,8 +218,8 @@ case 'today_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                 ORDER BY t.completed, t.end_date, t.title
             ");
@@ -228,17 +228,32 @@ case 'today_tasks':
     } else {
         // Non-operation: assigned to me, OR unassigned with my role
         $placeholders = implode(',', array_fill(0, count($roles), '?'));
-        $stmt = $db->prepare("
-            SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
-            FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-            LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
-            WHERE t.start_date <= ? AND t.end_date >= ?
-              AND (t.assignee_admin_id = ?
-                   OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
-              AND t.cohort = ?
-            ORDER BY t.completed, t.end_date, t.title
-        ");
+        $isMemberLogin = in_array('leader', $roles) || in_array('subleader', $roles);
+        if ($isMemberLogin) {
+            $stmt = $db->prepare("
+                SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+                WHERE t.start_date <= ? AND t.end_date >= ?
+                  AND (t.assignee_member_id = ?
+                       OR (t.assignee_member_id IS NULL AND t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+                  AND t.cohort = ?
+                ORDER BY t.completed, t.end_date, t.title
+            ");
+        } else {
+            $stmt = $db->prepare("
+                SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+                WHERE t.start_date <= ? AND t.end_date >= ?
+                  AND (t.assignee_admin_id = ?
+                       OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+                  AND t.cohort = ?
+                ORDER BY t.completed, t.end_date, t.title
+            ");
+        }
         $params = [$date, $date, $adminId];
         $params = array_merge($params, $roles);
         $params[] = $cohort;
@@ -261,8 +276,8 @@ case 'overdue_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                   AND t.assignee_admin_id = ?
                 ORDER BY t.end_date
@@ -272,8 +287,8 @@ case 'overdue_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                   AND t.role = ?
                 ORDER BY t.end_date
@@ -283,8 +298,8 @@ case 'overdue_tasks':
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
-                LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-                LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                 ORDER BY t.end_date
             ");
@@ -292,17 +307,32 @@ case 'overdue_tasks':
         }
     } else {
         $placeholders = implode(',', array_fill(0, count($roles), '?'));
-        $stmt = $db->prepare("
-            SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
-            FROM tasks t
-            LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
-            LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
-            WHERE t.end_date < ? AND t.completed = 0
-              AND (t.assignee_admin_id = ?
-                   OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
-              AND t.cohort = ?
-            ORDER BY t.end_date
-        ");
+        $isMemberLogin = in_array('leader', $roles) || in_array('subleader', $roles);
+        if ($isMemberLogin) {
+            $stmt = $db->prepare("
+                SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+                WHERE t.end_date < ? AND t.completed = 0
+                  AND (t.assignee_member_id = ?
+                       OR (t.assignee_member_id IS NULL AND t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+                  AND t.cohort = ?
+                ORDER BY t.end_date
+            ");
+        } else {
+            $stmt = $db->prepare("
+                SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
+                FROM tasks t
+                LEFT JOIN admins a ON t.assignee_admin_id = a.id
+                LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+                WHERE t.end_date < ? AND t.completed = 0
+                  AND (t.assignee_admin_id = ?
+                       OR (t.assignee_admin_id IS NULL AND t.role IN ({$placeholders})))
+                  AND t.cohort = ?
+                ORDER BY t.end_date
+            ");
+        }
         $params = [$today, $adminId];
         $params = array_merge($params, $roles);
         $params[] = $cohort;
@@ -910,7 +940,8 @@ case 'task_create':
         jsonError('올바르지 않은 날짜 설정 방식입니다.');
     }
 
-    $insertStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
     $createdCount = 0;
 
     // Get cohort_id for bootcamp_members lookup
@@ -921,9 +952,10 @@ case 'task_create':
 
     foreach ($datePairs as [$sd, $ed]) {
         foreach ($roles as $role) {
+            $isMemberRole = in_array($role, ['leader', 'subleader']);
             $assignees = [];
 
-            if (in_array($role, ['leader', 'subleader']) && $cohortId) {
+            if ($isMemberRole && $cohortId) {
                 // Leader/subleader: lookup from bootcamp_members
                 $stmt = $db->prepare('
                     SELECT id FROM bootcamp_members
@@ -931,7 +963,7 @@ case 'task_create':
                 ');
                 $stmt->execute([$role, $cohortId]);
                 $assignees = $stmt->fetchAll();
-            } else {
+            } else if (!$isMemberRole) {
                 // Other roles: lookup from admins + admin_roles
                 $stmt = $db->prepare('
                     SELECT a.id FROM admins a
@@ -944,11 +976,12 @@ case 'task_create':
             }
 
             if (empty($assignees)) {
-                $insertStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort]);
+                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort]);
                 $createdCount++;
             } else {
+                $ins = $isMemberRole ? $insertMemberStmt : $insertAdminStmt;
                 foreach ($assignees as $a) {
-                    $insertStmt->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort]);
+                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort]);
                     $createdCount++;
                 }
             }
