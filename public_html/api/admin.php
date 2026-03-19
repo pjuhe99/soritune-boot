@@ -191,7 +191,7 @@ case 'today_tasks':
     if (hasRole($admin, 'operation')) {
         if ($filterRole === 'mine') {
             // My tasks only
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
@@ -199,11 +199,11 @@ case 'today_tasks':
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                   AND t.assignee_admin_id = ?
                 ORDER BY t.completed, t.end_date, t.title
-            ');
+            ");
             $stmt->execute([$date, $date, $cohort, $adminId]);
         } elseif ($filterRole && $filterRole !== 'all') {
             // Filter by specific role
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
@@ -211,18 +211,18 @@ case 'today_tasks':
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                   AND t.role = ?
                 ORDER BY t.completed, t.end_date, t.title
-            ');
+            ");
             $stmt->execute([$date, $date, $cohort, $filterRole]);
         } else {
             // All tasks
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
                 LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
                 WHERE t.start_date <= ? AND t.end_date >= ? AND t.cohort = ?
                 ORDER BY t.completed, t.end_date, t.title
-            ');
+            ");
             $stmt->execute([$date, $date, $cohort]);
         }
     } else {
@@ -258,7 +258,7 @@ case 'overdue_tasks':
     $db = getDB();
     if (hasRole($admin, 'operation')) {
         if ($filterRole === 'mine') {
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
@@ -266,10 +266,10 @@ case 'overdue_tasks':
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                   AND t.assignee_admin_id = ?
                 ORDER BY t.end_date
-            ');
+            ");
             $stmt->execute([$today, $cohort, $adminId]);
         } elseif ($filterRole && $filterRole !== 'all') {
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
@@ -277,17 +277,17 @@ case 'overdue_tasks':
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                   AND t.role = ?
                 ORDER BY t.end_date
-            ');
+            ");
             $stmt->execute([$today, $cohort, $filterRole]);
         } else {
-            $stmt = $db->prepare('
+            $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
                 FROM tasks t
                 LEFT JOIN admins a ON t.assignee_admin_id = a.id AND t.role NOT IN ('leader','subleader')
                 LEFT JOIN bootcamp_members bm ON t.assignee_admin_id = bm.id AND t.role IN ('leader','subleader')
                 WHERE t.end_date < ? AND t.completed = 0 AND t.cohort = ?
                 ORDER BY t.end_date
-            ');
+            ");
             $stmt->execute([$today, $cohort]);
         }
     } else {
