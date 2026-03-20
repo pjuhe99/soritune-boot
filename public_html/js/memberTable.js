@@ -30,6 +30,10 @@ const MemberTable = (() => {
         return '<span class="badge badge-success">활성</span>';
     }
 
+    function enteredBadge(m) {
+        return parseInt(m.entered) ? '<span class="badge badge-success">입장</span>' : '<span class="badge badge-neutral">미입장</span>';
+    }
+
     function historyHtml(m) {
         const s1 = parseInt(m.stage1_participation_count) || 0;
         const s2 = parseInt(m.stage2_participation_count) || 0;
@@ -66,9 +70,10 @@ const MemberTable = (() => {
             <th class="mt-col-hist">이력</th>
             <th class="mt-col-bravo">등급</th>
             <th class="mt-col-score">점수</th>
+            <th class="mt-col-entered">입장</th>
             <th class="mt-col-status">상태</th>
         `;
-        const colCount = (showGroup ? 6 : 5) + 1;
+        const colCount = (showGroup ? 7 : 6) + 1;
 
         const rows = members.map(m => {
             const pc = parseInt(m.participation_count);
@@ -93,6 +98,7 @@ const MemberTable = (() => {
                 </td>
                 <td class="mt-col-bravo">${bravo || '-'}</td>
                 <td class="mt-col-score">${scoreHtml(m.current_score)}</td>
+                <td class="mt-col-entered">${enteredBadge(m)}</td>
                 <td class="mt-col-status">${statusBadge(m)}</td>
             </tr>`;
 

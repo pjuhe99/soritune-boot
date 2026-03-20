@@ -161,6 +161,7 @@ const BootcampApp = (() => {
             '#bc-tab-dashboard': () => loadDashboard(),
             '#bc-tab-checklist': loadChecklist,
             '#bc-tab-status': loadStatusBoard,
+            '#bc-tab-entrance': loadEntrance,
         };
         const tabs = document.getElementById('sec-tabs');
         if (tabs) {
@@ -1836,6 +1837,86 @@ const BootcampApp = (() => {
             if (count <= 3) return 'active-1';
             if (count <= 7) return 'active-2';
             return 'active-3';
+        }
+    }
+
+    // ── Entrance Check (입장 체크) ──
+
+    async function loadEntrance() {
+        const sec = document.getElementById('bc-tab-entrance');
+        if (!sec) return;
+
+        if (!selectedGroupId) {
+            sec.innerHTML = '<div class="empty-state">배정된 조가 없습니다.</div>';
+            return;
+        }
+
+        sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        const r = await App.get(API + 'entrance_list', { group_id: selectedGroupId });
+        if (!r.success) {
+            sec.innerHTML = '<div class="empty-state">데이터를 불러올 수 없습니다.</div>';
+            return;
+        }
+
+        const members = r.members || [];
+        if (!members.length) {
+            sec.innerHTML = '<div class="empty-state">조원이 없습니다.</div>';
+            return;
+        }
+
+        sec.innerHTML = `
+            <div class="bc-toolbar mt-md">
+                <span class="bc-toolbar-title">${App.esc(leaderGroupName)} 입장 체크</span>
+                <button class="btn btn-primary btn-sm" id="bc-entrance-save">저장</button>
+            </div>
+            <div class="mt-container">
+                <table class="data-table" id="bc-entrance-table">
+                    <thead>
+                        <tr>
+                            <th>이름</th>
+                            <th>닉네임</th>
+                            <th style="text-align:center">입장</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${members.map(m => `
+                        <tr>
+                            <td>${App.esc(m.real_name || '-')}</td>
+                            <td>${App.esc(m.nickname || '-')}${m.member_role !== 'member' ? ` <span class="badge badge-primary" style="font-size:10px">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span>` : ''}</td>
+                            <td style="text-align:center">
+                                <input type="checkbox" class="bc-entrance-check" data-member-id="${m.id}" ${parseInt(m.entered) ? 'checked' : ''}>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        document.getElementById('bc-entrance-save').onclick = saveEntrance;
+    }
+
+    async function saveEntrance() {
+        const checkboxes = document.querySelectorAll('.bc-entrance-check');
+        const entries = [];
+        checkboxes.forEach(cb => {
+            entries.push({
+                member_id: parseInt(cb.dataset.memberId),
+                entered: cb.checked ? 1 : 0,
+            });
+        });
+
+        if (!entries.length) return;
+
+        App.showLoading();
+        const r = await App.post(API + 'entrance_save', {
+            group_id: selectedGroupId,
+            entries,
+        });
+        App.hideLoading();
+
+        if (r.success) {
+            Toast.success(r.message);
         }
     }
 

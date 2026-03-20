@@ -25,6 +25,7 @@ require_once __DIR__ . '/services/member_page.php';
 require_once __DIR__ . '/services/issue_report.php';
 require_once __DIR__ . '/services/dashboard.php';
 require_once __DIR__ . '/services/group_assignment.php';
+require_once __DIR__ . '/services/entrance.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -296,6 +297,11 @@ case 'issue_detail':        handleIssueDetail(); break;
 case 'issue_admin_list':    handleIssueAdminList(); break;
 case 'issue_status_update': handleIssueStatusUpdate($method); break;
 case 'issue_admin_note':    handleIssueAdminNote($method); break;
+
+// ── Entrance (입장 체크) ─────────────────────────────────────
+
+case 'entrance_list':    handleEntranceList(); break;
+case 'entrance_save':    handleEntranceSave($method); break;
 
 // ── Group Assignment (조 배정) ──────────────────────────────
 

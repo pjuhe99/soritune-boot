@@ -511,7 +511,7 @@ case 'member_list':
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
                bm.member_role, bm.stage_no, bm.is_active, bm.created_at,
-               bm.participation_count,
+               bm.participation_count, bm.entered,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin,
                COALESCE(mhs_p.stage1_participation_count, mhs_u.stage1_participation_count, 0) AS stage1_participation_count,
