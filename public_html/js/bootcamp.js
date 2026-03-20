@@ -419,7 +419,7 @@ const BootcampApp = (() => {
                             return `
                             <tr>
                                 <td>
-                                    <div class="member-name">${App.esc(m.nickname)}${parseInt(m.participation_count) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
+                                    <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
                                     <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
                                 </td>
                                 <td class="score-cell ${sc}">${m.current_score}</td>
@@ -537,7 +537,7 @@ const BootcampApp = (() => {
                 <div class="bc-status-card ${warningClass}" data-member-id="${m.id}">
                     <div class="bc-status-info">
                         <div class="bc-status-name">
-                            ${App.esc(m.nickname)}
+                            ${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}
                             ${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}
                             ${warningBadge}
                         </div>
@@ -1802,7 +1802,7 @@ const BootcampApp = (() => {
             if (mode === 'required') {
                 const rq = m.required;
                 return `<div class="db-member-item">
-                    <span class="db-member-name">${App.esc(m.nickname)}</span>
+                    <span class="db-member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
                     <span class="db-member-score score-cell ${scoreClass}">${m.current_score}</span>
                     <div class="db-member-bars">
                         ${miniBar('줌', rq.zoom_daily.rate)}
@@ -1813,7 +1813,7 @@ const BootcampApp = (() => {
             } else {
                 const op = m.optional;
                 return `<div class="db-member-item">
-                    <span class="db-member-name">${App.esc(m.nickname)}</span>
+                    <span class="db-member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
                     <div class="db-member-optional">
                         <span class="db-opt-badge ${optLevel(op.bookclub_open)}">개설 ${op.bookclub_open}</span>
                         <span class="db-opt-badge ${optLevel(op.bookclub_join)}">참여 ${op.bookclub_join}</span>
