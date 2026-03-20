@@ -86,7 +86,7 @@ const MemberTable = (() => {
 
             // 기본 행
             const mainRow = `
-            <tr class="mt-row" data-id="${m.id}">
+            <tr class="mt-row" data-id="${m.id}" data-entered="${parseInt(m.entered) ? '1' : '0'}">
                 <td class="mt-col-name">
                     <div class="mt-name-primary">${App.esc(m.nickname)} ${roleBadge} ${pcBadge}</div>
                     <div class="mt-name-sub">${App.esc(m.real_name || '')}</div>
@@ -178,8 +178,23 @@ const MemberTable = (() => {
     /**
      * 검색 바 HTML 생성
      */
-    function searchBarHtml(count) {
-        return `<div class="mt-search-bar">
+    function entranceStatsHtml(members) {
+        const total = members.length;
+        const entered = members.filter(m => parseInt(m.entered)).length;
+        return `
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:var(--space-2)">
+            <div class="task-filter-chips mt-entrance-filters">
+                <button class="chip active" data-filter="all">전체</button>
+                <button class="chip" data-filter="entered">입장 완료</button>
+                <button class="chip" data-filter="not_entered">미입장</button>
+            </div>
+            <span class="mt-entrance-stats" style="font-size:var(--text-sm);color:var(--color-text-sub)">${entered} / ${total}명 입장 완료</span>
+        </div>`;
+    }
+
+    function searchBarHtml(count, members) {
+        return `${members ? entranceStatsHtml(members) : ''}
+        <div class="mt-search-bar">
             <input type="text" class="form-input mt-search-input" placeholder="이름 또는 아이디로 검색" id="mt-search">
             <span class="mt-search-count" id="mt-search-count">${count}명</span>
         </div>`;
@@ -212,5 +227,46 @@ const MemberTable = (() => {
         }, 150));
     }
 
-    return { render, bindToggle, bindSearch, searchBarHtml, ROLE_LABELS };
+    function bindEntranceFilter(container) {
+        const filterWrap = container.querySelector('.mt-entrance-filters');
+        if (!filterWrap) return;
+
+        filterWrap.querySelectorAll('.chip').forEach(btn => {
+            btn.onclick = () => {
+                filterWrap.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const filter = btn.dataset.filter;
+                let visible = 0;
+                container.querySelectorAll('.mt-row').forEach(row => {
+                    const entered = row.dataset.entered === '1';
+                    const searchHidden = row.style.display === 'none' && !row.dataset._entranceHidden;
+                    let show = filter === 'all' || (filter === 'entered' && entered) || (filter === 'not_entered' && !entered);
+                    if (show) {
+                        delete row.dataset._entranceHidden;
+                        // 검색 필터도 함께 적용
+                        const searchInput = container.querySelector('#mt-search');
+                        if (searchInput && searchInput.value.trim()) {
+                            const q = searchInput.value.trim().toLowerCase();
+                            const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
+                            const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
+                            show = name.includes(q) || userId.includes(q);
+                        }
+                    } else {
+                        row.dataset._entranceHidden = '1';
+                    }
+                    row.style.display = show ? '' : 'none';
+                    const detail = container.querySelector(`.mt-detail[data-for="${row.dataset.id}"]`);
+                    if (detail && !show) {
+                        detail.style.display = 'none';
+                        row.classList.remove('mt-row--open');
+                    }
+                    if (show) visible++;
+                });
+                const countEl = container.querySelector('#mt-search-count');
+                if (countEl) countEl.textContent = visible + '명';
+            };
+        });
+    }
+
+    return { render, bindToggle, bindSearch, bindEntranceFilter, searchBarHtml, ROLE_LABELS };
 })();

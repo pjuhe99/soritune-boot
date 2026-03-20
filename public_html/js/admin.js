@@ -779,7 +779,7 @@ const AdminApp = (() => {
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
             <div id="op-members-table">
-                ${MemberTable.searchBarHtml(r.members.length)}
+                ${MemberTable.searchBarHtml(r.members.length, r.members)}
                 ${MemberTable.render(r.members, {
                     mode: 'operation',
                     editFn: 'AdminApp._editMember',
@@ -790,6 +790,7 @@ const AdminApp = (() => {
         const tableEl = document.getElementById('op-members-table');
         MemberTable.bindToggle(tableEl);
         MemberTable.bindSearch(tableEl);
+        MemberTable.bindEntranceFilter(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 

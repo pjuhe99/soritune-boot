@@ -1157,13 +1157,14 @@ const BootcampApp = (() => {
             return;
         }
 
-        body.innerHTML = MemberTable.searchBarHtml(members.length) + MemberTable.render(members, {
+        body.innerHTML = MemberTable.searchBarHtml(members.length, members) + MemberTable.render(members, {
             mode: 'bootcamp',
             editFn: 'BootcampApp._editMember',
             deleteFn: 'BootcampApp._deleteMember',
         });
         MemberTable.bindToggle(body);
         MemberTable.bindSearch(body);
+        MemberTable.bindEntranceFilter(body);
     }
 
     function showMemberForm(data = {}) {
@@ -1865,10 +1866,21 @@ const BootcampApp = (() => {
             return;
         }
 
+        const enteredCount = members.filter(m => parseInt(m.entered)).length;
+        const total = members.length;
+
         sec.innerHTML = `
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">${App.esc(leaderGroupName)} 입장 체크</span>
                 <button class="btn btn-primary btn-sm" id="bc-entrance-save">저장</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:var(--space-3)">
+                <div class="task-filter-chips" id="bc-entrance-filters">
+                    <button class="chip active" data-filter="all">전체</button>
+                    <button class="chip" data-filter="entered">입장 완료</button>
+                    <button class="chip" data-filter="not_entered">미입장</button>
+                </div>
+                <span id="bc-entrance-stats" style="font-size:var(--text-sm);color:var(--color-text-sub)">${enteredCount} / ${total}명 입장 완료</span>
             </div>
             <div class="mt-container">
                 <table class="data-table" id="bc-entrance-table">
@@ -1881,7 +1893,7 @@ const BootcampApp = (() => {
                     </thead>
                     <tbody>
                         ${members.map(m => `
-                        <tr>
+                        <tr data-entered="${parseInt(m.entered) ? '1' : '0'}">
                             <td>${App.esc(m.real_name || '-')}</td>
                             <td>${App.esc(m.nickname || '-')}${m.member_role !== 'member' ? ` <span class="badge badge-primary" style="font-size:10px">${App.esc(ROLE_LABELS[m.member_role] || m.member_role)}</span>` : ''}</td>
                             <td style="text-align:center">
@@ -1892,6 +1904,27 @@ const BootcampApp = (() => {
                 </table>
             </div>
         `;
+
+        // 필터 칩 이벤트
+        const filterWrap = document.getElementById('bc-entrance-filters');
+        filterWrap.querySelectorAll('.chip').forEach(btn => {
+            btn.onclick = () => {
+                filterWrap.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                filterEntranceRows(btn.dataset.filter);
+            };
+        });
+
+        // 체크박스 변경 시 카운트 & data-entered 실시간 업데이트
+        sec.querySelectorAll('.bc-entrance-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                cb.closest('tr').dataset.entered = cb.checked ? '1' : '0';
+                updateEntranceStats();
+                // 현재 필터 다시 적용
+                const activeFilter = filterWrap.querySelector('.chip.active')?.dataset.filter || 'all';
+                filterEntranceRows(activeFilter);
+            });
+        });
 
         document.getElementById('bc-entrance-save').onclick = saveEntrance;
     }
@@ -1918,6 +1951,25 @@ const BootcampApp = (() => {
         if (r.success) {
             Toast.success(r.message);
         }
+    }
+
+    function filterEntranceRows(filter) {
+        const table = document.getElementById('bc-entrance-table');
+        if (!table) return;
+        table.querySelectorAll('tbody tr').forEach(row => {
+            if (filter === 'all') { row.style.display = ''; return; }
+            const entered = row.dataset.entered === '1';
+            row.style.display = (filter === 'entered' && entered) || (filter === 'not_entered' && !entered) ? '' : 'none';
+        });
+    }
+
+    function updateEntranceStats() {
+        const statsEl = document.getElementById('bc-entrance-stats');
+        if (!statsEl) return;
+        const rows = document.querySelectorAll('#bc-entrance-table tbody tr');
+        let total = 0, entered = 0;
+        rows.forEach(row => { total++; if (row.dataset.entered === '1') entered++; });
+        statsEl.textContent = `${entered} / ${total}명 입장 완료`;
     }
 
     // ── Public API ──
