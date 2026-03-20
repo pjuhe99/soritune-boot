@@ -2,7 +2,7 @@
    Service Worker — 소리튠 부트캠프 PWA
    전략: 정적 에셋은 Cache First, API는 Network Only
    ══════════════════════════════════════════════════════════════ */
-const CACHE_NAME = 'boot-v20260316';
+const CACHE_NAME = 'boot-v20260320';
 
 const STATIC_ASSETS = [
     '/',
@@ -73,17 +73,14 @@ self.addEventListener('fetch', (e) => {
         return;
     }
 
-    // 정적 에셋: Cache First
+    // 정적 에셋: Network First (버전 쿼리스트링으로 캐시 버스팅)
     e.respondWith(
-        caches.match(e.request).then(cached => {
-            if (cached) return cached;
-            return fetch(e.request).then(response => {
-                if (response.ok && e.request.method === 'GET') {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-                }
-                return response;
-            });
+        fetch(e.request).then(response => {
+            if (response.ok && e.request.method === 'GET') {
+                const clone = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+            }
+            return response;
         }).catch(() => caches.match(e.request))
     );
 });
