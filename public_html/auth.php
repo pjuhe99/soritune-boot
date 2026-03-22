@@ -129,7 +129,9 @@ function requireAdmin(array $allowedRoles = []): array {
     $s = getAdminSession();
     if (!$s) jsonError('로그인이 필요합니다.', 401);
     if ($allowedRoles && !hasAnyRole($s, $allowedRoles)) {
-        jsonError('권한이 없습니다.', 403);
+        $needRoles = implode(', ', $allowedRoles);
+        $userRoles = implode(', ', $s['admin_roles'] ?? []);
+        jsonError("권한이 없습니다. 필요 역할: [{$needRoles}], 현재 역할: [{$userRoles}]", 403);
     }
     return $s;
 }

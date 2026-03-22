@@ -37,6 +37,13 @@ const AdminApp = (() => {
             admin = r.admin;
             showDashboard();
         } else {
+            if (r.logged_in && r.admin) {
+                const userRoles = (r.admin.admin_roles || []).map(r => ROLE_LABELS[r] || r).join(', ') || '없음';
+                const needRoles = (PAGE_ROLES[role] || []).map(r => ROLE_LABELS[r] || r).join(', ');
+                Toast.error(`접근 권한이 없습니다. 이 페이지는 [${needRoles}] 역할이 필요합니다. 현재 계정 역할: [${userRoles}]`);
+            } else if (r.logged_in === false) {
+                Toast.error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.');
+            }
             showLoginForm();
         }
     }
@@ -75,7 +82,9 @@ const AdminApp = (() => {
                     const pageAllowed = (PAGE_ROLES[role] || []);
                     const hasAccess = r.admin.admin_roles.some(ar => pageAllowed.includes(ar));
                     if (!hasAccess) {
-                        Toast.error('이 페이지에 접근 권한이 없습니다.');
+                        const userRoles = (r.admin.admin_roles || []).map(r => ROLE_LABELS[r] || r).join(', ') || '없음';
+                        const needRoles = pageAllowed.map(r => ROLE_LABELS[r] || r).join(', ');
+                        Toast.error(`접근 권한이 없습니다. 이 페이지는 [${needRoles}] 역할이 필요합니다. 현재 계정 역할: [${userRoles}]`);
                         return;
                     }
                     admin = r.admin;
@@ -117,7 +126,9 @@ const AdminApp = (() => {
                     const pageAllowed = (PAGE_ROLES[role] || []);
                     const hasAccess = r.admin.admin_roles.some(ar => pageAllowed.includes(ar));
                     if (!hasAccess) {
-                        Toast.error('이 페이지에 접근 권한이 없습니다.');
+                        const userRoles = (r.admin.admin_roles || []).map(r => ROLE_LABELS[r] || r).join(', ') || '없음';
+                        const needRoles = pageAllowed.map(r => ROLE_LABELS[r] || r).join(', ');
+                        Toast.error(`접근 권한이 없습니다. 이 페이지는 [${needRoles}] 역할이 필요합니다. 현재 계정 역할: [${userRoles}]`);
                         return;
                     }
                     admin = r.admin;
