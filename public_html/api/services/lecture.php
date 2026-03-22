@@ -114,7 +114,7 @@ function handleLectureScheduleCreate($method) {
         INSERT INTO lecture_schedules
             (cohort_id, coach_admin_id, stage, weekdays, start_time, duration_minutes,
              host_account, zoom_status, status, created_by)
-        VALUES (?, ?, ?, ?, ?, 60, ?, 'pending', 'active', ?)
+        VALUES (?, ?, ?, ?, ?, 60, ?, 'ready', 'active', ?)
     ")->execute([
         $cohortId, $coachAdminId, $stage, $weekdaysStr,
         $startTimeFull, $hostAccount, $admin['admin_id'],
@@ -150,38 +150,21 @@ function handleLectureScheduleCreate($method) {
         $count++;
     }
 
-    // ── n8n webhook 호출 (Zoom 생성) ──
-    $zoomResult = callLectureZoomWebhook($db, $scheduleId, [
-        'lecture_schedule_id' => $scheduleId,
-        'title'              => $title,
-        'type'               => 'recurring_lecture',
-        'host_account'       => $hostAccount,
-        'coach_name'         => $coachName,
-        'stage'              => $stage,
-        'start_time'         => $timeLabel,
-        'duration'           => 60,
-        'weekdays'           => $validWeekdays,
-        'first_date'         => $sessionDates[0],
-        'last_date'          => end($sessionDates),
-        'scheduled_at'       => (new DateTime("{$sessionDates[0]} {$startTimeFull}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
+    // ── 단계별 고정 Zoom URL 설정 ──
+    $zoomJoinUrl = getFixedZoomUrl($stage);
 
-    if ($zoomResult['success']) {
-        jsonSuccess([
-            'schedule_id'   => $scheduleId,
-            'session_count' => $count,
-            'title'         => $title,
-            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        ], '강의 스케줄이 생성되었습니다.');
-    } else {
-        jsonSuccess([
-            'schedule_id'   => $scheduleId,
-            'session_count' => $count,
-            'title'         => $title,
-            'zoom_status'   => 'failed',
-            'zoom_error'    => $zoomResult['error'] ?? 'Zoom 생성 실패',
-        ], '강의 스케줄이 생성되었지만 Zoom 생성에 실패했습니다. 상세에서 재시도할 수 있습니다.');
-    }
+    $db->prepare("
+        UPDATE lecture_schedules
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $scheduleId]);
+
+    jsonSuccess([
+        'schedule_id'   => $scheduleId,
+        'session_count' => $count,
+        'title'         => $title,
+        'zoom_join_url' => $zoomJoinUrl,
+    ], '강의 스케줄이 생성되었습니다.');
 }
 
 /**
@@ -311,7 +294,7 @@ function handleLectureScheduleCancel($method) {
 }
 
 /**
- * Zoom 재생성 (스케줄 단위)
+ * Zoom 재설정 (스케줄 단위) — 단계별 고정 URL로 업데이트
  */
 function handleLectureZoomRetry($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -331,46 +314,18 @@ function handleLectureZoomRetry($method) {
     $stmt->execute([$scheduleId]);
     $schedule = $stmt->fetch();
     if (!$schedule) jsonError('스케줄을 찾을 수 없습니다.', 404);
-    if ($schedule['zoom_status'] === 'ready') jsonError('이미 Zoom이 생성되어 있습니다.');
 
-    // 세션 날짜 범위
-    $dateRange = $db->prepare("
-        SELECT MIN(lecture_date) AS first_date, MAX(lecture_date) AS last_date
-        FROM lecture_sessions WHERE schedule_id = ? AND status = 'active'
-    ");
-    $dateRange->execute([$scheduleId]);
-    $range = $dateRange->fetch();
+    $zoomJoinUrl = getFixedZoomUrl((int)$schedule['stage']);
 
-    $timeLabel = substr($schedule['start_time'], 0, 5);
-    $stageLabel = $schedule['stage'] . '단계';
-    $title = "[{$timeLabel}] {$schedule['coach_name']} {$stageLabel} 강의";
+    $db->prepare("
+        UPDATE lecture_schedules
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $scheduleId]);
 
-    $weekdays = array_map('intval', explode(',', $schedule['weekdays']));
-
-    $zoomResult = callLectureZoomWebhook($db, $scheduleId, [
-        'lecture_schedule_id' => $scheduleId,
-        'title'              => $title,
-        'type'               => 'recurring_lecture',
-        'host_account'       => $schedule['host_account'],
-        'coach_name'         => $schedule['coach_name'],
-        'stage'              => (int)$schedule['stage'],
-        'start_time'         => $timeLabel,
-        'duration'           => (int)$schedule['duration_minutes'],
-        'weekdays'           => $weekdays,
-        'first_date'         => $range['first_date'] ?? '',
-        'last_date'          => $range['last_date'] ?? '',
-        'scheduled_at'       => $range['first_date']
-            ? (new DateTime("{$range['first_date']} {$schedule['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c')
-            : '',
-    ]);
-
-    if ($zoomResult['success']) {
-        jsonSuccess([
-            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        ], 'Zoom이 생성되었습니다.');
-    } else {
-        jsonError($zoomResult['error'] ?? 'Zoom 생성에 실패했습니다.');
-    }
+    jsonSuccess([
+        'zoom_join_url' => $zoomJoinUrl,
+    ], 'Zoom URL이 설정되었습니다.');
 }
 
 
@@ -458,71 +413,12 @@ function checkLectureOverlap(PDO $db, array $dates, string $startTime, string $h
 }
 
 /**
- * n8n webhook 호출 (강의용)
- * lecture_schedules 테이블의 zoom 필드를 업데이트
+ * 단계별 고정 Zoom URL 반환
  */
-function callLectureZoomWebhook(PDO $db, int $scheduleId, array $payload): array {
-    $webhookUrl = getSetting('lecture_zoom_webhook_url');
-    if (!$webhookUrl) {
-        $db->prepare("
-            UPDATE lecture_schedules SET zoom_status = 'failed', zoom_error_message = 'webhook URL 미설정'
-            WHERE id = ?
-        ")->execute([$scheduleId]);
-        return ['success' => false, 'error' => 'Zoom webhook URL이 설정되지 않았습니다.'];
-    }
-
-    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
-
-    $ch = curl_init($webhookUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $jsonPayload,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
-        $errorMsg = $curlError ?: "HTTP {$httpCode}";
-        $db->prepare("
-            UPDATE lecture_schedules SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $scheduleId]);
-        return ['success' => false, 'error' => $errorMsg];
-    }
-
-    $data = json_decode($response, true);
-    if (!$data || empty($data['success'])) {
-        $errorMsg = $data['error'] ?? $data['message'] ?? 'n8n 응답 파싱 실패';
-        $db->prepare("
-            UPDATE lecture_schedules SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $scheduleId]);
-        return ['success' => false, 'error' => $errorMsg];
-    }
-
-    // Zoom 정보 저장
-    $db->prepare("
-        UPDATE lecture_schedules
-        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
-            zoom_status = 'ready', zoom_error_message = NULL
-        WHERE id = ?
-    ")->execute([
-        $data['zoom_meeting_id'] ?? null,
-        $data['zoom_join_url'] ?? null,
-        $data['zoom_start_url'] ?? null,
-        $data['zoom_password'] ?? null,
-        $scheduleId,
-    ]);
-
-    return [
-        'success'      => true,
-        'zoom_join_url' => $data['zoom_join_url'] ?? null,
+function getFixedZoomUrl(int $stage): string {
+    $urls = [
+        1 => 'https://us02web.zoom.us/j/81330750588?pwd=duqguPLdaLRSJel2ZGoCwGYtcKaAFi.1',
+        2 => 'https://us02web.zoom.us/j/83575089340?pwd=mxHTGfd2ImbRxNv46KbCVPPKUlM7Ql.1',
     ];
+    return $urls[$stage] ?? $urls[1];
 }
