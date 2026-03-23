@@ -40,7 +40,7 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $m) {
     }
 }
 
-$updateStmt = $db->prepare("UPDATE bootcamp_members SET cafe_member_key = ?, nickname = ? WHERE id = ?");
+$updateStmt = $db->prepare("UPDATE bootcamp_members SET cafe_member_key = ? WHERE id = ?");
 
 function getCafeUserInfo($articleId) {
     // 네이버 카페 게시글 조회 API (인증 불필요)
@@ -150,11 +150,11 @@ if (($handle = fopen($csvFile, "r")) !== FALSE) {
             continue;
         }
 
-        // DB 업데이트
+        // DB 업데이트 (cafe_member_key만 업데이트, 닉네임은 유저가 설정한 값 유지)
         try {
-            $updateStmt->execute([$cafeKey, $nick, $memberId]);
+            $updateStmt->execute([$cafeKey, $memberId]);
             $successCount++;
-            echo "  [OK] {$identifier} -> {$nick} (Key: {$cafeKey})\n";
+            echo "  [OK] {$identifier} -> cafe_nick: {$nick} (Key: {$cafeKey})\n";
         } catch (PDOException $e) {
             echo "  [FAIL] {$identifier} - DB 업데이트 오류: {$e->getMessage()}\n";
             $failCount++;
