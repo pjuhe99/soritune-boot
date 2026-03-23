@@ -714,7 +714,7 @@ const BootcampApp = (() => {
     async function renderRevivalCandidates() {
         const sec = document.getElementById('revival-candidates');
         sec.innerHTML = `
-            ${filterBarHtml({ date: false, stage: false })}
+            ${filterBarHtml({ date: false })}
             <div id="revival-list"><div class="empty-state">로딩 중...</div></div>
         `;
         bindFilterEvents(fetchRevivalCandidates);
@@ -727,6 +727,7 @@ const BootcampApp = (() => {
 
         const params = { cohort_id: selectedCohortId };
         if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
 
         const r = await App.get(API + 'revival_candidates', params);
         if (!r.success) return;
