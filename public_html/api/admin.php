@@ -508,7 +508,7 @@ case 'member_list':
     $cohort = getEffectiveCohort($admin);
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
+        SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
                bm.member_role, bm.stage_no, bm.is_active, bm.created_at,
                bm.participation_count, bm.entered,
@@ -563,6 +563,10 @@ case 'member_create':
         'stage_no'  => $stageNo,
     ]);
 
+    if (!empty($input['cafe_member_key'])) {
+        $db->prepare('UPDATE bootcamp_members SET cafe_member_key = ? WHERE id = ?')->execute([trim($input['cafe_member_key']), $newId]);
+    }
+
     jsonSuccess(['id' => $newId], '회원이 추가되었습니다.');
     break;
 
@@ -583,7 +587,7 @@ case 'member_update':
     // Map 'name' input to 'real_name' column
     if (isset($input['name'])) { $fields[] = 'real_name = ?'; $params[] = trim($input['name']); }
     if (isset($input['real_name'])) { $fields[] = 'real_name = ?'; $params[] = trim($input['real_name']); }
-    foreach (['nickname', 'phone', 'user_id', 'member_role'] as $f) {
+    foreach (['nickname', 'phone', 'user_id', 'member_role', 'cafe_member_key'] as $f) {
         if (isset($input[$f])) { $fields[] = "{$f} = ?"; $params[] = trim($input[$f]); }
     }
     if (isset($input['stage_no'])) { $fields[] = 'stage_no = ?'; $params[] = (int)$input['stage_no']; }
@@ -652,6 +656,59 @@ case 'member_delete':
     refreshMemberStats($db, $ident['phone'], $ident['user_id']);
 
     jsonSuccess([], '회원이 삭제되었습니다.');
+    break;
+
+case 'fetch_cafe_info':
+    $admin = requireAdmin(['operation']);
+    $articleId = $_GET['article_id'] ?? '';
+    if (!$articleId) jsonError('게시글 번호가 필요합니다.');
+    
+    $cafeId = 23243775;
+    $buid = 'a968c143-ebd4-46bb-82ff-5f11230389c5';
+    $url = "https://article.cafe.naver.com/gw/v4/cafes/{$cafeId}/articles/{$articleId}?fromList=true&menuId=292&tc=cafe_article_list&useCafeId=true&buid={$buid}";
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200) {
+        jsonError("HTTP 오류: {$httpCode}");
+    }
+    
+    $data = json_decode($response, true);
+    if (isset($data['result']['errorCode'])) {
+        jsonError($data['result']['message'] ?? '게시글 접근 불가');
+    }
+    
+    if (!isset($data['result']['article']['writer'])) {
+        jsonError('작성자 정보를 찾을 수 없습니다.');
+    }
+    
+    $writer = $data['result']['article']['writer'];
+    $memberKey = $writer['memberKey'] ?? '';
+    $nick = $writer['nick'] ?? '';
+    
+    if (!$memberKey) {
+        jsonError('memberKey를 추출할 수 없습니다.');
+    }
+    
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id, real_name FROM bootcamp_members WHERE cafe_member_key = ?');
+    $stmt->execute([$memberKey]);
+    $existingMember = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    jsonSuccess([
+        'data' => [
+            'memberKey' => $memberKey,
+            'nick' => $nick,
+            'existingMember' => $existingMember ?: null
+        ]
+    ]);
     break;
 
 // ── Admin CRUD (operation only) ─────────────────────────────

@@ -820,6 +820,18 @@ const AdminApp = (() => {
                 <label class="form-label">아이디 *</label>
                 <input type="text" class="form-input" id="mf-userid" value="${App.esc(data.user_id || '')}">
             </div>
+            <div class="form-group" style="padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 12px;">
+                <label class="form-label text-primary" style="font-weight: 600;">☕ 네이버 카페 계정 연동</label>
+                <div style="display:flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" class="form-input" id="mf-cafe-article" placeholder="게시글 번호 입력 (예: 321852)" style="flex: 1;">
+                    <button type="button" class="btn btn-secondary" id="mf-btn-fetch-cafe" style="white-space:nowrap;">가져오기</button>
+                </div>
+                <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">* 게시글 번호로 카페 유저 식별키와 닉네임을 불러와 자동 입력합니다.</div>
+                
+                <label class="form-label">카페 유저 키</label>
+                <input type="text" class="form-input" id="mf-cafe-key" value="${App.esc(data.cafe_member_key || '')}" readonly style="background: #f3f4f6;">
+                <div id="mf-cafe-warning" style="color: #ef4444; font-size: 12px; margin-top: 6px; display: none; font-weight: 500;"></div>
+            </div>
             <div class="form-group">
                 <label class="form-label">전화번호</label>
                 <input type="tel" class="form-input" id="mf-phone" value="${App.esc(data.phone || '')}" placeholder="01012345678">
@@ -852,6 +864,7 @@ const AdminApp = (() => {
                 user_id: document.getElementById('mf-userid').value.trim(),
                 phone: document.getElementById('mf-phone').value.trim(),
                 stage_no: parseInt(document.getElementById('mf-stage').value),
+                cafe_member_key: document.getElementById('mf-cafe-key').value.trim(),
             };
             if (isEdit) {
                 payload.id = data.id;
@@ -869,6 +882,46 @@ const AdminApp = (() => {
                 loadMembersMgmt();
             }
         };
+
+        const fetchBtn = document.getElementById('mf-btn-fetch-cafe');
+        if (fetchBtn) {
+            fetchBtn.onclick = async () => {
+                const articleId = document.getElementById('mf-cafe-article').value.trim();
+                if (!articleId) return Toast.warning('게시글 번호를 입력해주세요.');
+                
+                App.showLoading();
+                const r = await App.get('/api/admin.php?action=fetch_cafe_info', { article_id: articleId });
+                App.hideLoading();
+                
+                const warnEl = document.getElementById('mf-cafe-warning');
+                warnEl.style.display = 'none';
+                
+                if (!r.success) {
+                    return Toast.error(r.message || '정보를 가져올 수 없습니다.');
+                }
+                
+                const { memberKey, nick, existingMember } = r.data;
+                
+                if (existingMember && existingMember.id != (data.id || 0)) {
+                    warnEl.textContent = `⚠️ 이미 다른 회원(${existingMember.real_name})에게 등록된 유저 키입니다!`;
+                    warnEl.style.display = 'block';
+                    if (!await App.confirm(`이 키는 이미 '${existingMember.real_name}' 님에게 등록되어 있습니다. 정말 무시하고 가져오시겠습니까?`)) {
+                        return;
+                    }
+                }
+                
+                const currKey = document.getElementById('mf-cafe-key').value.trim();
+                if (currKey && currKey !== memberKey) {
+                    if (!await App.confirm(`기존에 등록된 카페 유저 키가 지워지고 새 값으로 덮어씌워집니다. 진행하시겠습니까?`)) {
+                        return;
+                    }
+                }
+                
+                document.getElementById('mf-cafe-key').value = memberKey;
+                document.getElementById('mf-nickname').value = nick;
+                Toast.success('카페 정보를 성공적으로 불러왔습니다.');
+            };
+        }
     }
 
     async function _editMember(id) {
@@ -877,7 +930,7 @@ const AdminApp = (() => {
         if (!r.success) return;
         const m = r.members.find(x => x.id == id);
         if (!m) return Toast.error('회원을 찾을 수 없습니다.');
-        showMemberForm({ id: m.id, nickname: m.nickname, real_name: m.real_name, user_id: m.user_id, phone: m.phone, is_active: m.is_active });
+        showMemberForm({ id: m.id, nickname: m.nickname, real_name: m.real_name, user_id: m.user_id, phone: m.phone, is_active: m.is_active, cafe_member_key: m.cafe_member_key });
     }
 
     async function _deleteMember(id, name) {
