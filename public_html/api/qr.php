@@ -52,7 +52,7 @@ switch ($action) {
 // ── 세션 생성 (코치 전용) ──
 case 'create_session':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['coach', 'head', 'subhead1', 'subhead2', 'operation']);
+    $admin = requireAdmin(['coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation']);
     $db = getDB();
 
     $input = getJsonInput();
@@ -98,7 +98,7 @@ case 'create_session':
 // ── 세션 종료 (코치 전용) ──
 case 'close_session':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['coach', 'head', 'subhead1', 'subhead2', 'operation']);
+    $admin = requireAdmin(['coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation']);
     $db = getDB();
 
     $input = getJsonInput();
@@ -123,7 +123,7 @@ case 'close_session':
 
 // ── 세션 상태 + 출석자 목록 (코치 전용) ──
 case 'session_status':
-    $admin = requireAdmin(['coach', 'head', 'subhead1', 'subhead2', 'operation']);
+    $admin = requireAdmin(['coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation']);
     $db = getDB();
 
     $queryType = ($_GET['session_type'] ?? 'attendance') === 'revival' ? 'revival' : 'attendance';
