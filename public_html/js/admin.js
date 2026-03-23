@@ -790,6 +790,7 @@ const AdminApp = (() => {
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
             <div id="op-members-table">
+                ${MemberTable.groupFilterHtml(r.members)}
                 ${MemberTable.searchBarHtml(r.members.length, r.members)}
                 ${MemberTable.render(r.members, {
                     mode: 'operation',
@@ -802,6 +803,7 @@ const AdminApp = (() => {
         MemberTable.bindToggle(tableEl);
         MemberTable.bindSearch(tableEl);
         MemberTable.bindEntranceFilter(tableEl);
+        MemberTable.bindGroupFilter(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
     }
 
@@ -829,7 +831,11 @@ const AdminApp = (() => {
                 <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">* 게시글 번호로 카페 유저 식별키와 닉네임을 불러와 자동 입력합니다.</div>
                 
                 <label class="form-label">카페 유저 키</label>
-                <input type="text" class="form-input" id="mf-cafe-key" value="${App.esc(data.cafe_member_key || '')}" readonly style="background: #f3f4f6;">
+                <div style="display:flex; gap: 8px;">
+                    <input type="text" class="form-input" id="mf-cafe-key" value="${App.esc(data.cafe_member_key || '')}" placeholder="직접 입력 또는 위에서 가져오기" style="flex: 1;">
+                    <button type="button" class="btn btn-secondary" id="mf-btn-lookup-nick" style="white-space:nowrap; font-size: 12px;">닉네임 조회</button>
+                </div>
+                <div id="mf-cafe-nick" style="color: #059669; font-size: 12px; margin-top: 6px; display: none; font-weight: 500;"></div>
                 <div id="mf-cafe-warning" style="color: #ef4444; font-size: 12px; margin-top: 6px; display: none; font-weight: 500;"></div>
             </div>
             <div class="form-group">
@@ -919,7 +925,43 @@ const AdminApp = (() => {
                 
                 document.getElementById('mf-cafe-key').value = memberKey;
                 document.getElementById('mf-nickname').value = nick;
+                const nickEl = document.getElementById('mf-cafe-nick');
+                nickEl.textContent = `☕ 카페 닉네임: ${nick}`;
+                nickEl.style.display = 'block';
                 Toast.success('카페 정보를 성공적으로 불러왔습니다.');
+            };
+        }
+
+        const lookupBtn = document.getElementById('mf-btn-lookup-nick');
+        if (lookupBtn) {
+            lookupBtn.onclick = async () => {
+                const key = document.getElementById('mf-cafe-key').value.trim();
+                if (!key) return Toast.warning('카페 유저 키를 입력해주세요.');
+
+                App.showLoading();
+                const r = await App.get('/api/admin.php?action=lookup_cafe_nick', { member_key: key });
+                App.hideLoading();
+
+                const nickEl = document.getElementById('mf-cafe-nick');
+                const warnEl = document.getElementById('mf-cafe-warning');
+                nickEl.style.display = 'none';
+                warnEl.style.display = 'none';
+
+                if (!r.success) return Toast.error(r.message || '조회 실패');
+
+                const { nick, existingMember } = r.data;
+                if (nick) {
+                    nickEl.textContent = `☕ 카페 닉네임: ${nick}`;
+                    nickEl.style.display = 'block';
+                } else {
+                    nickEl.textContent = '닉네임을 조회할 수 없습니다. (비공개이거나 잘못된 키)';
+                    nickEl.style.color = '#6b7280';
+                    nickEl.style.display = 'block';
+                }
+                if (existingMember && existingMember.id != (data.id || 0)) {
+                    warnEl.textContent = `⚠️ 이미 다른 회원(${existingMember.real_name})에게 등록된 유저 키입니다!`;
+                    warnEl.style.display = 'block';
+                }
             };
         }
     }

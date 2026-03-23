@@ -86,7 +86,7 @@ const MemberTable = (() => {
 
             // 기본 행
             const mainRow = `
-            <tr class="mt-row" data-id="${m.id}" data-entered="${parseInt(m.entered) ? '1' : '0'}">
+            <tr class="mt-row" data-id="${m.id}" data-entered="${parseInt(m.entered) ? '1' : '0'}" data-group="${App.esc(m.group_name || '')}">
                 <td class="mt-col-name">
                     <div class="mt-name-primary">${App.esc(m.nickname)} ${roleBadge} ${pcBadge}</div>
                     <div class="mt-name-sub">${App.esc(m.real_name || '')}</div>
@@ -243,9 +243,14 @@ const MemberTable = (() => {
                     let show = filter === 'all' || (filter === 'entered' && entered) || (filter === 'not_entered' && !entered);
                     if (show) {
                         delete row.dataset._entranceHidden;
+                        // 조 필터도 함께 적용
+                        const groupFilter = container.querySelector('.mt-group-filters .chip.active');
+                        if (show && groupFilter && groupFilter.dataset.group !== 'all') {
+                            show = (row.dataset.group || '') === groupFilter.dataset.group;
+                        }
                         // 검색 필터도 함께 적용
                         const searchInput = container.querySelector('#mt-search');
-                        if (searchInput && searchInput.value.trim()) {
+                        if (show && searchInput && searchInput.value.trim()) {
                             const q = searchInput.value.trim().toLowerCase();
                             const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
                             const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
@@ -268,5 +273,67 @@ const MemberTable = (() => {
         });
     }
 
-    return { render, bindToggle, bindSearch, bindEntranceFilter, searchBarHtml, ROLE_LABELS };
+    function groupFilterHtml(members) {
+        const groups = [...new Set(members.map(m => m.group_name).filter(Boolean))].sort();
+        if (!groups.length) return '';
+        return `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:var(--space-2)">
+            <span style="font-size:var(--text-sm);color:var(--color-text-sub);font-weight:600;">조 필터:</span>
+            <div class="task-filter-chips mt-group-filters">
+                <button class="chip active" data-group="all">전체</button>
+                ${groups.map(g => `<button class="chip" data-group="${App.esc(g)}">${App.esc(g)}</button>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    function bindGroupFilter(container) {
+        const filterWrap = container.querySelector('.mt-group-filters');
+        if (!filterWrap) return;
+
+        filterWrap.querySelectorAll('.chip').forEach(btn => {
+            btn.onclick = () => {
+                filterWrap.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const group = btn.dataset.group;
+                let visible = 0;
+                container.querySelectorAll('.mt-row').forEach(row => {
+                    const rowGroup = row.dataset.group || '';
+                    let show = group === 'all' || rowGroup === group;
+                    if (show) {
+                        delete row.dataset._groupHidden;
+                        // 검색 필터도 함께 적용
+                        const searchInput = container.querySelector('#mt-search');
+                        if (searchInput && searchInput.value.trim()) {
+                            const q = searchInput.value.trim().toLowerCase();
+                            const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
+                            const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
+                            show = name.includes(q) || userId.includes(q);
+                        }
+                        // 입장 필터도 함께 적용
+                        const entranceFilter = container.querySelector('.mt-entrance-filters .chip.active');
+                        if (show && entranceFilter) {
+                            const ef = entranceFilter.dataset.filter;
+                            if (ef !== 'all') {
+                                const entered = row.dataset.entered === '1';
+                                show = (ef === 'entered' && entered) || (ef === 'not_entered' && !entered);
+                            }
+                        }
+                    } else {
+                        row.dataset._groupHidden = '1';
+                    }
+                    row.style.display = show ? '' : 'none';
+                    const detail = container.querySelector(`.mt-detail[data-for="${row.dataset.id}"]`);
+                    if (detail && !show) {
+                        detail.style.display = 'none';
+                        row.classList.remove('mt-row--open');
+                    }
+                    if (show) visible++;
+                });
+                const countEl = container.querySelector('#mt-search-count');
+                if (countEl) countEl.textContent = visible + '명';
+            };
+        });
+    }
+
+    return { render, bindToggle, bindSearch, bindEntranceFilter, bindGroupFilter, groupFilterHtml, searchBarHtml, ROLE_LABELS };
 })();

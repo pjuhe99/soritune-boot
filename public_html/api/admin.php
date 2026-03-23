@@ -711,6 +711,42 @@ case 'fetch_cafe_info':
     ]);
     break;
 
+case 'lookup_cafe_nick':
+    $admin = requireAdmin(['operation']);
+    $memberKey = trim($_GET['member_key'] ?? '');
+    if (!$memberKey) jsonError('카페 유저 키가 필요합니다.');
+
+    $cafeId = 23243775;
+    $url = "https://cafe.naver.com/ca-fe/cafes/{$cafeId}/members/{$memberKey}";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $nick = null;
+    if ($httpCode === 200) {
+        $data = json_decode($response, true);
+        $nick = $data['result']['nickname'] ?? $data['result']['nick'] ?? $data['result']['memberNickname'] ?? null;
+    }
+
+    $db = getDB();
+    $stmt = $db->prepare('SELECT id, real_name FROM bootcamp_members WHERE cafe_member_key = ?');
+    $stmt->execute([$memberKey]);
+    $existingMember = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    jsonSuccess([
+        'data' => [
+            'nick' => $nick,
+            'existingMember' => $existingMember ?: null
+        ]
+    ]);
+    break;
+
 // ── Admin CRUD (operation only) ─────────────────────────────
 
 case 'admin_list':
