@@ -634,7 +634,8 @@ const LectureApp = (() => {
 
                     <div class="form-group">
                         <label class="form-label">단계 <span class="text-danger">*</span></label>
-                        <select class="form-input" id="evt-stage" required>
+                        <select class="form-input" id="evt-stage">
+                            <option value="0">선택 안 함 (전체)</option>
                             <option value="1">1단계</option>
                             <option value="2">2단계</option>
                         </select>
@@ -740,13 +741,14 @@ const LectureApp = (() => {
         const c = EVENT_COLORS[color] || EVENT_COLORS.coral;
         const hostLabel = host === 'coach1' ? 'Coach 1' : 'Coach 2';
 
+        const stageText = stage === '0' ? '전체' : stage + '단계';
         preview.innerHTML = `
             <div class="lec-preview-title">생성 미리보기</div>
             <div class="lec-preview-body">
                 <span class="lec-event-chip-preview" style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:3px;font-weight:600;">${App.esc(title)}</span>
                 <span class="host-badge ${host}" style="font-size:10px;padding:0 4px;">${App.esc(hostLabel)}</span>
             </div>
-            <div class="lec-preview-sub">${App.esc(date)} ${App.esc(time)} / ${App.esc(coachName)} / ${App.esc(stage)}단계</div>
+            <div class="lec-preview-sub">${App.esc(date)} ${App.esc(time)} / ${App.esc(coachName)} / ${App.esc(stageText)}</div>
         `;
         preview.style.display = '';
     }
@@ -764,7 +766,7 @@ const LectureApp = (() => {
         if (!title)    return { ok: false, msg: '제목을 입력해주세요.' };
         if (!cohortId) return { ok: false, msg: '수업 기수를 선택해주세요.' };
         if (!coachId)  return { ok: false, msg: '담당 코치를 선택해주세요.' };
-        if (!stage)    return { ok: false, msg: '단계를 선택해주세요.' };
+        // stage 0 = 선택 안 함 (전체) — 허용
         if (!date)     return { ok: false, msg: '날짜를 선택해주세요.' };
         if (!time)     return { ok: false, msg: '시작 시간을 입력해주세요.' };
         if (!color)    return { ok: false, msg: '색상을 선택해주세요.' };
@@ -822,8 +824,12 @@ const LectureApp = (() => {
         const dateKo = App.formatDateKo(ev.event_date);
         const timeLabel = (ev.start_time || '').substring(0, 5) + ' ~ ' + (ev.end_time || '').substring(0, 5);
         const hostLabel = ev.host_account === 'coach1' ? 'Coach 1' : 'Coach 2';
-        const stageLabel = STAGE_LABELS[ev.stage] || ev.stage;
+        const stageLabel = ev.stage ? (STAGE_LABELS[ev.stage] || ev.stage) : null;
         const c = EVENT_COLORS[ev.color] || EVENT_COLORS.coral;
+
+        const stageRow = stageLabel
+            ? `<div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>`
+            : '';
 
         let body = `
             <div style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;background:${c.bg};color:${c.fg};margin-bottom:12px;">${App.esc(c.label)}</div>
@@ -831,7 +837,7 @@ const LectureApp = (() => {
                 <div class="lec-detail-row"><span class="lec-detail-label">날짜</span><span class="lec-detail-value">${dateKo}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(ev.coach_name)}</span></div>
-                <div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>
+                ${stageRow}
                 <div class="lec-detail-row"><span class="lec-detail-label">호스트</span><span class="lec-detail-value"><span class="host-badge ${ev.host_account}" style="font-size:11px;padding:1px 6px;">${App.esc(hostLabel)}</span></span></div>
             </div>
         `;

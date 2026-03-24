@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   MemberCalendarDetail — 복습클래스 / 코치 강의 상세 모달
+   MemberCalendarDetail — 복습스터디 / 코치 강의 상세 모달
    ══════════════════════════════════════════════════════════════ */
 const MemberCalendarDetail = (() => {
     const API = '/api/bootcamp.php?action=';
@@ -10,8 +10,8 @@ const MemberCalendarDetail = (() => {
             action: 'study_session_detail',
             dateField: 'study_date',
             dotClass: 'member-legend-study',
-            typeLabel: '복습클래스',
-            defaultTitle: '복습클래스 상세',
+            typeLabel: '복습스터디',
+            defaultTitle: '복습스터디 상세',
             rows: s => [
                 { label: '진행자', value: s.host_nickname || '' },
                 { label: '참여', value: (s.participant_count ?? 0) + '명' },
@@ -36,10 +36,11 @@ const MemberCalendarDetail = (() => {
             dotClass: 'member-legend-event',
             typeLabel: '이벤트',
             defaultTitle: '이벤트 상세',
-            rows: s => [
-                { label: '코치', value: s.coach_name || '' },
-                { label: '단계', value: (s.stage == 1 ? '1단계' : '2단계') },
-            ],
+            rows: s => {
+                const r = [{ label: '코치', value: s.coach_name || '' }];
+                if (s.stage) r.push({ label: '단계', value: s.stage == 1 ? '1단계' : '2단계' });
+                return r;
+            },
         },
     };
 

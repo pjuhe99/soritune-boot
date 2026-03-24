@@ -344,7 +344,8 @@ function handleLectureEventCreate($method) {
     // ── 입력값 추출 ──
     $coachAdminId = (int)($input['coach_admin_id'] ?? 0);
     $cohortId     = (int)($input['cohort_id'] ?? 0);
-    $stage        = (int)($input['stage'] ?? 0);
+    $stageRaw     = $input['stage'] ?? '';
+    $stage        = $stageRaw === '' || $stageRaw === '0' || $stageRaw === 0 ? null : (int)$stageRaw;
     $eventDate    = trim($input['event_date'] ?? '');
     $startTime    = trim($input['start_time'] ?? '');
     $title        = trim($input['title'] ?? '');
@@ -354,7 +355,7 @@ function handleLectureEventCreate($method) {
     // ── 입력값 검증 ──
     if (!$coachAdminId) jsonError('담당 코치를 선택해주세요.');
     if (!$cohortId)     jsonError('수업 기수를 선택해주세요.');
-    if (!in_array($stage, [1, 2], true)) jsonError('단계를 선택해주세요.');
+    if ($stage !== null && !in_array($stage, [1, 2], true)) jsonError('단계는 1단계, 2단계, 또는 선택 안 함이어야 합니다.');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) jsonError('날짜를 선택해주세요.');
     if (!preg_match('/^\d{2}:\d{2}$/', $startTime)) jsonError('시작 시간 형식: HH:MM');
     if (!$title || mb_strlen($title) > 200) jsonError('제목을 입력해주세요 (최대 200자).');

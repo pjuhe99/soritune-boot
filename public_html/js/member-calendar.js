@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   MemberCalendar — 캘린더 탭 (복습클래스 + 코치 강의 통합 달력)
+   MemberCalendar — 캘린더 탭 (복습스터디 + 코치 강의 통합 달력)
    역할: 필터 칩 UI + 데이터 로드 + normalize + filter + 칩 렌더링
    상세 모달은 member-calendar-detail.js에 위임
    ══════════════════════════════════════════════════════════════ */
@@ -26,7 +26,7 @@ const MemberCalendar = (() => {
             <div class="member-cal-section">
                 <div class="member-cal-toolbar">
                     <div class="member-legend">
-                        <span class="member-legend-item"><span class="member-legend-dot member-legend-study"></span>복습클래스</span>
+                        <span class="member-legend-item"><span class="member-legend-dot member-legend-study"></span>복습스터디</span>
                         <span class="member-legend-item"><span class="member-legend-dot member-legend-lecture"></span>코치 강의</span>
                         <span class="member-legend-item"><span class="member-legend-dot member-legend-event"></span>이벤트</span>
                     </div>
@@ -35,7 +35,7 @@ const MemberCalendar = (() => {
                         <button class="filter-chip" data-stage="1">1단계</button>
                         <button class="filter-chip" data-stage="2">2단계</button>
                     </div>
-                    <a href="/study" class="btn btn-primary btn-sm" style="text-decoration:none;white-space:nowrap">복습클래스 관리 →</a>
+                    <a href="/study" class="btn btn-primary btn-sm" style="text-decoration:none;white-space:nowrap">복습스터디 관리 →</a>
                 </div>
                 <div id="member-cal-container"></div>
             </div>
@@ -107,7 +107,7 @@ const MemberCalendar = (() => {
         if (!cal) return;
         const filtered = activeFilter === 'all'
             ? allEvents
-            : allEvents.filter(ev => ev.stage === parseInt(activeFilter));
+            : allEvents.filter(ev => ev.stage === null || ev.stage === parseInt(activeFilter));
         cal.setEvents(filtered).render();
     }
 

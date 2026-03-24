@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS lecture_events (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     cohort_id           INT UNSIGNED NOT NULL COMMENT '기수 ID',
     coach_admin_id      INT UNSIGNED NOT NULL COMMENT '담당 코치 admin ID',
-    stage               TINYINT UNSIGNED NOT NULL COMMENT '1 or 2',
+    stage               TINYINT UNSIGNED DEFAULT NULL COMMENT '1, 2, or NULL(전체)',
     event_date          DATE NOT NULL COMMENT '이벤트 날짜',
     start_time          TIME NOT NULL,
     end_time            TIME NOT NULL,
