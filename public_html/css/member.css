@@ -112,15 +112,14 @@
 }
 
 .member-nickname {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
+    position: relative;
     font-size: var(--text-2xl);
     font-weight: var(--font-extrabold);
     color: var(--color-text);
 }
 
 .nickname-edit-btn {
+    position: absolute;
     background: none;
     border: none;
     cursor: pointer;
@@ -128,6 +127,9 @@
     padding: var(--space-1);
     opacity: 0.5;
     transition: opacity 0.15s;
+    margin-left: var(--space-1);
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .nickname-edit-btn:hover {
