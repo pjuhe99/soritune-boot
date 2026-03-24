@@ -787,7 +787,6 @@ const AdminApp = (() => {
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
                 <span style="font-weight:600">회원 (${r.members.length}명)</span>
-                <button class="btn btn-secondary btn-sm" id="btn-cafe-remap" title="미매핑 카페 게시글을 재매핑하고 체크리스트에 반영합니다">수동 반영</button>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
             <div id="op-members-table">
@@ -806,20 +805,6 @@ const AdminApp = (() => {
         MemberTable.bindEntranceFilter(tableEl);
         MemberTable.bindGroupFilter(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm();
-        document.getElementById('btn-cafe-remap').onclick = async () => {
-            if (!await App.confirm('미매핑 카페 게시글을 재매핑하고 체크리스트에 반영합니다. 진행하시겠습니까?')) return;
-            const btn = document.getElementById('btn-cafe-remap');
-            btn.disabled = true;
-            btn.textContent = '반영 중...';
-            const r = await App.api('bootcamp', { action: 'cafe_remap_unmapped' }, 'POST');
-            btn.disabled = false;
-            btn.textContent = '수동 반영';
-            if (r.success) {
-                Toast.success(r.data.message);
-            } else {
-                Toast.error(r.message || '수동 반영 실패');
-            }
-        };
     }
 
     function showMemberForm(data = {}) {
@@ -1797,6 +1782,7 @@ const AdminApp = (() => {
                     <input type="text" class="form-input form-input-sm" id="cafe-filter-keyword" placeholder="제목/닉네임 검색" value="${App.esc(cafePostFilter.keyword || '')}" style="width:140px">
                     <button class="btn btn-primary btn-sm" id="cafe-filter-btn">검색</button>
                     <button class="btn btn-secondary btn-sm" id="cafe-filter-reset">초기화</button>
+                    <button class="btn btn-sm" id="btn-cafe-remap" style="background:#f59e0b;color:#fff" title="미매핑 카페 게시글을 재매핑하고 체크리스트에 반영합니다">수동 반영</button>
                 </div>
             </div>
             ${statsHtml ? `<div class="mt-sm">${statsHtml}</div>` : ''}
@@ -1851,6 +1837,21 @@ const AdminApp = (() => {
         document.getElementById('cafe-filter-reset').onclick = () => {
             cafePostFilter = {};
             loadCafePosts(1);
+        };
+        document.getElementById('btn-cafe-remap').onclick = async () => {
+            if (!await App.confirm('미매핑 카페 게시글을 재매핑하고 체크리스트에 반영합니다. 진행하시겠습니까?')) return;
+            const btn = document.getElementById('btn-cafe-remap');
+            btn.disabled = true;
+            btn.textContent = '반영 중...';
+            const r = await App.api('bootcamp', { action: 'cafe_remap_unmapped' }, 'POST');
+            btn.disabled = false;
+            btn.textContent = '수동 반영';
+            if (r.success) {
+                Toast.success(r.data.message);
+                loadCafePosts(1);
+            } else {
+                Toast.error(r.message || '수동 반영 실패');
+            }
         };
     }
 
