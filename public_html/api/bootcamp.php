@@ -242,6 +242,7 @@ case 'integration_member_map': handleIntegrationMemberMap(); break;
 case 'integration_logs':       handleIntegrationLogs(); break;
 case 'integration_cafe_posts': handleIntegrationCafePosts($method); break;
 case 'cafe_posts':             handleCafePosts(); break;
+case 'cafe_remap_unmapped':    handleCafeRemapUnmapped($method); break;
 
 // ── Study (복습클래스) ──────────────────────────────────────
 

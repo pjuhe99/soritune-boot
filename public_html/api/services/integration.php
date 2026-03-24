@@ -239,6 +239,70 @@ function handleIntegrationCafePosts($method) {
     jsonSuccess($response);
 }
 
+function handleCafeRemapUnmapped($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'coach']);
+
+    $db = getDB();
+
+    // 1. cafe_posts에서 member_id IS NULL이지만 member_key가 있는 게시글 중,
+    //    현재 bootcamp_members에 매핑된 것을 찾아 업데이트
+    $unmappedStmt = $db->query("
+        SELECT cp.id, cp.cafe_article_id, cp.member_key, cp.board_type, cp.assignment_date
+        FROM cafe_posts cp
+        WHERE cp.member_id IS NULL
+          AND cp.member_key IS NOT NULL
+          AND cp.member_key IN (
+              SELECT cafe_member_key FROM bootcamp_members WHERE cafe_member_key IS NOT NULL AND is_active = 1
+          )
+    ");
+    $unmappedPosts = $unmappedStmt->fetchAll();
+
+    if (empty($unmappedPosts)) {
+        jsonSuccess(['remapped' => 0, 'checked' => 0, 'message' => '재매핑할 게시글이 없습니다.']);
+        return;
+    }
+
+    $updateStmt = $db->prepare("UPDATE cafe_posts SET member_id = ?, mission_checked = 1 WHERE id = ?");
+    $remapped = 0;
+    $checked = 0;
+    $memberKeyCache = [];
+
+    foreach ($unmappedPosts as $post) {
+        $memberKey = $post['member_key'];
+
+        if (isset($memberKeyCache[$memberKey])) {
+            $memberId = $memberKeyCache[$memberKey];
+        } else {
+            $memberId = resolveMemberByKey($db, $memberKey);
+            $memberKeyCache[$memberKey] = $memberId;
+        }
+
+        if (!$memberId) continue;
+
+        // cafe_posts 업데이트
+        $updateStmt->execute([$memberId, $post['id']]);
+        $remapped++;
+
+        // 체크리스트 반영
+        if ($post['board_type'] && $post['assignment_date']) {
+            $missionTypeId = getMissionTypeId($db, $post['board_type']);
+            if ($missionTypeId) {
+                $r = saveCheck($db, $memberId, $post['assignment_date'], $missionTypeId, true, 'automation', "cafe:{$post['cafe_article_id']}", null);
+                if (in_array($r['action'], ['created', 'updated'])) {
+                    $checked++;
+                }
+            }
+        }
+    }
+
+    jsonSuccess([
+        'remapped' => $remapped,
+        'checked' => $checked,
+        'message' => "{$remapped}건 재매핑, {$checked}건 체크리스트 반영 완료",
+    ]);
+}
+
 function handleCafePosts() {
     requireAdmin(['operation', 'coach']);
     $db = getDB();
