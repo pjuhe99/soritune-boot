@@ -26,6 +26,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="/js/memberTable.js<?= v('/js/memberTable.js') ?>"></script>
     <script src="/js/bootcamp.js<?= v('/js/bootcamp.js') ?>"></script>
+    <script src="/js/attendance.js<?= v('/js/attendance.js') ?>"></script>
     <script src="/js/group-assignment.js<?= v('/js/group-assignment.js') ?>"></script>
     <script src="/js/curriculum.js<?= v('/js/curriculum.js') ?>"></script>
     <script src="/js/admin.js<?= v('/js/admin.js') ?>"></script>

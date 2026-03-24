@@ -79,10 +79,31 @@ case 'create_session':
     $expiryMinutes = (int)getSetting('qr_expiry_minutes', QR_DEFAULT_EXPIRY_MINUTES);
     $expiresAt = date('Y-m-d H:i:s', time() + $expiryMinutes * 60);
 
+    // 당일 해당 코치의 강의 자동 매칭
+    $lectureSessionId = null;
+    if ($sessionType === 'attendance' && $admin['admin_id'] > 0) {
+        $today = date('Y-m-d');
+        $now = date('H:i:s');
+        $lectureStmt = $db->prepare("
+            SELECT id FROM lecture_sessions
+            WHERE coach_admin_id = ?
+              AND lecture_date = ?
+              AND cohort_id = ?
+              AND status = 'active'
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
+            LIMIT 1
+        ");
+        $lectureStmt->execute([$admin['admin_id'], $today, $cohortId, $now]);
+        $lectureRow = $lectureStmt->fetch();
+        if ($lectureRow) {
+            $lectureSessionId = (int)$lectureRow['id'];
+        }
+    }
+
     $db->prepare("
-        INSERT INTO qr_sessions (session_code, session_type, admin_id, cohort_id, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-    ")->execute([$sessionCode, $sessionType, $admin['admin_id'], $cohortId, $expiresAt]);
+        INSERT INTO qr_sessions (session_code, session_type, admin_id, cohort_id, lecture_session_id, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ")->execute([$sessionCode, $sessionType, $admin['admin_id'], $cohortId, $lectureSessionId, $expiresAt]);
 
     $scanUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/qr/?code=' . $sessionCode;
 

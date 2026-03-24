@@ -26,6 +26,7 @@ require_once __DIR__ . '/services/issue_report.php';
 require_once __DIR__ . '/services/dashboard.php';
 require_once __DIR__ . '/services/group_assignment.php';
 require_once __DIR__ . '/services/entrance.php';
+require_once __DIR__ . '/services/attendance.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -320,6 +321,9 @@ case 'assignment_reset':     handleAssignmentReset($method); break;
 case 'member_move':          handleMemberMove($method); break;
 case 'group_members':        handleGroupMembers(); break;
 case 'assignment_summary':   handleAssignmentSummary(); break;
+
+// ── Attendance ──
+case 'attendance_stats':     handleAttendanceStats(); break;
 
 // ──────────────────────────────────────────────────────────────
 

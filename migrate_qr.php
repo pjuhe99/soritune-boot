@@ -50,4 +50,44 @@ CREATE TABLE IF NOT EXISTS qr_attendance (
 ");
 echo "  - 완료\n";
 
+// 3. qr_sessions에 lecture_session_id 컬럼 추가
+echo "\n[3] qr_sessions.lecture_session_id 컬럼 추가...\n";
+$cols = $db->query("SHOW COLUMNS FROM qr_sessions LIKE 'lecture_session_id'")->fetchAll();
+if (empty($cols)) {
+    $db->exec("
+        ALTER TABLE qr_sessions
+        ADD COLUMN lecture_session_id INT UNSIGNED DEFAULT NULL
+            COMMENT '연결된 강의 세션 (NULL이면 기타/수동 세션)'
+            AFTER cohort_id,
+        ADD KEY idx_qs_lecture (lecture_session_id)
+    ");
+    echo "  - 컬럼 추가 완료\n";
+
+    // 기존 데이터 소급 매칭: 같은 코치 + 같은 날짜 + 같은 기수에서 시간이 가장 가까운 강의 매칭
+    $db->exec("
+        UPDATE qr_sessions qs
+        JOIN (
+            SELECT qs2.id AS qr_id, (
+                SELECT ls.id
+                FROM lecture_sessions ls
+                WHERE ls.coach_admin_id = qs2.admin_id
+                  AND ls.lecture_date = DATE(qs2.created_at)
+                  AND ls.cohort_id = qs2.cohort_id
+                  AND ls.status = 'active'
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, ls.start_time, TIME(qs2.created_at))) ASC
+                LIMIT 1
+            ) AS matched_lecture_id
+            FROM qr_sessions qs2
+            WHERE qs2.session_type = 'attendance'
+              AND qs2.admin_id > 0
+        ) sub ON qs.id = sub.qr_id
+        SET qs.lecture_session_id = sub.matched_lecture_id
+        WHERE sub.matched_lecture_id IS NOT NULL
+    ");
+    $backfilled = $db->query("SELECT COUNT(*) FROM qr_sessions WHERE lecture_session_id IS NOT NULL")->fetchColumn();
+    echo "  - 소급 매칭 완료: {$backfilled}건\n";
+} else {
+    echo "  - 이미 존재\n";
+}
+
 echo "\n=== Migration QR Attendance 완료 ===\n";

@@ -90,6 +90,7 @@ const BootcampApp = (() => {
             '#bc-tab-checklist': loadChecklist,
             '#bc-tab-status': loadStatusBoard,
             '#bc-tab-qr': loadQR,
+            '#bc-tab-attendance': () => { if (typeof AttendanceApp !== 'undefined') AttendanceApp.init(document.getElementById('bc-tab-attendance'), admin, 'coach'); },
             '#bc-tab-revival': loadRevival,
             '#bc-tab-coins': loadCoins,
             '#bc-tab-members': loadMembersMgmt,
