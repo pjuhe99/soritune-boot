@@ -330,6 +330,254 @@ function handleLectureZoomRetry($method) {
 
 
 // ══════════════════════════════════════════════════════════════
+// Lecture Events (1회성 이벤트)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 이벤트 생성 — 1회성 날짜 + 직접 제목 + 컬러 + n8n Zoom
+ */
+function handleLectureEventCreate($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    // ── 입력값 추출 ──
+    $coachAdminId = (int)($input['coach_admin_id'] ?? 0);
+    $cohortId     = (int)($input['cohort_id'] ?? 0);
+    $stage        = (int)($input['stage'] ?? 0);
+    $eventDate    = trim($input['event_date'] ?? '');
+    $startTime    = trim($input['start_time'] ?? '');
+    $title        = trim($input['title'] ?? '');
+    $color        = trim($input['color'] ?? 'coral');
+    $hostAccount  = trim($input['host_account'] ?? '');
+
+    // ── 입력값 검증 ──
+    if (!$coachAdminId) jsonError('담당 코치를 선택해주세요.');
+    if (!$cohortId)     jsonError('수업 기수를 선택해주세요.');
+    if (!in_array($stage, [1, 2], true)) jsonError('단계를 선택해주세요.');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) jsonError('날짜를 선택해주세요.');
+    if (!preg_match('/^\d{2}:\d{2}$/', $startTime)) jsonError('시작 시간 형식: HH:MM');
+    if (!$title || mb_strlen($title) > 200) jsonError('제목을 입력해주세요 (최대 200자).');
+    $validColors = ['coral', 'amber', 'violet', 'teal', 'slate'];
+    if (!in_array($color, $validColors, true)) jsonError('유효한 색상을 선택해주세요.');
+    if (!in_array($hostAccount, ['coach1', 'coach2'], true)) jsonError('호스트 계정을 선택해주세요.');
+
+    [$h, $m] = explode(':', $startTime);
+    if ((int)$h < 0 || (int)$h > 23 || (int)$m < 0 || (int)$m > 59) {
+        jsonError('유효하지 않은 시간입니다.');
+    }
+
+    $db = getDB();
+
+    // ── 코치 확인 ──
+    $stmt = $db->prepare("
+        SELECT a.id, a.name FROM admins a
+        JOIN admin_roles ar ON a.id = ar.admin_id
+        WHERE a.id = ? AND a.is_active = 1
+          AND ar.role IN ('coach','sub_coach','head','subhead1','subhead2')
+        LIMIT 1
+    ");
+    $stmt->execute([$coachAdminId]);
+    $coach = $stmt->fetch();
+    if (!$coach) jsonError('유효한 코치를 찾을 수 없습니다.');
+
+    // ── cohort 확인 ──
+    $stmt = $db->prepare("SELECT * FROM cohorts WHERE id = ? AND is_active = 1");
+    $stmt->execute([$cohortId]);
+    if (!$stmt->fetch()) jsonError('유효한 기수를 찾을 수 없습니다.');
+
+    // ── host 중복 검사 (lecture_sessions + lecture_events 둘 다) ──
+    $startTimeFull = $startTime . ':00';
+
+    // 기존 특강 세션과 겹침
+    $overlap = checkLectureOverlap($db, [$eventDate], $startTimeFull, $hostAccount);
+    if ($overlap) {
+        jsonError("중복: {$overlap['lecture_date']} {$overlap['title']} — 같은 시간·호스트 계정에 이미 강의가 있습니다.");
+    }
+    // 기존 이벤트와 겹침
+    $overlapEvt = checkEventOverlap($db, $eventDate, $startTimeFull, $hostAccount);
+    if ($overlapEvt) {
+        jsonError("중복: {$overlapEvt['event_date']} {$overlapEvt['title']} — 같은 시간·호스트 계정에 이미 이벤트가 있습니다.");
+    }
+
+    // ── end_time 계산 ──
+    $startDt = new DateTime("2000-01-01 {$startTimeFull}");
+    $endDt = clone $startDt;
+    $endDt->modify('+60 minutes');
+    $endTimeFull = $endDt->format('H:i:s');
+
+    // ── INSERT ──
+    $db->prepare("
+        INSERT INTO lecture_events
+            (cohort_id, coach_admin_id, stage, event_date, start_time, end_time,
+             title, color, host_account, zoom_status, status, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'active', ?)
+    ")->execute([
+        $cohortId, $coachAdminId, $stage, $eventDate,
+        $startTimeFull, $endTimeFull,
+        $title, $color, $hostAccount, $admin['admin_id'],
+    ]);
+    $eventId = (int)$db->lastInsertId();
+
+    // ── n8n webhook → Zoom 생성 ──
+    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
+        'event_id'    => $eventId,
+        'title'       => $title,
+        'event_date'  => $eventDate,
+        'start_time'  => $startTime,
+        'end_time'    => $endDt->format('H:i'),
+        'duration'    => 60,
+        'host_account' => $hostAccount,
+        'scheduled_at' => (new DateTime("{$eventDate} {$startTimeFull}", new DateTimeZone('Asia/Seoul')))->format('c'),
+    ]);
+
+    jsonSuccess([
+        'event_id'     => $eventId,
+        'title'        => $title,
+        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+        'zoom_status'  => $zoomResult['success'] ? 'ready' : 'pending',
+    ], '이벤트가 생성되었습니다.');
+}
+
+/**
+ * 이벤트 취소
+ */
+function handleLectureEventCancel($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $eventId = (int)($input['event_id'] ?? 0);
+    if (!$eventId) jsonError('event_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM lecture_events WHERE id = ? AND status = 'active'");
+    $stmt->execute([$eventId]);
+    if (!$stmt->fetch()) jsonError('활성 상태의 이벤트를 찾을 수 없습니다.', 404);
+
+    $db->prepare("UPDATE lecture_events SET status = 'cancelled' WHERE id = ?")->execute([$eventId]);
+    jsonSuccess([], '이벤트가 취소되었습니다.');
+}
+
+/**
+ * 이벤트 상세 (Zoom URL 포함)
+ */
+function handleLectureEventDetail() {
+    resolveLectureAuth();
+
+    $eventId = (int)($_GET['event_id'] ?? 0);
+    if (!$eventId) jsonError('event_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT le.*, a.name AS coach_name
+        FROM lecture_events le
+        JOIN admins a ON le.coach_admin_id = a.id
+        WHERE le.id = ?
+    ");
+    $stmt->execute([$eventId]);
+    $event = $stmt->fetch();
+    if (!$event) jsonError('이벤트를 찾을 수 없습니다.', 404);
+
+    // admin이 아니면 zoom_start_url 숨김
+    $isAdmin = false;
+    if (!empty($_COOKIE['BOOT_ADMIN_SID'])) {
+        $adminData = getAdminSession();
+        if ($adminData) $isAdmin = true;
+    }
+    if (!$isAdmin) {
+        unset($event['zoom_start_url']);
+    }
+
+    jsonSuccess(['event' => $event]);
+}
+
+/**
+ * 이벤트 Zoom 재시도
+ */
+function handleLectureEventZoomRetry($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $eventId = (int)($input['event_id'] ?? 0);
+    if (!$eventId) jsonError('event_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT le.*, a.name AS coach_name
+        FROM lecture_events le
+        JOIN admins a ON le.coach_admin_id = a.id
+        WHERE le.id = ? AND le.status = 'active'
+    ");
+    $stmt->execute([$eventId]);
+    $event = $stmt->fetch();
+    if (!$event) jsonError('이벤트를 찾을 수 없습니다.', 404);
+
+    $startTime = substr($event['start_time'], 0, 5);
+    $endTime   = substr($event['end_time'], 0, 5);
+
+    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
+        'event_id'     => $eventId,
+        'title'        => $event['title'],
+        'event_date'   => $event['event_date'],
+        'start_time'   => $startTime,
+        'end_time'     => $endTime,
+        'duration'     => 60,
+        'host_account' => $event['host_account'],
+        'scheduled_at' => (new DateTime("{$event['event_date']} {$event['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c'),
+    ]);
+
+    if (!$zoomResult['success']) {
+        jsonError('Zoom 재시도 실패: ' . ($zoomResult['error'] ?? '알 수 없는 오류'));
+    }
+
+    jsonSuccess([
+        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+    ], 'Zoom URL이 설정되었습니다.');
+}
+
+/**
+ * 월별 이벤트 목록 (달력용) — lecture_sessions와 별도
+ */
+function handleLectureEvents() {
+    $cohortId = resolveLectureAuth();
+
+    $month = $_GET['month'] ?? date('Y-m');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) jsonError('month 형식: YYYY-MM');
+
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-t', strtotime($startDate));
+
+    $db = getDB();
+    $params = [$startDate, $endDate];
+    $cohortWhere = '';
+    if ($cohortId) {
+        $cohortWhere = 'AND le.cohort_id = ?';
+        $params[] = $cohortId;
+    }
+
+    $stmt = $db->prepare("
+        SELECT le.id, le.title, le.event_date, le.start_time, le.end_time,
+               le.stage, le.host_account, le.color, le.status,
+               le.coach_admin_id, le.zoom_status,
+               a.name AS coach_name
+        FROM lecture_events le
+        JOIN admins a ON le.coach_admin_id = a.id
+        WHERE le.event_date BETWEEN ? AND ?
+          AND le.status = 'active'
+          {$cohortWhere}
+        ORDER BY le.event_date, le.start_time
+    ");
+    $stmt->execute($params);
+
+    jsonSuccess([
+        'month'  => $month,
+        'events' => $stmt->fetchAll(),
+    ]);
+}
+
+// ══════════════════════════════════════════════════════════════
 // Internal Helpers
 // ══════════════════════════════════════════════════════════════
 
@@ -421,4 +669,97 @@ function getFixedZoomUrl(int $stage): string {
         2 => 'https://us02web.zoom.us/j/83575089340?pwd=mxHTGfd2ImbRxNv46KbCVPPKUlM7Ql.1',
     ];
     return $urls[$stage] ?? $urls[1];
+}
+
+/**
+ * 이벤트 간 host 중복 검사
+ */
+function checkEventOverlap(PDO $db, string $eventDate, string $startTime, string $hostAccount, ?int $excludeEventId = null): ?array {
+    $params = [$eventDate, $startTime, $hostAccount];
+    $excludeClause = '';
+    if ($excludeEventId) {
+        $excludeClause = 'AND le.id != ?';
+        $params[] = $excludeEventId;
+    }
+
+    $stmt = $db->prepare("
+        SELECT le.id, le.event_date, le.title, le.start_time, le.host_account
+        FROM lecture_events le
+        WHERE le.event_date = ?
+          AND le.start_time = ?
+          AND le.host_account = ?
+          AND le.status = 'active'
+          {$excludeClause}
+        LIMIT 1
+    ");
+    $stmt->execute($params);
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * n8n webhook 호출하여 이벤트 Zoom meeting 생성
+ */
+function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): array {
+    $webhookUrl = getSetting('lecture_zoom_webhook_url');
+    if (!$webhookUrl) {
+        $db->prepare("
+            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = 'webhook URL 미설정'
+            WHERE id = ?
+        ")->execute([$eventId]);
+        return ['success' => false, 'error' => 'Zoom webhook URL이 설정되지 않았습니다.'];
+    }
+
+    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init($webhookUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $jsonPayload,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
+        $errorMsg = $curlError ?: "HTTP {$httpCode}";
+        $db->prepare("
+            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
+            WHERE id = ?
+        ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    $data = json_decode($response, true);
+    if (!$data || empty($data['success'])) {
+        $errorMsg = $data['error'] ?? $data['message'] ?? 'n8n 응답 파싱 실패';
+        $db->prepare("
+            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
+            WHERE id = ?
+        ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
+        return ['success' => false, 'error' => $errorMsg];
+    }
+
+    $db->prepare("
+        UPDATE lecture_events
+        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
+            zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([
+        $data['zoom_meeting_id'] ?? null,
+        $data['zoom_join_url'] ?? null,
+        $data['zoom_start_url'] ?? null,
+        $data['zoom_password'] ?? null,
+        $eventId,
+    ]);
+
+    return [
+        'success' => true,
+        'zoom_join_url' => $data['zoom_join_url'] ?? null,
+    ];
 }

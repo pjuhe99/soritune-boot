@@ -28,6 +28,19 @@ const MemberCalendarDetail = (() => {
                 { label: '단계', value: (s.stage == 1 ? '1단계' : '2단계') },
             ],
         },
+        event: {
+            action: 'lecture_event_detail',
+            responseKey: 'event',
+            idParam: 'event_id',
+            dateField: 'event_date',
+            dotClass: 'member-legend-event',
+            typeLabel: '이벤트',
+            defaultTitle: '이벤트 상세',
+            rows: s => [
+                { label: '코치', value: s.coach_name || '' },
+                { label: '단계', value: (s.stage == 1 ? '1단계' : '2단계') },
+            ],
+        },
     };
 
     function open(type, id) {
@@ -39,11 +52,13 @@ const MemberCalendarDetail = (() => {
 
     async function openDetail(config, sessionId) {
         App.showLoading();
-        const r = await App.get(API + config.action, { session_id: sessionId });
+        const paramKey = config.idParam || 'session_id';
+        const r = await App.get(API + config.action, { [paramKey]: sessionId });
         App.hideLoading();
         if (!r.success) return;
 
-        const s = r.session;
+        const responseKey = config.responseKey || 'session';
+        const s = r[responseKey];
         const dateKo = App.formatDateKo(s[config.dateField]);
         const timeLabel = (s.start_time || '').substring(0, 5) + ' ~ ' + (s.end_time || '').substring(0, 5);
 

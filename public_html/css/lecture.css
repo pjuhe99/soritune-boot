@@ -339,9 +339,57 @@
     to { transform: rotate(360deg); }
 }
 
+/* ── Event Chip (Operation Calendar) ──────────────────────── */
+.lec-event-chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 3px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    line-height: var(--leading-tight);
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: opacity var(--transition-fast);
+}
+.lec-event-chip .chip-line1 { white-space: nowrap; }
+.lec-event-chip .chip-line2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lec-event-chip:hover { opacity: 0.75; }
+
+/* ── Color Selection Group ───────────────────────────────── */
+.lec-color-group {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+.lec-color-radio {
+    cursor: pointer;
+}
+.lec-color-radio input[type="radio"] {
+    display: none;
+}
+.lec-color-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-1) var(--space-3);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    transition: all var(--transition-fast);
+}
+.lec-color-radio input:checked + .lec-color-chip {
+    border-color: currentColor;
+    box-shadow: 0 0 0 1px currentColor;
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .lec-chip {
+    .lec-chip, .lec-event-chip {
         font-size: 10px;
         padding: 1px 3px;
     }

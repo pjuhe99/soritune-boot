@@ -17,6 +17,15 @@ const LectureApp = (() => {
     const STAGE_LABELS = { 1: '1단계', 2: '2단계' };
     const WEEKDAY_NAMES = ['', '월', '화', '수', '목', '금', '토', '일'];
 
+    // 이벤트 컬러 팔레트
+    const EVENT_COLORS = {
+        coral:  { bg: '#fee2e2', fg: '#dc2626', label: '코랄' },
+        amber:  { bg: '#fef3c7', fg: '#d97706', label: '앰버' },
+        violet: { bg: '#ede9fe', fg: '#7c3aed', label: '바이올렛' },
+        teal:   { bg: '#ccfbf1', fg: '#0d9488', label: '틸' },
+        slate:  { bg: '#f1f5f9', fg: '#475569', label: '슬레이트' },
+    };
+
     // ══════════════════════════════════════════════════════════
     // Init
     // ══════════════════════════════════════════════════════════
@@ -41,14 +50,28 @@ const LectureApp = (() => {
         const canCreate = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
 
         cal = CalendarUI.create(document.getElementById('lec-cal-wrap'), {
-            onMonthChange: () => loadSessions(),
-            chipSelector: '.lec-chip',
-            onChipClick: (e, chip) => openDetail(parseInt(chip.dataset.id)),
+            onMonthChange: () => loadAllData(),
+            chipSelector: '.lec-chip, .lec-event-chip',
+            onChipClick: (e, chip) => {
+                if (chip.classList.contains('lec-event-chip')) {
+                    openEventDetail(parseInt(chip.dataset.id));
+                } else {
+                    openDetail(parseInt(chip.dataset.id));
+                }
+            },
             headerHtml: canCreate
-                ? '<button class="btn btn-primary btn-sm" id="btn-lec-create">특강 스케줄 추가</button>'
+                ? '<button class="btn btn-primary btn-sm" id="btn-lec-create">특강 스케줄 추가</button> <button class="btn btn-sm" id="btn-evt-create" style="margin-left:6px;background:#7c3aed;color:#fff;border:none;">이벤트 추가</button>'
                 : '',
             renderChips(events) {
                 return events.map(s => {
+                    // 이벤트 칩
+                    if (s._type === 'event') {
+                        const c = EVENT_COLORS[s.color] || EVENT_COLORS.coral;
+                        const timeLabel = (s.start_time || '').substring(0, 5);
+                        const hostBadge = `<span class="host-badge ${s.host_account}">${HOST_LABELS[s.host_account] || ''}</span>`;
+                        return `<div class="lec-event-chip" data-id="${s.id}" title="${App.esc(s.title)}" style="background:${c.bg};color:${c.fg};">${hostBadge}<span class="chip-line1">${timeLabel}</span><span class="chip-line2">${App.esc(s.title)}</span></div>`;
+                    }
+                    // 기존 특강 칩
                     const stageClass = `stage-${s.stage}`;
                     const zoomClass = s.zoom_status === 'failed' ? 'zoom-failed' : '';
                     const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
@@ -62,25 +85,36 @@ const LectureApp = (() => {
             },
         }).mount();
 
-        // Bind create button after mount
+        // Bind create buttons after mount
         if (canCreate) {
             const createBtn = document.getElementById('btn-lec-create');
             if (createBtn) createBtn.onclick = openCreateModal;
+            const evtBtn = document.getElementById('btn-evt-create');
+            if (evtBtn) evtBtn.onclick = openEventCreateModal;
         }
 
-        loadSessions();
+        loadAllData();
     }
 
     // ══════════════════════════════════════════════════════════
     // Data Loading
     // ══════════════════════════════════════════════════════════
 
-    async function loadSessions() {
+    async function loadAllData() {
         const { year, month } = cal.getMonth();
         const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-        const r = await App.get(API + 'lecture_sessions', { month: monthStr });
-        const sessions = r.success ? (r.sessions || []) : [];
-        cal.setEvents(sessions.map(s => ({ ...s, date: s.lecture_date }))).render();
+
+        const [rSess, rEvt] = await Promise.all([
+            App.get(API + 'lecture_sessions', { month: monthStr }),
+            App.get(API + 'lecture_events', { month: monthStr }),
+        ]);
+
+        const sessions = (rSess.success ? (rSess.sessions || []) : [])
+            .map(s => ({ ...s, date: s.lecture_date, _type: 'lecture' }));
+        const events = (rEvt.success ? (rEvt.events || []) : [])
+            .map(e => ({ ...e, date: e.event_date, _type: 'event' }));
+
+        cal.setEvents([...sessions, ...events]).render();
     }
 
     async function loadCoaches() {
@@ -186,7 +220,7 @@ const LectureApp = (() => {
         if (r.success) {
             Toast.success(r.message || 'Zoom이 생성되었습니다.');
             App.closeModal();
-            loadSessions();
+            loadAllData();
         }
     }
 
@@ -200,7 +234,7 @@ const LectureApp = (() => {
         if (r.success) {
             Toast.success(r.message || '취소되었습니다.');
             App.closeModal();
-            loadSessions();
+            loadAllData();
         }
     }
 
@@ -530,7 +564,343 @@ const LectureApp = (() => {
             Toast.success((r.message || '강의 스케줄이 생성되었습니다.') + extra);
             App.closeModal();
             coachesCache = null; // 다음 생성 시 최신 목록
-            loadSessions();
+            loadAllData();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Event Create Modal
+    // ══════════════════════════════════════════════════════════
+
+    async function openEventCreateModal() {
+        App.showLoading();
+        const [coaches, cohorts] = await Promise.all([loadCoaches(), loadCohorts()]);
+        App.hideLoading();
+
+        if (!coaches.length) { Toast.warning('등록된 코치가 없습니다.'); return; }
+        if (!cohorts.length) { Toast.warning('등록된 기수가 없습니다.'); return; }
+
+        const body = buildEventCreateFormHtml(coaches, cohorts);
+        App.openModal('이벤트 추가', body);
+        bindEventCreateFormEvents();
+    }
+
+    function buildEventCreateFormHtml(coaches, cohorts) {
+        const coachOpts = coaches
+            .map(c => `<option value="${c.id}">${App.esc(c.name)}</option>`)
+            .join('');
+
+        const cohortOpts = cohorts.map(c => {
+            const label = c.cohort || c.name || `기수 #${c.id}`;
+            const period = c.start_date && c.end_date
+                ? ` (${c.start_date} ~ ${c.end_date})`
+                : '';
+            return `<option value="${c.id}">${App.esc(label + period)}</option>`;
+        }).join('');
+
+        const colorChips = Object.entries(EVENT_COLORS).map(([key, c], i) =>
+            `<label class="lec-color-radio">
+                <input type="radio" name="evt-color" value="${key}" ${i === 0 ? 'checked' : ''}>
+                <span class="lec-color-chip" style="background:${c.bg};color:${c.fg};border-color:${c.fg};">${App.esc(c.label)}</span>
+            </label>`
+        ).join('');
+
+        return `
+            <form id="evt-create-form" class="lec-create-form">
+
+                <!-- ▸ 기본 정보 -->
+                <fieldset class="lec-form-section">
+                    <legend class="lec-form-section-title">기본 정보</legend>
+
+                    <div class="form-group">
+                        <label class="form-label">제목 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-input" id="evt-title" maxlength="200" placeholder="이벤트 제목을 입력하세요" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">수업 기수 <span class="text-danger">*</span></label>
+                        <select class="form-input" id="evt-cohort" required>
+                            ${cohortOpts}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">담당 코치 <span class="text-danger">*</span></label>
+                        <select class="form-input" id="evt-coach" required>
+                            <option value="">선택해주세요</option>
+                            ${coachOpts}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">단계 <span class="text-danger">*</span></label>
+                        <select class="form-input" id="evt-stage" required>
+                            <option value="1">1단계</option>
+                            <option value="2">2단계</option>
+                        </select>
+                    </div>
+                </fieldset>
+
+                <!-- ▸ 스케줄 설정 -->
+                <fieldset class="lec-form-section">
+                    <legend class="lec-form-section-title">스케줄 설정</legend>
+
+                    <div class="form-group">
+                        <label class="form-label">날짜 <span class="text-danger">*</span></label>
+                        <input type="date" class="form-input" id="evt-date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">시작 시간 <span class="text-danger">*</span></label>
+                        <input type="time" class="form-input" id="evt-time" required>
+                        <p class="lec-form-hint">수업 시간: 60분 (자동)</p>
+                    </div>
+                </fieldset>
+
+                <!-- ▸ 컬러 선택 -->
+                <fieldset class="lec-form-section">
+                    <legend class="lec-form-section-title">캘린더 색상</legend>
+                    <div class="lec-color-group">
+                        ${colorChips}
+                    </div>
+                </fieldset>
+
+                <!-- ▸ Zoom 설정 -->
+                <fieldset class="lec-form-section">
+                    <legend class="lec-form-section-title">Zoom 설정</legend>
+
+                    <div class="form-group">
+                        <label class="form-label">호스트 계정 <span class="text-danger">*</span></label>
+                        <div class="lec-host-radio-group" id="evt-host-group">
+                            <label class="lec-host-radio">
+                                <input type="radio" name="evt-host" value="coach1" checked>
+                                <span class="lec-host-radio-card">
+                                    <span class="host-badge coach1" style="font-size:11px;padding:1px 6px;">Coach 1</span>
+                                </span>
+                            </label>
+                            <label class="lec-host-radio">
+                                <input type="radio" name="evt-host" value="coach2">
+                                <span class="lec-host-radio-card">
+                                    <span class="host-badge coach2" style="font-size:11px;padding:1px 6px;">Coach 2</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="lec-form-hint">선택한 호스트 계정으로 Zoom 미팅이 새로 생성됩니다.</p>
+                    </div>
+                </fieldset>
+
+                <!-- ▸ 미리보기 -->
+                <div class="lec-preview" id="evt-preview" style="display:none;"></div>
+
+                <!-- ▸ 제출 -->
+                <button type="submit" class="btn btn-primary btn-block btn-lg mt-md" id="evt-submit-btn">
+                    이벤트 생성
+                </button>
+            </form>
+        `;
+    }
+
+    function bindEventCreateFormEvents() {
+        ['evt-title', 'evt-coach', 'evt-stage', 'evt-date', 'evt-time'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', updateEventPreview);
+            if (el) el.addEventListener('change', updateEventPreview);
+        });
+        document.querySelectorAll('input[name="evt-color"]').forEach(r => {
+            r.onchange = updateEventPreview;
+        });
+        document.querySelectorAll('input[name="evt-host"]').forEach(r => {
+            r.onchange = updateEventPreview;
+        });
+
+        document.getElementById('evt-create-form').onsubmit = (e) => {
+            e.preventDefault();
+            handleEventCreateSubmit();
+        };
+    }
+
+    function updateEventPreview() {
+        const preview = document.getElementById('evt-preview');
+        if (!preview) return;
+
+        const title = document.getElementById('evt-title')?.value?.trim() || '';
+        const date = document.getElementById('evt-date')?.value || '';
+        const time = document.getElementById('evt-time')?.value || '';
+        const coachEl = document.getElementById('evt-coach');
+        const coachName = coachEl?.options[coachEl.selectedIndex]?.text || '';
+        const stage = document.getElementById('evt-stage')?.value || '1';
+        const color = document.querySelector('input[name="evt-color"]:checked')?.value || 'coral';
+        const host = document.querySelector('input[name="evt-host"]:checked')?.value || 'coach1';
+
+        if (!title || !date || !time || !coachEl?.value) {
+            preview.style.display = 'none';
+            return;
+        }
+
+        const c = EVENT_COLORS[color] || EVENT_COLORS.coral;
+        const hostLabel = host === 'coach1' ? 'Coach 1' : 'Coach 2';
+
+        preview.innerHTML = `
+            <div class="lec-preview-title">생성 미리보기</div>
+            <div class="lec-preview-body">
+                <span class="lec-event-chip-preview" style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:3px;font-weight:600;">${App.esc(title)}</span>
+                <span class="host-badge ${host}" style="font-size:10px;padding:0 4px;">${App.esc(hostLabel)}</span>
+            </div>
+            <div class="lec-preview-sub">${App.esc(date)} ${App.esc(time)} / ${App.esc(coachName)} / ${App.esc(stage)}단계</div>
+        `;
+        preview.style.display = '';
+    }
+
+    function validateEventCreateForm() {
+        const title    = document.getElementById('evt-title')?.value?.trim() || '';
+        const cohortId = parseInt(document.getElementById('evt-cohort')?.value || '0');
+        const coachId  = parseInt(document.getElementById('evt-coach')?.value || '0');
+        const stage    = parseInt(document.getElementById('evt-stage')?.value || '0');
+        const date     = document.getElementById('evt-date')?.value || '';
+        const time     = document.getElementById('evt-time')?.value || '';
+        const color    = document.querySelector('input[name="evt-color"]:checked')?.value || '';
+        const host     = document.querySelector('input[name="evt-host"]:checked')?.value || '';
+
+        if (!title)    return { ok: false, msg: '제목을 입력해주세요.' };
+        if (!cohortId) return { ok: false, msg: '수업 기수를 선택해주세요.' };
+        if (!coachId)  return { ok: false, msg: '담당 코치를 선택해주세요.' };
+        if (!stage)    return { ok: false, msg: '단계를 선택해주세요.' };
+        if (!date)     return { ok: false, msg: '날짜를 선택해주세요.' };
+        if (!time)     return { ok: false, msg: '시작 시간을 입력해주세요.' };
+        if (!color)    return { ok: false, msg: '색상을 선택해주세요.' };
+        if (!host)     return { ok: false, msg: '호스트 계정을 선택해주세요.' };
+
+        return {
+            ok: true,
+            payload: {
+                title,
+                cohort_id: cohortId,
+                coach_admin_id: coachId,
+                stage,
+                event_date: date,
+                start_time: time,
+                color,
+                host_account: host,
+            },
+        };
+    }
+
+    async function handleEventCreateSubmit() {
+        const { ok, msg, payload } = validateEventCreateForm();
+        if (!ok) { Toast.warning(msg); return; }
+
+        const btn = document.getElementById('evt-submit-btn');
+        if (!btn || btn.disabled) return;
+
+        btn.disabled = true;
+        const origText = btn.textContent;
+        btn.innerHTML = '<span class="spinner-inline"></span> 생성 중…';
+
+        const r = await App.post(API + 'lecture_event_create', payload);
+
+        btn.disabled = false;
+        btn.textContent = origText;
+
+        if (r.success) {
+            Toast.success(r.message || '이벤트가 생성되었습니다.');
+            App.closeModal();
+            loadAllData();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Event Detail Modal
+    // ══════════════════════════════════════════════════════════
+
+    async function openEventDetail(eventId) {
+        App.showLoading();
+        const r = await App.get(API + 'lecture_event_detail', { event_id: eventId });
+        App.hideLoading();
+        if (!r.success) return;
+
+        const ev = r.event;
+        const dateKo = App.formatDateKo(ev.event_date);
+        const timeLabel = (ev.start_time || '').substring(0, 5) + ' ~ ' + (ev.end_time || '').substring(0, 5);
+        const hostLabel = ev.host_account === 'coach1' ? 'Coach 1' : 'Coach 2';
+        const stageLabel = STAGE_LABELS[ev.stage] || ev.stage;
+        const c = EVENT_COLORS[ev.color] || EVENT_COLORS.coral;
+
+        let body = `
+            <div style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;background:${c.bg};color:${c.fg};margin-bottom:12px;">${App.esc(c.label)}</div>
+            <div class="lec-detail-info">
+                <div class="lec-detail-row"><span class="lec-detail-label">날짜</span><span class="lec-detail-value">${dateKo}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(ev.coach_name)}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">호스트</span><span class="lec-detail-value"><span class="host-badge ${ev.host_account}" style="font-size:11px;padding:1px 6px;">${App.esc(hostLabel)}</span></span></div>
+            </div>
+        `;
+
+        // Zoom section
+        if (ev.zoom_status === 'ready' && ev.zoom_join_url) {
+            body += `
+                <div class="lec-detail-actions">
+                    <a href="${App.esc(ev.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>
+                    <button class="lec-btn-copy" onclick="LectureApp._copyZoom('${App.esc(ev.zoom_join_url)}')">Zoom 링크 복사</button>
+            `;
+            if (ev.zoom_password) {
+                body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(ev.zoom_password)}</strong></div>`;
+            }
+            body += `<div class="lec-host-guide">호스트 계정: <strong>${App.esc(hostLabel)}</strong> 계정으로 Zoom이 생성되었습니다.</div>`;
+            body += `</div>`;
+        } else if (ev.zoom_status === 'failed') {
+            body += `<div class="lec-notice warning">Zoom 생성에 실패했습니다.${ev.zoom_error_message ? ' (' + App.esc(ev.zoom_error_message) + ')' : ''}</div>`;
+            if (['operation', 'head', 'subhead1', 'subhead2'].includes(role)) {
+                body += `<button class="btn btn-primary btn-sm mt-sm" id="btn-evt-zoom-retry" data-event="${ev.id}">Zoom 재생성</button>`;
+            }
+        } else if (ev.zoom_status === 'pending') {
+            body += `<div class="lec-notice muted">Zoom 생성 대기 중입니다.</div>`;
+            if (['operation', 'head', 'subhead1', 'subhead2'].includes(role)) {
+                body += `<button class="btn btn-primary btn-sm mt-sm" id="btn-evt-zoom-retry" data-event="${ev.id}">Zoom 재시도</button>`;
+            }
+        }
+
+        // Cancel button
+        const canCancel = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
+        if (canCancel) {
+            body += `
+                <div class="lec-detail-cancel-area">
+                    <button class="btn btn-danger btn-sm" id="btn-evt-cancel" data-event="${ev.id}">이벤트 취소</button>
+                </div>
+            `;
+        }
+
+        App.openModal(ev.title || '이벤트 상세', body);
+
+        const retryBtn = document.getElementById('btn-evt-zoom-retry');
+        if (retryBtn) retryBtn.onclick = () => retryEventZoom(parseInt(retryBtn.dataset.event));
+
+        const cancelBtn = document.getElementById('btn-evt-cancel');
+        if (cancelBtn) cancelBtn.onclick = () => cancelEvent(parseInt(cancelBtn.dataset.event));
+    }
+
+    async function retryEventZoom(eventId) {
+        App.showLoading();
+        const r = await App.post(API + 'lecture_event_zoom_retry', { event_id: eventId });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message || 'Zoom이 생성되었습니다.');
+            App.closeModal();
+            loadAllData();
+        }
+    }
+
+    async function cancelEvent(eventId) {
+        const ok = await App.confirm('이 이벤트를 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.');
+        if (!ok) return;
+
+        App.showLoading();
+        const r = await App.post(API + 'lecture_event_cancel', { event_id: eventId });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message || '이벤트가 취소되었습니다.');
+            App.closeModal();
+            loadAllData();
         }
     }
 

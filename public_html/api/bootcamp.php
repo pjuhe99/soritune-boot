@@ -266,6 +266,14 @@ case 'lecture_schedule_create':   handleLectureScheduleCreate($method); break;
 case 'lecture_schedule_cancel':   handleLectureScheduleCancel($method); break;
 case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
 
+// ── Lecture Events (1회성 이벤트) ────────────────────────
+
+case 'lecture_event_create':      handleLectureEventCreate($method); break;
+case 'lecture_event_cancel':      handleLectureEventCancel($method); break;
+case 'lecture_event_detail':      handleLectureEventDetail(); break;
+case 'lecture_event_zoom_retry':  handleLectureEventZoomRetry($method); break;
+case 'lecture_events':            handleLectureEvents(); break;
+
 // ── Curriculum (진도) ──────────────────────────────────────────
 case 'curriculum_today':    handleCurriculumToday(); break;
 
