@@ -21,7 +21,10 @@ const MemberHome = (() => {
     function render(headerEl, member) {
         headerEl.innerHTML = `
             <div class="member-info-card">
-                <div class="member-nickname">${App.esc(member.nickname || member.member_name)}</div>
+                <div class="member-nickname">
+                    ${App.esc(member.nickname || member.member_name)}
+                    <button class="nickname-edit-btn" title="닉네임 수정">✏️</button>
+                </div>
                 <div class="member-realname">${App.esc(member.member_name)}${member.group_name ? ` · ${App.esc(member.group_name)}` : ''}</div>
                 <div class="member-stats">
                     <div class="member-stat">
@@ -41,6 +44,8 @@ const MemberHome = (() => {
         headerEl.querySelectorAll('.cur-help-btn[data-guide]').forEach(btn => {
             btn.onclick = () => showGuide(btn.dataset.guide);
         });
+
+        headerEl.querySelector('.nickname-edit-btn').onclick = () => showNicknameEditModal(headerEl, member);
 
         loadCurriculumToday();
         MemberShortcuts.render(document.getElementById('member-shortcuts-section'), member);
@@ -201,6 +206,45 @@ const MemberHome = (() => {
             : '<p class="score-coin-guide-empty">안내가 준비되지 않았습니다.</p>';
 
         App.openModal(title, html);
+    }
+
+    function showNicknameEditModal(headerEl, member) {
+        App.openModal('닉네임 수정', `
+            <div class="nickname-edit-form">
+                <div class="form-group">
+                    <label class="form-label">새 닉네임</label>
+                    <input type="text" class="form-input" id="nickname-edit-input"
+                           value="${App.esc(member.nickname || member.member_name)}"
+                           placeholder="닉네임 입력 (1~20자)" maxlength="20">
+                </div>
+                <div class="nickname-edit-actions">
+                    <button class="btn btn-secondary" id="nickname-edit-cancel">취소</button>
+                    <button class="btn btn-primary" id="nickname-edit-save">저장</button>
+                </div>
+            </div>
+        `);
+
+        const input = document.getElementById('nickname-edit-input');
+        input.focus();
+        input.select();
+
+        document.getElementById('nickname-edit-cancel').onclick = () => App.closeModal();
+        document.getElementById('nickname-edit-save').onclick = async () => {
+            const nickname = input.value.trim();
+            if (!nickname) { Toast.error('닉네임을 입력해주세요.'); return; }
+            if (nickname.length > 20) { Toast.error('닉네임은 20자 이내로 입력해주세요.'); return; }
+
+            App.showLoading();
+            const r = await App.post('/api/member.php?action=save_nickname', { nickname });
+            App.hideLoading();
+
+            if (r.success) {
+                member.nickname = r.nickname;
+                headerEl.querySelector('.member-nickname').childNodes[0].textContent = r.nickname;
+                App.closeModal();
+                Toast.success(r.message);
+            }
+        };
     }
 
     return { render };
