@@ -1843,7 +1843,7 @@ const AdminApp = (() => {
             const btn = document.getElementById('btn-cafe-remap');
             btn.disabled = true;
             btn.textContent = '반영 중...';
-            const r = await App.api('bootcamp', { action: 'cafe_remap_unmapped' }, 'POST');
+            const r = await App.post('/api/bootcamp.php?action=cafe_remap_unmapped');
             btn.disabled = false;
             btn.textContent = '수동 반영';
             if (r.success) {
