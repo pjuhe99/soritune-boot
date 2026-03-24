@@ -245,7 +245,7 @@ case 'integration_cafe_posts': handleIntegrationCafePosts($method); break;
 case 'cafe_posts':             handleCafePosts(); break;
 case 'cafe_remap_unmapped':    handleCafeRemapUnmapped($method); break;
 
-// ── Study (복습클래스) ──────────────────────────────────────
+// ── Study (복습스터디) ──────────────────────────────────────
 
 case 'study_groups':            handleStudyGroups(); break;
 case 'study_members':           handleStudyMembers(); break;
