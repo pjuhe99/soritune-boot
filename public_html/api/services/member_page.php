@@ -64,11 +64,19 @@ function handleMemberChecksSummary() {
     $db = getDB();
     $today = date('Y-m-d');
 
+    // 필터 조건: 선택미션 미완료 제외, 말까미션 비월요일 제외
+    $filterWhere = "
+        AND NOT (mt.code IN ('hamemmal','bookclub_join','bookclub_open') AND mmc.status = 0)
+        AND NOT (mt.code = 'speak_mission' AND DAYOFWEEK(mmc.check_date) != 2)
+    ";
+
     // 전체 완료 항목 / 전체 항목
     $totalStmt = $db->prepare("
-        SELECT COUNT(*) AS total, SUM(status) AS done
-        FROM member_mission_checks
-        WHERE member_id = ? AND check_date <= ?
+        SELECT COUNT(*) AS total, SUM(mmc.status) AS done
+        FROM member_mission_checks mmc
+        JOIN mission_types mt ON mmc.mission_type_id = mt.id
+        WHERE mmc.member_id = ? AND mmc.check_date <= ?
+        {$filterWhere}
     ");
     $totalStmt->execute([$memberId, $today]);
     $totals = $totalStmt->fetch(PDO::FETCH_ASSOC);
@@ -77,11 +85,13 @@ function handleMemberChecksSummary() {
 
     // 연속 올클 일수 (최근부터 역순)
     $streakStmt = $db->prepare("
-        SELECT check_date, COUNT(*) AS total, SUM(status) AS done
-        FROM member_mission_checks
-        WHERE member_id = ? AND check_date <= ?
-        GROUP BY check_date
-        ORDER BY check_date DESC
+        SELECT mmc.check_date, COUNT(*) AS total, SUM(mmc.status) AS done
+        FROM member_mission_checks mmc
+        JOIN mission_types mt ON mmc.mission_type_id = mt.id
+        WHERE mmc.member_id = ? AND mmc.check_date <= ?
+        {$filterWhere}
+        GROUP BY mmc.check_date
+        ORDER BY mmc.check_date DESC
     ");
     $streakStmt->execute([$memberId, $today]);
     $streak = 0;
@@ -95,8 +105,11 @@ function handleMemberChecksSummary() {
 
     // 활동 일수
     $dayStmt = $db->prepare("
-        SELECT COUNT(DISTINCT check_date) FROM member_mission_checks
-        WHERE member_id = ? AND check_date <= ?
+        SELECT COUNT(DISTINCT mmc.check_date)
+        FROM member_mission_checks mmc
+        JOIN mission_types mt ON mmc.mission_type_id = mt.id
+        WHERE mmc.member_id = ? AND mmc.check_date <= ?
+        {$filterWhere}
     ");
     $dayStmt->execute([$memberId, $today]);
     $totalDays = (int)$dayStmt->fetchColumn();
@@ -104,11 +117,13 @@ function handleMemberChecksSummary() {
     // 올클 일수
     $perfectStmt = $db->prepare("
         SELECT COUNT(*) FROM (
-            SELECT check_date
-            FROM member_mission_checks
-            WHERE member_id = ? AND check_date <= ?
-            GROUP BY check_date
-            HAVING SUM(status) = COUNT(*)
+            SELECT mmc.check_date
+            FROM member_mission_checks mmc
+            JOIN mission_types mt ON mmc.mission_type_id = mt.id
+            WHERE mmc.member_id = ? AND mmc.check_date <= ?
+            {$filterWhere}
+            GROUP BY mmc.check_date
+            HAVING SUM(mmc.status) = COUNT(*)
         ) AS perfect_days
     ");
     $perfectStmt->execute([$memberId, $today]);
@@ -188,28 +203,44 @@ function handleMemberChecks() {
         return;
     }
 
-    // 체크 데이터 일괄 조회
+    // 선택미션 코드 (완료일 때만 표시)
+    $optionalCodes = ['hamemmal', 'bookclub_join', 'bookclub_open'];
+    // 월요일만 표시하는 미션 코드
+    $mondayOnlyCodes = ['speak_mission'];
+
+    // 체크 데이터 일괄 조회 (mission_types JOIN으로 code 포함)
     $ph = implode(',', array_fill(0, count($dates), '?'));
     $checkStmt = $db->prepare("
-        SELECT check_date, mission_type_id, status, source
-        FROM member_mission_checks
-        WHERE member_id = ? AND check_date IN ({$ph})
-        ORDER BY check_date DESC
+        SELECT mmc.check_date, mmc.mission_type_id, mmc.status, mmc.source,
+               mt.code AS mission_code
+        FROM member_mission_checks mmc
+        JOIN mission_types mt ON mmc.mission_type_id = mt.id
+        WHERE mmc.member_id = ? AND mmc.check_date IN ({$ph})
+        ORDER BY mmc.check_date DESC, mt.display_order
     ");
     $checkStmt->execute(array_merge([$memberId], $dates));
     $rows = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 날짜별 그룹핑
+    // 날짜별 그룹핑 + 필터 적용
     $grouped = [];
     foreach ($rows as $row) {
         $d = $row['check_date'];
         $typeId = (int)$row['mission_type_id'];
+        $code = $row['mission_code'];
+        $status = (int)$row['status'];
         $mt = $missionMap[$typeId] ?? null;
+
+        // 선택미션: 미완료면 숨김
+        if (in_array($code, $optionalCodes) && $status === 0) continue;
+
+        // 말까미션: 월요일이 아니면 숨김
+        if (in_array($code, $mondayOnlyCodes) && (int)date('N', strtotime($d)) !== 1) continue;
+
         $grouped[$d][] = [
             'mission_type_id'   => $typeId,
-            'mission_code'      => $mt ? $mt['code'] : null,
+            'mission_code'      => $code,
             'mission_name'      => $mt ? $mt['name'] : '(알 수 없음)',
-            'status'            => (int)$row['status'],
+            'status'            => $status,
             'source'            => $row['source'],
         ];
     }
