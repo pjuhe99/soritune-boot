@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   StudyApp — 복습클래스 달력 & 예약
+   StudyApp — 복습스터디 달력 & 예약
    CalendarUI 공통 컴포넌트 사용
    ══════════════════════════════════════════════════════════════ */
 const StudyApp = (() => {
@@ -32,7 +32,7 @@ const StudyApp = (() => {
             <div class="study-login">
                 <div class="login-box">
                     <div class="login-title">소리튠 부트캠프</div>
-                    <p class="login-subtitle">복습클래스</p>
+                    <p class="login-subtitle">복습스터디</p>
                     <form id="login-form">
                         <div class="form-group">
                             <label class="form-label">휴대폰번호</label>
@@ -76,11 +76,11 @@ const StudyApp = (() => {
             <div class="study-app">
                 <div class="study-header">
                     <div class="study-header-left">
-                        <div class="study-header-title">복습클래스</div>
+                        <div class="study-header-title">복습스터디</div>
                         <span class="study-header-user">${App.esc(member.nickname || member.member_name)}</span>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-primary btn-sm" id="btn-create-study">복습클래스 예약</button>
+                        <button class="btn btn-primary btn-sm" id="btn-create-study">복습스터디 예약</button>
                         <button class="btn btn-secondary btn-sm" id="btn-logout">로그아웃</button>
                     </div>
                 </div>
@@ -127,7 +127,7 @@ const StudyApp = (() => {
     }
 
     function hostName(title) {
-        // "[HH:MM] N단계 닉네임님의 복습 클래스" → "닉네임"
+        // "[HH:MM] N단계 닉네임님의 복습 스터디" → "닉네임"
         const m = title.match(/단계\s+(.+?)님의/) || title.match(/\]\s*(.+?)님의/);
         return m ? m[1] : '';
     }
@@ -186,7 +186,7 @@ const StudyApp = (() => {
             } else {
                 qrSection = `
                     <button class="btn btn-secondary btn-block" disabled>출석체크 진행하기</button>
-                    <p class="study-notice muted">복습클래스 시간에만 출석체크를 진행할 수 있습니다</p>
+                    <p class="study-notice muted">복습스터디 시간에만 출석체크를 진행할 수 있습니다</p>
                 `;
             }
         }
@@ -195,10 +195,10 @@ const StudyApp = (() => {
         let cancelSection = '';
         if (isHost && s.status !== 'cancelled') {
             if (canCancel) {
-                cancelSection = `<button class="btn btn-danger btn-block btn-sm" id="btn-cancel-study">복습클래스 취소하기</button>`;
+                cancelSection = `<button class="btn btn-danger btn-block btn-sm" id="btn-cancel-study">복습스터디 취소하기</button>`;
             } else {
-                cancelSection = `<button class="btn btn-secondary btn-block btn-sm" disabled>복습클래스 취소하기</button>
-                    <p class="study-notice muted">시작된 복습클래스는 취소할 수 없습니다</p>`;
+                cancelSection = `<button class="btn btn-secondary btn-block btn-sm" disabled>복습스터디 취소하기</button>
+                    <p class="study-notice muted">시작된 복습스터디는 취소할 수 없습니다</p>`;
             }
         }
 
@@ -362,7 +362,7 @@ const StudyApp = (() => {
         if (studyDate && startTime) {
             const startDt = new Date(`${studyDate}T${startTime.substring(0, 5)}:00`);
             if (startDt.getTime() - Date.now() < 30 * 60 * 1000) {
-                return Toast.warning('복습클래스 시작 30분 전부터는 취소할 수 없습니다.');
+                return Toast.warning('복습스터디 시작 30분 전부터는 취소할 수 없습니다.');
             }
         }
 
@@ -370,7 +370,7 @@ const StudyApp = (() => {
         const body = `
             <p style="font-size:var(--md-font-size);line-height:1.6;margin-bottom:16px;">
                 <strong>${App.esc(title)}</strong>을(를) 취소하시겠습니까?<br>
-                취소하려면 복습클래스를 예약할 때 입력한 비밀번호 4자리를 입력해주세요.
+                취소하려면 복습스터디를 예약할 때 입력한 비밀번호 4자리를 입력해주세요.
             </p>
             <div class="form-group">
                 <input type="tel" class="form-input" id="cancel-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" inputmode="numeric" style="text-align:center;font-size:24px;letter-spacing:8px;">
@@ -380,7 +380,7 @@ const StudyApp = (() => {
             <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>
             <button class="btn btn-danger btn-sm" id="btn-confirm-cancel">취소하기</button>
         `;
-        App.openModal('복습클래스 취소', body, footer);
+        App.openModal('복습스터디 취소', body, footer);
 
         document.getElementById('cancel-pw').focus();
         document.getElementById('btn-confirm-cancel').onclick = async () => {
@@ -394,7 +394,7 @@ const StudyApp = (() => {
             const r = await App.post(API + 'study_session_cancel', { session_id: sessionId, password: pw });
             App.hideLoading();
             if (r.success) {
-                Toast.success('복습클래스가 취소되었습니다.');
+                Toast.success('복습스터디가 취소되었습니다.');
                 App.closeModal();
                 loadSessions();
             }
@@ -481,7 +481,7 @@ const StudyApp = (() => {
             <button class="btn btn-secondary" onclick="App.closeModal()">닫기</button>
             <button class="btn btn-primary" id="btn-submit-create">예약하기</button>
         `;
-        App.openModal('복습클래스 예약', body, footer);
+        App.openModal('복습스터디 예약', body, footer);
 
         const state = { hostMemberId: null, hostNickname: '' };
         const groupSelect = document.getElementById('create-group');
@@ -595,7 +595,7 @@ const StudyApp = (() => {
             const startDt = new Date(`${studyDate}T${startTime}:00`);
             const now = new Date();
             if (startDt.getTime() - now.getTime() < 3 * 60 * 60 * 1000) {
-                return Toast.warning('복습클래스는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
+                return Toast.warning('복습스터디는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
             }
 
             const slotStart = timeToMinutes(startTime);
@@ -604,7 +604,7 @@ const StudyApp = (() => {
                 return exStart === slotStart;
             });
             if (overlap) {
-                return Toast.warning(`이미 해당 날짜/시간에 예약된 복습클래스가 있습니다`);
+                return Toast.warning(`이미 해당 날짜/시간에 예약된 복습스터디가 있습니다`);
             }
 
             const level = parseInt(document.querySelector('input[name="create-level"]:checked').value);
@@ -621,9 +621,9 @@ const StudyApp = (() => {
 
             if (r.success) {
                 if (r.zoom_status === 'failed') {
-                    Toast.warning(r.message || '복습클래스가 생성되었지만 Zoom 생성에 실패했습니다.');
+                    Toast.warning(r.message || '복습스터디가 생성되었지만 Zoom 생성에 실패했습니다.');
                 } else {
-                    Toast.success(r.message || '복습클래스가 생성되었습니다.');
+                    Toast.success(r.message || '복습스터디가 생성되었습니다.');
                 }
                 App.closeModal();
 

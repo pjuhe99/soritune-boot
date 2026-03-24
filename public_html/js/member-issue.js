@@ -11,8 +11,8 @@ const MemberIssue = (() => {
         { key: 'zoom',         label: '줌 특강' },
         { key: 'daily',        label: '데일리 미션' },
         { key: 'malkka',       label: '말까미션' },
-        { key: 'study_create', label: '복습클래스 개설' },
-        { key: 'study_join',   label: '복습클래스 참여' },
+        { key: 'study_create', label: '복습스터디 개설' },
+        { key: 'study_join',   label: '복습스터디 참여' },
     ];
 
     // ── 상태 배지 매핑 ──

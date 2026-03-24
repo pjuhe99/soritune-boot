@@ -91,7 +91,7 @@ const CoinApp = (() => {
         App.modal(`${esc(cycleName)} - 회원 코인 현황`, `
             <div style="overflow-x:auto;max-height:70vh">
                 <table class="data-table" style="font-size:13px">
-                    <thead><tr><th>회원</th><th>조</th><th>역할</th><th>코인</th><th>복클개설</th><th>복클참여</th><th>리더</th><th>찐완주</th><th>하멈말</th></tr></thead>
+                    <thead><tr><th>회원</th><th>조</th><th>역할</th><th>코인</th><th>복스개설</th><th>복스참여</th><th>리더</th><th>찐완주</th><th>하멈말</th></tr></thead>
                     <tbody>
                         ${members.map(m => `
                             <tr>

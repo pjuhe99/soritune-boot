@@ -1,7 +1,7 @@
 <?php
 /**
  * Study Service
- * 복습클래스(스터디) 생성/조회/상세/취소/QR출석
+ * 복습스터디(스터디) 생성/조회/상세/취소/QR출석
  */
 
 /**
@@ -187,14 +187,14 @@ function handleStudySessionCreate($method) {
     $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
     $startAt = new DateTime("{$studyDate} {$startTime}", new DateTimeZone('Asia/Seoul'));
     if ($startAt <= $now) {
-        jsonError('과거 시간에는 복습클래스를 생성할 수 없습니다.');
+        jsonError('과거 시간에는 복습스터디를 생성할 수 없습니다.');
     }
 
     // 시작 3시간 전까지만 생성 가능
     $minCreateAt = clone $now;
     $minCreateAt->modify('+3 hours');
     if ($startAt < $minCreateAt) {
-        jsonError('복습클래스는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
+        jsonError('복습스터디는 시작 시간 3시간 전까지만 개설할 수 있습니다.');
     }
 
     // end_time = start_time + 1시간
@@ -217,13 +217,13 @@ function handleStudySessionCreate($method) {
     // 시간 겹침 검증
     $overlap = checkTimeOverlap($db, $cohortId, $studyDate, $startTimeFull, $endTime);
     if ($overlap) {
-        jsonError("이미 해당 날짜/시간에 예약된 복습클래스가 있습니다: {$overlap['title']}");
+        jsonError("이미 해당 날짜/시간에 예약된 복습스터디가 있습니다: {$overlap['title']}");
     }
 
     // 제목 자동 생성
     $timeLabel = substr($startTime, 0, 5); // "HH:MM"
     $levelLabel = "{$level}단계";
-    $title = "[{$timeLabel}] {$levelLabel} {$nickname}님의 복습 클래스";
+    $title = "[{$timeLabel}] {$levelLabel} {$nickname}님의 복습 스터디";
 
     // DB 저장 (status=pending, zoom_status=pending)
     $db->prepare("
@@ -257,7 +257,7 @@ function handleStudySessionCreate($method) {
             'session_id' => $sessionId,
             'title' => $title,
             'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        ], '복습클래스가 생성되었습니다.');
+        ], '복습스터디가 생성되었습니다.');
     } else {
         // Zoom 실패해도 세션은 pending으로 유지
         jsonSuccess([
@@ -265,7 +265,7 @@ function handleStudySessionCreate($method) {
             'title' => $title,
             'zoom_status' => 'failed',
             'zoom_error' => $zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다.',
-        ], '복습클래스가 생성되었지만 Zoom 회의실 생성에 실패했습니다. 상세에서 다시 시도할 수 있습니다.');
+        ], '복습스터디가 생성되었지만 Zoom 회의실 생성에 실패했습니다. 상세에서 다시 시도할 수 있습니다.');
     }
 }
 
@@ -370,7 +370,7 @@ function handleStudySessionCancel($method) {
 
     // 개설자 확인
     if ((int)$session['host_member_id'] !== (int)$member['member_id']) {
-        jsonError('본인이 개설한 복습클래스만 취소할 수 있습니다.', 403);
+        jsonError('본인이 개설한 복습스터디만 취소할 수 있습니다.', 403);
     }
 
     // 비밀번호 확인
@@ -384,7 +384,7 @@ function handleStudySessionCancel($method) {
     $cancelDeadline = clone $startAt;
     $cancelDeadline->modify('-30 minutes');
     if ($now >= $cancelDeadline) {
-        jsonError('복습클래스 시작 30분 전부터는 취소할 수 없습니다.');
+        jsonError('복습스터디 시작 30분 전부터는 취소할 수 없습니다.');
     }
 
     // cancelled 처리 (hard delete 아님)
@@ -402,7 +402,7 @@ function handleStudySessionCancel($method) {
         saveCheck($db, $member['member_id'], $session['study_date'], $openTypeId, 0, 'automation', "study_cancel:{$sessionId}", null);
     }
 
-    jsonSuccess([], '복습클래스가 취소되었습니다.');
+    jsonSuccess([], '복습스터디가 취소되었습니다.');
 }
 
 /**
@@ -424,7 +424,7 @@ function handleStudySessionQr($method) {
 
     // 개설자 확인
     if ((int)$session['host_member_id'] !== (int)$member['member_id']) {
-        jsonError('본인이 개설한 복습클래스만 출석체크를 시작할 수 있습니다.', 403);
+        jsonError('본인이 개설한 복습스터디만 출석체크를 시작할 수 있습니다.', 403);
     }
 
     // 시작시각~+1시간 확인

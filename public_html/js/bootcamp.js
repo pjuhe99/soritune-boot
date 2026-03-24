@@ -5,7 +5,7 @@
 const BootcampApp = (() => {
     const API = '/api/bootcamp.php?action=';
     const ROLE_LABELS = { member: '회원', leader: '조장', subleader: '부조장' };
-    const MISSION_SHORT = { '데일리미션': '데일리', '복클 참여': '복클참여', '복클 개설': '복클개설' };
+    const MISSION_SHORT = { '데일리미션': '데일리', '복스 참여': '복스참여', '복스 개설': '복스개설' };
     function missionShort(name) { return MISSION_SHORT[name] || name.substring(0, 4); }
 
     let admin = null;
@@ -1698,7 +1698,7 @@ const BootcampApp = (() => {
         html += `<div class="db-section-title">선택 참여 현황 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(1인 평균 횟수)</span></div>`;
         html += `<div style="overflow-x:auto"><table class="db-group-table">
             <thead><tr>
-                <th>조</th><th>인원</th><th>복클 개설</th><th>복클 참여</th><th>하멈말</th>
+                <th>조</th><th>인원</th><th>복스 개설</th><th>복스 참여</th><th>하멈말</th>
             </tr></thead><tbody>`;
 
         // 전체 행

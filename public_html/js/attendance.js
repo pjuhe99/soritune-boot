@@ -192,7 +192,7 @@ const AttendanceApp = (() => {
     function getCategoryLabel(s) {
         switch (s.category) {
             case 'lecture': return '강의';
-            case 'study':   return '복습클래스';
+            case 'study':   return '복습스터디';
             case 'revival': return '패자부활';
             default:        return '기타';
         }

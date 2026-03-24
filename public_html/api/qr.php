@@ -311,13 +311,13 @@ case 'record':
             VALUES (?, ?, ?, ?)
         ")->execute([$session['id'], $memberId, $member['group_id'], getClientIP()]);
 
-        // 복습클래스 연결 여부 확인
+        // 복습스터디 연결 여부 확인
         $studyLink = $db->prepare("SELECT id, study_date FROM study_sessions WHERE qr_session_id = ?");
         $studyLink->execute([$session['id']]);
         $studyRow = $studyLink->fetch();
 
         if ($studyRow) {
-            // 복습클래스 출석 → bookclub_join 체크
+            // 복습스터디 출석 → bookclub_join 체크
             $missionCode = 'bookclub_join';
             $checkDate = $studyRow['study_date'];
             $sourceRef = 'study_qr:' . $studyRow['id'];

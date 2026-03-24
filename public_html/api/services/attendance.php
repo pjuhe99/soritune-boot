@@ -1,7 +1,7 @@
 <?php
 /**
  * Attendance Stats Service
- * QR 출석 세션별 통계 — 강의/복습클래스/기타 분류
+ * QR 출석 세션별 통계 — 강의/복습스터디/기타 분류
  */
 
 function handleAttendanceStats() {
@@ -29,7 +29,7 @@ function handleAttendanceStats() {
     $totalStmt->execute([$cohortId]);
     $totalMembers = (int)$totalStmt->fetchColumn();
 
-    // QR 세션별 출석 데이터 (강의 + 복습클래스 + 기타)
+    // QR 세션별 출석 데이터 (강의 + 복습스터디 + 기타)
     $stmt = $db->prepare("
         SELECT
             qs.id AS qr_session_id,
