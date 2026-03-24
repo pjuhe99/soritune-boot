@@ -31,6 +31,7 @@ function startSessionFor(string $tier): void {
     }
     $cfg = SESSION_CONFIGS[$tier];
     session_name($cfg['cookie_name']);
+    ini_set('session.gc_maxlifetime', $cfg['lifetime']);
     session_set_cookie_params([
         'lifetime' => $cfg['lifetime'],
         'path'     => '/',
