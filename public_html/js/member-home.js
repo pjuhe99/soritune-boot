@@ -35,6 +35,14 @@ const MemberHome = (() => {
                         <div class="member-coin">${member.coin ?? 0}</div>
                         <div class="member-coin-label">코인 <button class="cur-help-btn" data-guide="coin_guide">?</button></div>
                     </div>
+                    <div class="member-stat">
+                        <div class="member-completed">${member.completed_count ?? 0}</div>
+                        <div class="member-completed-label">완주</div>
+                    </div>
+                    <div class="member-stat">
+                        <div class="member-bravo">${member.bravo_grade ? App.esc(member.bravo_grade) : '-'}</div>
+                        <div class="member-bravo-label">브라보</div>
+                    </div>
                 </div>
             </div>
             <div id="member-curriculum-section"></div>

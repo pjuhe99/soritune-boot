@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
-   MemberBootees — 다른 부티즈 탭
+   MemberBootees — 부티즈 정보 탭
    같은 기수 멤버 목록 (코인 내림차순 → 닉네임 가나다순)
-   본인 제외, 필터: 전체 / 우리 조
+   본인 포함 (강조 표시), 필터: 전체 / 우리 조
    ══════════════════════════════════════════════════════════════ */
 const MemberBootees = (() => {
     const API = '/api/bootcamp.php?action=';
@@ -31,7 +31,7 @@ const MemberBootees = (() => {
         panel.innerHTML = `
             <div class="bootees-container">
                 <div class="bootees-toolbar">
-                    <h3 class="bootees-title">다른 부티즈</h3>
+                    <h3 class="bootees-title">부티즈 정보</h3>
                     <div class="bootees-filter-chips" id="bootees-filter-chips">
                         <button class="filter-chip active" data-filter="all">전체</button>
                         <button class="filter-chip" data-filter="my_group">우리 조</button>
@@ -82,6 +82,7 @@ const MemberBootees = (() => {
 
         allMembers = r.members || [];
         myGroupId = r.my_group_id;
+        myMemberId = r.my_member_id;
         renderList();
     }
 
@@ -107,15 +108,17 @@ const MemberBootees = (() => {
         }
 
         const rows = filtered.map((m, i) => {
+            const isMe = m.id == myMemberId;
             const bravoHtml = m.bravo_grade
                 ? `<span class="bootees-bravo">${App.esc(m.bravo_grade)}</span>`
                 : '<span class="bootees-bravo-none">-</span>';
+            const meBadge = isMe ? '<span class="bootees-me-badge">나</span>' : '';
 
             return `
-                <div class="bootees-row">
+                <div class="bootees-row${isMe ? ' bootees-row-me' : ''}">
                     <span class="bootees-rank">${i + 1}</span>
                     <div class="bootees-info">
-                        <span class="bootees-nickname">${App.esc(m.nickname)}</span>
+                        <span class="bootees-nickname">${App.esc(m.nickname)}${meBadge}</span>
                         <span class="bootees-group">${App.esc(m.group_name || '')}</span>
                     </div>
                     <div class="bootees-stats">

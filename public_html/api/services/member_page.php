@@ -324,10 +324,9 @@ function handleMemberBootees() {
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
           AND bm.member_status = 'active'
-          AND bm.id != ?
         ORDER BY coin DESC, bm.nickname ASC
     ");
-    $stmt->execute([$cohortId, $memberId]);
+    $stmt->execute([$cohortId]);
     $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($members as &$m) {
@@ -341,6 +340,7 @@ function handleMemberBootees() {
     jsonSuccess([
         'members' => $members,
         'my_group_id' => $myGroupId,
+        'my_member_id' => (int)$memberId,
     ]);
 }
 

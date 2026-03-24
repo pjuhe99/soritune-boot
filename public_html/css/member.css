@@ -156,7 +156,7 @@
 .member-stats {
     display: flex;
     justify-content: center;
-    gap: var(--space-8);
+    gap: var(--space-6);
     margin-top: var(--space-5);
 }
 
@@ -187,6 +187,30 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
+}
+
+.member-completed {
+    font-size: var(--text-3xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
+}
+
+.member-completed-label {
+    font-size: var(--text-sm);
+    color: var(--color-text-sub);
+    margin-top: var(--space-1);
+}
+
+.member-bravo {
+    font-size: var(--text-3xl);
+    font-weight: var(--font-extrabold);
+    color: #b45309;
+}
+
+.member-bravo-label {
     font-size: var(--text-sm);
     color: var(--color-text-sub);
     margin-top: var(--space-1);
@@ -454,7 +478,7 @@
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .member-stats { gap: var(--space-5); }
-    .member-point, .member-coin { font-size: var(--text-2xl); }
+    .member-stats { gap: var(--space-3); }
+    .member-point, .member-coin, .member-completed, .member-bravo { font-size: var(--text-2xl); }
     .member-content { max-width: 100%; }
 }
