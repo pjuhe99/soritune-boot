@@ -924,7 +924,6 @@ const AdminApp = (() => {
                 }
                 
                 document.getElementById('mf-cafe-key').value = memberKey;
-                document.getElementById('mf-nickname').value = nick;
                 const nickEl = document.getElementById('mf-cafe-nick');
                 nickEl.textContent = `☕ 카페 닉네임: ${nick}`;
                 nickEl.style.display = 'block';
