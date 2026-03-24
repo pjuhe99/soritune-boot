@@ -182,6 +182,7 @@
 
 .stat-card-body {
     min-width: 0;
+    text-align: left;
 }
 
 .stat-card-value {
