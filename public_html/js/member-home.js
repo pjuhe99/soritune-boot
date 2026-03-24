@@ -26,22 +26,42 @@ const MemberHome = (() => {
                     <button class="nickname-edit-btn" title="닉네임 수정">✏️</button>
                 </div>
                 <div class="member-realname">${App.esc(member.member_name)}${member.group_name ? ` · ${App.esc(member.group_name)}` : ''}</div>
-                <div class="member-stats">
-                    <div class="member-stat">
-                        <div class="member-point">${member.score ?? 0}</div>
-                        <div class="member-point-label">점수 <button class="cur-help-btn" data-guide="score_guide">?</button></div>
+                <div class="member-stats-grid">
+                    <div class="stat-card stat-score">
+                        <div class="stat-card-icon">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.09 4.26L17 7.27l-3.5 3.42.82 4.81L10 13.27 5.68 15.5l.82-4.81L3 7.27l4.91-1.01L10 2z" fill="currentColor"/></svg>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">${member.score ?? 0}</div>
+                            <div class="stat-card-label">점수 <button class="cur-help-btn" data-guide="score_guide">?</button></div>
+                        </div>
                     </div>
-                    <div class="member-stat">
-                        <div class="member-coin">${member.coin ?? 0}</div>
-                        <div class="member-coin-label">코인 <button class="cur-help-btn" data-guide="coin_guide">?</button></div>
+                    <div class="stat-card stat-coin">
+                        <div class="stat-card-icon">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.8" fill="none"/><text x="10" y="14" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">C</text></svg>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">${member.coin ?? 0}</div>
+                            <div class="stat-card-label">코인 <button class="cur-help-btn" data-guide="coin_guide">?</button></div>
+                        </div>
                     </div>
-                    <div class="member-stat">
-                        <div class="member-completed">${member.completed_count ?? 0}</div>
-                        <div class="member-completed-label">완주</div>
+                    <div class="stat-card stat-completed">
+                        <div class="stat-card-icon">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M6.5 3.5h7a2 2 0 012 2v9a2 2 0 01-2 2h-7a2 2 0 01-2-2v-9a2 2 0 012-2z" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M7.5 9.5l2 2 3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">${member.completed_count ?? 0}<span class="stat-card-unit">회</span></div>
+                            <div class="stat-card-label">완주</div>
+                        </div>
                     </div>
-                    <div class="member-stat">
-                        <div class="member-bravo">${member.bravo_grade ? App.esc(member.bravo_grade) : '-'}</div>
-                        <div class="member-bravo-label">브라보</div>
+                    <div class="stat-card stat-bravo">
+                        <div class="stat-card-icon">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2.5c-1.5 0-2.5 1-2.5 2.5 0 1.2.8 2.2 2 2.4V9H7a.5.5 0 000 1h2.5v1.5a4 4 0 00-3 3.87.5.5 0 00.5.5h6a.5.5 0 00.5-.5 4 4 0 00-3-3.87V10H13a.5.5 0 000-1h-2.5V7.4c1.2-.2 2-1.2 2-2.4 0-1.5-1-2.5-2.5-2.5z" fill="currentColor"/></svg>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">${member.bravo_grade ? App.esc(member.bravo_grade) : '-'}</div>
+                            <div class="stat-card-label">브라보</div>
+                        </div>
                     </div>
                 </div>
             </div>

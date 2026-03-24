@@ -152,68 +152,77 @@
     margin-top: var(--space-1);
 }
 
-/* ── Stats ─────────────────────────────────────────────────── */
-.member-stats {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-6);
+/* ── Stats Grid (2x2 카드) ─────────────────────────────────── */
+.member-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
     margin-top: var(--space-5);
 }
 
-.member-stat { text-align: center; }
-
-.member-point {
-    font-size: var(--text-3xl);
-    font-weight: var(--font-extrabold);
-    color: var(--color-primary);
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-gray-100);
+    background: var(--color-gray-50);
 }
 
-.member-point-label {
+.stat-card-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+}
+
+.stat-card-body {
+    min-width: 0;
+}
+
+.stat-card-value {
+    font-size: var(--text-xl);
+    font-weight: var(--font-extrabold);
+    line-height: 1.2;
+    color: var(--color-gray-800);
+}
+
+.stat-card-unit {
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-gray-500);
+    margin-left: 1px;
+}
+
+.stat-card-label {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    font-size: var(--text-sm);
-    color: var(--color-text-sub);
-    margin-top: var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--color-gray-500);
+    margin-top: 2px;
 }
 
-.member-coin {
-    font-size: var(--text-3xl);
-    font-weight: var(--font-extrabold);
-    color: var(--color-accent);
+/* ── 카드별 아이콘 색상 (차분한 톤) ── */
+.stat-score .stat-card-icon {
+    color: #3560a0;
+    background: #e8eef7;
 }
-
-.member-coin-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--text-sm);
-    color: var(--color-text-sub);
-    margin-top: var(--space-1);
+.stat-coin .stat-card-icon {
+    color: #96700a;
+    background: #f5f0e0;
 }
-
-.member-completed {
-    font-size: var(--text-3xl);
-    font-weight: var(--font-extrabold);
-    color: var(--color-text);
+.stat-completed .stat-card-icon {
+    color: #3a7a5c;
+    background: #e6f2ec;
 }
-
-.member-completed-label {
-    font-size: var(--text-sm);
-    color: var(--color-text-sub);
-    margin-top: var(--space-1);
-}
-
-.member-bravo {
-    font-size: var(--text-3xl);
-    font-weight: var(--font-extrabold);
-    color: #b45309;
-}
-
-.member-bravo-label {
-    font-size: var(--text-sm);
-    color: var(--color-text-sub);
-    margin-top: var(--space-1);
+.stat-bravo .stat-card-icon {
+    color: #8b5e2f;
+    background: #f2ebe0;
 }
 
 /* ── Score/Coin Guide Modal Content ──────────────────────── */
@@ -478,7 +487,9 @@
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 640px) {
-    .member-stats { gap: var(--space-3); }
-    .member-point, .member-coin, .member-completed, .member-bravo { font-size: var(--text-2xl); }
+    .member-stats-grid { gap: var(--space-2); }
+    .stat-card { padding: var(--space-2) var(--space-3); gap: var(--space-2); }
+    .stat-card-icon { width: 32px; height: 32px; }
+    .stat-card-value { font-size: var(--text-lg); }
     .member-content { max-width: 100%; }
 }
