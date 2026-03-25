@@ -340,6 +340,101 @@
     color: #fff;
 }
 
+/* ══ Side Menu (Hamburger) ═════════════════════════════════════ */
+.side-menu-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--color-text-sub);
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+.side-menu-toggle:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+}
+.has-side-menu .side-menu-toggle { display: flex; }
+
+.side-menu-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s, visibility 0.25s;
+}
+.side-menu-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.side-menu-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    max-width: 80vw;
+    background: var(--color-bg);
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.1);
+    padding-top: var(--safe-top, 0px);
+}
+.side-menu-panel.open {
+    transform: translateX(0);
+}
+
+.side-menu-header {
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-lg);
+    font-weight: var(--font-bold);
+    color: var(--color-text);
+}
+
+.side-menu-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-2) 0;
+}
+
+.side-menu-item {
+    display: block;
+    width: 100%;
+    padding: 12px var(--space-5);
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: var(--text-md);
+    font-weight: var(--font-medium);
+    font-family: inherit;
+    color: var(--color-text-sub);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.side-menu-item:hover {
+    background: var(--color-bg-subtle);
+}
+.side-menu-item.active {
+    color: var(--color-primary);
+    font-weight: var(--font-bold);
+    background: var(--color-primary-50, rgba(37,99,235,0.06));
+    border-left: 3px solid var(--color-primary);
+}
+
 /* ══ Modal ═════════════════════════════════════════════════════ */
 .modal-overlay {
     position: fixed;

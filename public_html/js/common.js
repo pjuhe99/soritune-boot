@@ -227,6 +227,69 @@ const App = (() => {
             window.addEventListener('resize', updateFade);
         }
 
+        // ── Side Menu (햄버거) ── 탭 5개 이상이면 자동 생성
+        let sideOverlay = null, sidePanel = null;
+        const sideMenuItems = [];
+        if (btns.length >= 5) {
+            const header = document.querySelector('.admin-header');
+            if (header) {
+                const headerLeft = header.querySelector('.admin-header-left');
+                header.classList.add('has-side-menu');
+
+                // 햄버거 버튼
+                const hamburger = document.createElement('button');
+                hamburger.className = 'side-menu-toggle';
+                hamburger.innerHTML = '&#9776;';
+                hamburger.setAttribute('aria-label', '메뉴');
+                headerLeft.insertBefore(hamburger, headerLeft.firstChild);
+
+                // 오버레이
+                sideOverlay = document.createElement('div');
+                sideOverlay.className = 'side-menu-overlay';
+                document.body.appendChild(sideOverlay);
+
+                // 패널
+                sidePanel = document.createElement('div');
+                sidePanel.className = 'side-menu-panel';
+
+                const panelHeader = document.createElement('div');
+                panelHeader.className = 'side-menu-header';
+                panelHeader.textContent = '메뉴';
+                sidePanel.appendChild(panelHeader);
+
+                const panelList = document.createElement('div');
+                panelList.className = 'side-menu-list';
+
+                btns.forEach(btn => {
+                    const item = document.createElement('button');
+                    item.className = 'side-menu-item';
+                    if (btn.classList.contains('active')) item.classList.add('active');
+                    item.textContent = btn.textContent;
+                    item.addEventListener('click', () => {
+                        btn.click();
+                        closeSideMenu();
+                    });
+                    panelList.appendChild(item);
+                    sideMenuItems.push({ item, btn });
+                });
+
+                sidePanel.appendChild(panelList);
+                document.body.appendChild(sidePanel);
+
+                function openSideMenu() {
+                    sideOverlay.classList.add('open');
+                    sidePanel.classList.add('open');
+                }
+                function closeSideMenu() {
+                    sideOverlay.classList.remove('open');
+                    sidePanel.classList.remove('open');
+                }
+
+                hamburger.addEventListener('click', openSideMenu);
+                sideOverlay.addEventListener('click', closeSideMenu);
+            }
+        }
+
         function scrollToTab(btn) {
             if (tabWrap) {
                 btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -240,6 +303,10 @@ const App = (() => {
             const target = container.querySelector(btn.dataset.tab);
             if (target) target.classList.add('active');
             scrollToTab(btn);
+            // 사이드 메뉴 active 상태 동기화
+            sideMenuItems.forEach(({ item, btn: b }) => {
+                item.classList.toggle('active', b === btn);
+            });
         }
 
         btns.forEach(btn => {
