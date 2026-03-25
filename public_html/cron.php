@@ -21,6 +21,9 @@ switch ($command) {
     case 'init_daily_checks':
         initDailyChecks();
         break;
+    case 'backfill_checks':
+        backfillChecks();
+        break;
     case 'run_all':
         // 향후 확장용
         cronLog('run_all: no tasks configured yet');
@@ -28,6 +31,7 @@ switch ($command) {
     default:
         echo "Usage: php cron.php <command>\n";
         echo "  init_daily_checks  매일 06:00 필수 미션 미완료 레코드 생성\n";
+        echo "  backfill_checks    과거 날짜 미션 레코드 소급 생성 (1회성)\n";
         echo "  run_all            일괄 크론\n";
         exit(1);
 }
@@ -109,6 +113,91 @@ function initDailyChecks() {
 
     $total = count($members) * count($missionMap);
     cronLog("init_daily_checks DONE: {$created}/{$total} records created (rest already existed)");
+}
+
+// ══════════════════════════════════════════════════════════════
+// backfill_checks: cohort 시작일~어제까지 과거 날짜 미션 레코드 소급 생성 (1회성)
+// ══════════════════════════════════════════════════════════════
+
+function backfillChecks() {
+    $db = getDB();
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+    cronLog("backfill_checks START: backfill up to {$yesterday}");
+
+    // 필수 미션 코드 → ID 매핑
+    $allCodes = ['zoom_daily', 'daily_mission', 'inner33', 'speak_mission'];
+    $ph = implode(',', array_fill(0, count($allCodes), '?'));
+    $stmt = $db->prepare("SELECT id, code FROM mission_types WHERE code IN ({$ph}) AND is_active = 1");
+    $stmt->execute($allCodes);
+    $missionMap = [];
+    foreach ($stmt->fetchAll() as $mt) {
+        $missionMap[$mt['code']] = (int)$mt['id'];
+    }
+
+    $dailyCodes = ['zoom_daily', 'daily_mission', 'inner33'];
+    $mondayCodes = ['speak_mission'];
+
+    // 활성 멤버 + cohort 기간 조회
+    $members = $db->query("
+        SELECT bm.id AS member_id, bm.cohort_id, bm.group_id,
+               c.start_date, c.end_date
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE bm.is_active = 1
+          AND bm.member_status = 'active'
+          AND c.end_date >= '{$yesterday}'
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($members)) {
+        cronLog("No active members found. Skipping.");
+        return;
+    }
+
+    cronLog("Active members: " . count($members));
+
+    $insertStmt = $db->prepare("
+        INSERT IGNORE INTO member_mission_checks
+            (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref)
+        VALUES (?, ?, ?, ?, ?, 0, 'automation', 'cron:backfill')
+    ");
+
+    $created = 0;
+    $total = 0;
+
+    foreach ($members as $m) {
+        $start = $m['start_date'];
+        $end = min($m['end_date'], $yesterday);
+
+        $current = $start;
+        while ($current <= $end) {
+            $dow = (int)date('N', strtotime($current)); // 1=Mon ... 7=Sun
+
+            // 매일 미션
+            foreach ($dailyCodes as $code) {
+                if (isset($missionMap[$code])) {
+                    $insertStmt->execute([$m['member_id'], $m['cohort_id'], $m['group_id'], $current, $missionMap[$code]]);
+                    if ($insertStmt->rowCount() > 0) $created++;
+                    $total++;
+                }
+            }
+
+            // 월요일 미션
+            if ($dow === 1) {
+                foreach ($mondayCodes as $code) {
+                    if (isset($missionMap[$code])) {
+                        $insertStmt->execute([$m['member_id'], $m['cohort_id'], $m['group_id'], $current, $missionMap[$code]]);
+                        if ($insertStmt->rowCount() > 0) $created++;
+                        $total++;
+                    }
+                }
+            }
+
+            $current = date('Y-m-d', strtotime($current . ' +1 day'));
+        }
+    }
+
+    cronLog("backfill_checks DONE: {$created}/{$total} records created (rest already existed)");
 }
 
 // ══════════════════════════════════════════════════════════════
