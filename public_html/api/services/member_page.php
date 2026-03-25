@@ -64,76 +64,80 @@ function handleMemberChecksSummary() {
     $db = getDB();
     $today = date('Y-m-d');
 
-    // 필터 조건: 선택미션 미완료 제외, 말까미션 비월요일 제외
-    $filterWhere = "
-        AND NOT (mt.code IN ('hamemmal','bookclub_join','bookclub_open') AND mmc.status = 0)
-        AND NOT (mt.code = 'speak_mission' AND DAYOFWEEK(mmc.check_date) != 2)
-    ";
-
-    // 전체 완료 항목 / 전체 항목
-    $totalStmt = $db->prepare("
-        SELECT COUNT(*) AS total, SUM(mmc.status) AS done
+    // 전체 데이터 조회
+    $stmt = $db->prepare("
+        SELECT mmc.check_date, mt.code, mmc.status
         FROM member_mission_checks mmc
         JOIN mission_types mt ON mmc.mission_type_id = mt.id
         WHERE mmc.member_id = ? AND mmc.check_date <= ?
-        {$filterWhere}
     ");
-    $totalStmt->execute([$memberId, $today]);
-    $totals = $totalStmt->fetch(PDO::FETCH_ASSOC);
-    $totalAll = (int)$totals['total'];
-    $totalDone = (int)$totals['done'];
+    $stmt->execute([$memberId, $today]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 연속 올클 일수 (최근부터 역순)
-    $streakStmt = $db->prepare("
-        SELECT mmc.check_date, COUNT(*) AS total, SUM(mmc.status) AS done
-        FROM member_mission_checks mmc
-        JOIN mission_types mt ON mmc.mission_type_id = mt.id
-        WHERE mmc.member_id = ? AND mmc.check_date <= ?
-        {$filterWhere}
-        GROUP BY mmc.check_date
-        ORDER BY mmc.check_date DESC
-    ");
-    $streakStmt->execute([$memberId, $today]);
-    $streak = 0;
-    while ($row = $streakStmt->fetch(PDO::FETCH_ASSOC)) {
-        if ((int)$row['done'] === (int)$row['total'] && (int)$row['total'] > 0) {
-            $streak++;
-        } else {
-            break;
+    $optionalCodes = ['hamemmal', 'bookclub_join', 'bookclub_open'];
+
+    // 날짜별 줌/데일리 상태 먼저 수집
+    $zoomDailyByDate = [];
+    foreach ($rows as $r) {
+        if ($r['code'] === 'zoom_daily' || $r['code'] === 'daily_mission') {
+            $zoomDailyByDate[$r['check_date']][$r['code']] = (int)$r['status'];
         }
     }
 
-    // 활동 일수
-    $dayStmt = $db->prepare("
-        SELECT COUNT(DISTINCT mmc.check_date)
-        FROM member_mission_checks mmc
-        JOIN mission_types mt ON mmc.mission_type_id = mt.id
-        WHERE mmc.member_id = ? AND mmc.check_date <= ?
-        {$filterWhere}
-    ");
-    $dayStmt->execute([$memberId, $today]);
-    $totalDays = (int)$dayStmt->fetchColumn();
+    // 날짜별 그룹핑 + 필터 적용
+    $grouped = [];
+    foreach ($rows as $r) {
+        $code = $r['code'];
+        $status = (int)$r['status'];
+        $date = $r['check_date'];
 
-    // 올클 일수
-    $perfectStmt = $db->prepare("
-        SELECT COUNT(*) FROM (
-            SELECT mmc.check_date
-            FROM member_mission_checks mmc
-            JOIN mission_types mt ON mmc.mission_type_id = mt.id
-            WHERE mmc.member_id = ? AND mmc.check_date <= ?
-            {$filterWhere}
-            GROUP BY mmc.check_date
-            HAVING SUM(mmc.status) = COUNT(*)
-        ) AS perfect_days
-    ");
-    $perfectStmt->execute([$memberId, $today]);
-    $perfectDays = (int)$perfectStmt->fetchColumn();
+        // 선택미션: 미완료면 제외
+        if (in_array($code, $optionalCodes) && $status === 0) continue;
+
+        // 말까미션: 월요일이 아니면 제외
+        if ($code === 'speak_mission' && (int)date('N', strtotime($date)) !== 1) continue;
+
+        // 데일리미션: 줌특강과 합산하므로 개별 카운트 제외
+        if ($code === 'daily_mission') continue;
+
+        // 줌특강: 줌 또는 데일리 중 하나라도 완료면 완료
+        if ($code === 'zoom_daily') {
+            $zoomStatus = $zoomDailyByDate[$date]['zoom_daily'] ?? 0;
+            $dailyStatus = $zoomDailyByDate[$date]['daily_mission'] ?? 0;
+            $status = ($zoomStatus || $dailyStatus) ? 1 : 0;
+        }
+
+        $grouped[$date][] = $status;
+    }
+
+    // 통계 계산
+    $totalAll = 0;
+    $totalDone = 0;
+    $perfectDays = 0;
+    $streak = 0;
+    $streakBroken = false;
+
+    krsort($grouped); // 날짜 역순 (streak 계산용)
+
+    foreach ($grouped as $date => $statuses) {
+        $dayTotal = count($statuses);
+        $dayDone = array_sum($statuses);
+        $totalAll += $dayTotal;
+        $totalDone += $dayDone;
+
+        if ($dayDone === $dayTotal && $dayTotal > 0) {
+            $perfectDays++;
+            if (!$streakBroken) $streak++;
+        } else {
+            $streakBroken = true;
+        }
+    }
 
     jsonSuccess([
         'total_checks' => $totalAll,
         'total_done' => $totalDone,
         'completion_rate' => $totalAll > 0 ? round($totalDone / $totalAll * 100) : 0,
-        'total_days' => $totalDays,
+        'total_days' => count($grouped),
         'perfect_days' => $perfectDays,
         'current_streak' => $streak,
     ]);
