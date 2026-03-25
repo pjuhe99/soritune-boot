@@ -223,6 +223,16 @@ function handleMemberChecks() {
 
     // 날짜별 그룹핑 + 필터 적용
     $grouped = [];
+    // 줌/데일리 표시 필터용: 날짜별 status 먼저 수집
+    $zoomDailyStatus = []; // $zoomDailyStatus[$date] = ['zoom_daily' => 0|1|null, 'daily_mission' => 0|1|null]
+    foreach ($rows as $row) {
+        $code = $row['mission_code'];
+        $d = $row['check_date'];
+        if ($code === 'zoom_daily' || $code === 'daily_mission') {
+            $zoomDailyStatus[$d][$code] = (int)$row['status'];
+        }
+    }
+
     foreach ($rows as $row) {
         $d = $row['check_date'];
         $typeId = (int)$row['mission_type_id'];
@@ -235,6 +245,13 @@ function handleMemberChecks() {
 
         // 말까미션: 월요일이 아니면 숨김
         if (in_array($code, $mondayOnlyCodes) && (int)date('N', strtotime($d)) !== 1) continue;
+
+        // 줌 특강 / 데일리미션 표시 필터
+        // - 데일리미션 미완료(0) → 항상 숨김
+        // - 줌 특강 미완료(0) + 데일리미션 완료(1) → 줌 숨김
+        if ($code === 'daily_mission' && $status === 0) continue;
+        if ($code === 'zoom_daily' && $status === 0
+            && ($zoomDailyStatus[$d]['daily_mission'] ?? 0) === 1) continue;
 
         $grouped[$d][] = [
             'mission_type_id'   => $typeId,
