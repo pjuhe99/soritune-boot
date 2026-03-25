@@ -616,6 +616,13 @@ case 'member_update':
         $beforeRole = $brRow ? $brRow['member_role'] : null;
     }
 
+    // cafe_member_key 중복 해소: 다른 회원에게 등록된 키를 가져오는 경우 기존 회원의 키 해제
+    if (!empty($input['cafe_member_key'])) {
+        $cafeKey = trim($input['cafe_member_key']);
+        $db->prepare('UPDATE bootcamp_members SET cafe_member_key = NULL WHERE cafe_member_key = ? AND id != ?')
+           ->execute([$cafeKey, $id]);
+    }
+
     $params[] = $id;
     $db->prepare('UPDATE bootcamp_members SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
 

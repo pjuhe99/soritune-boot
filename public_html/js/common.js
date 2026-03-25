@@ -143,10 +143,12 @@ const App = (() => {
     // ── Confirm ──
     function confirm(message) {
         return new Promise(resolve => {
-            closeModal();
+            const prev = document.getElementById('app-confirm');
+            if (prev) prev.remove();
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
-            overlay.id = 'app-modal';
+            overlay.id = 'app-confirm';
+            overlay.style.zIndex = '10001';
             overlay.innerHTML = `
                 <div class="modal modal--confirm">
                     <div class="modal-body" style="padding:4px 0 12px">
@@ -159,8 +161,9 @@ const App = (() => {
                 </div>
             `;
             document.body.appendChild(overlay);
-            document.getElementById('confirm-yes').onclick = () => { closeModal(); resolve(true); };
-            document.getElementById('confirm-no').onclick = () => { closeModal(); resolve(false); };
+            const cleanup = () => { const el = document.getElementById('app-confirm'); if (el) el.remove(); };
+            document.getElementById('confirm-yes').onclick = () => { cleanup(); resolve(true); };
+            document.getElementById('confirm-no').onclick = () => { cleanup(); resolve(false); };
         });
     }
 
