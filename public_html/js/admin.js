@@ -176,6 +176,8 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-calendar-mgmt" data-hash="calendar">캘린더 관리</button>
                             <button class="tab" data-tab="#tab-lectures" data-hash="lectures">특강 관리</button>
                             <button class="tab" data-tab="#bc-tab-attendance" data-hash="attendance">출석 현황</button>
+                            <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
+                            <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
@@ -192,6 +194,8 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-calendar-mgmt"></div>
                         <div class="tab-content" id="tab-lectures"></div>
                         <div class="tab-content" id="bc-tab-attendance"></div>
+                        <div class="tab-content" id="bc-tab-checklist"></div>
+                        <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="tab-members"></div>
                         <div class="tab-content" id="tab-group-assign"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
@@ -449,7 +453,7 @@ const AdminApp = (() => {
             }
         }
 
-        if ((role === 'coach' || role === 'sub_coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader') && typeof BootcampApp !== 'undefined') {
+        if ((role === 'coach' || role === 'sub_coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader' || isOperation()) && typeof BootcampApp !== 'undefined') {
             if (role === 'leader' || role === 'subleader') {
                 BootcampApp.initForLeader(admin);
             } else {
