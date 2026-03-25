@@ -64,14 +64,27 @@ function handleMemberChecksSummary() {
     $db = getDB();
     $today = date('Y-m-d');
 
-    // 전체 데이터 조회
+    // 회원의 cohort 기간 조회
+    $cohortStmt = $db->prepare("
+        SELECT c.start_date, c.end_date
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE bm.id = ? AND bm.is_active = 1
+    ");
+    $cohortStmt->execute([$memberId]);
+    $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
+    $cohortStart = $cohortInfo['start_date'] ?? '1970-01-01';
+    $cohortEnd = $cohortInfo['end_date'] ?? $today;
+    $endDate = min($today, $cohortEnd);
+
+    // 전체 데이터 조회 (cohort 기간 내만)
     $stmt = $db->prepare("
         SELECT mmc.check_date, mt.code, mmc.status
         FROM member_mission_checks mmc
         JOIN mission_types mt ON mmc.mission_type_id = mt.id
-        WHERE mmc.member_id = ? AND mmc.check_date <= ?
+        WHERE mmc.member_id = ? AND mmc.check_date >= ? AND mmc.check_date <= ?
     ");
-    $stmt->execute([$memberId, $today]);
+    $stmt->execute([$memberId, $cohortStart, $endDate]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $optionalCodes = ['hamemmal', 'bookclub_join', 'bookclub_open'];
@@ -165,7 +178,10 @@ function handleMemberChecks() {
         WHERE bm.id = ? AND bm.is_active = 1
     ");
     $cohortStmt->execute([$memberId]);
-    $cohortInfo = $cohortStmt->fetch();
+    $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
+    $cohortStart = $cohortInfo['start_date'] ?? '1970-01-01';
+    $cohortEnd = $cohortInfo['end_date'] ?? $today;
+    $endDate = min($today, $cohortEnd);
 
     // 미션 타입 목록
     $missionTypes = $db->query(
@@ -176,25 +192,25 @@ function handleMemberChecks() {
         $missionMap[(int)$mt['id']] = $mt;
     }
 
-    // 전체 날짜 수
+    // 전체 날짜 수 (cohort 기간 내만)
     $countStmt = $db->prepare("
         SELECT COUNT(DISTINCT check_date) AS cnt
         FROM member_mission_checks
-        WHERE member_id = ? AND check_date <= ?
+        WHERE member_id = ? AND check_date >= ? AND check_date <= ?
     ");
-    $countStmt->execute([$memberId, $today]);
+    $countStmt->execute([$memberId, $cohortStart, $endDate]);
     $totalDates = (int)$countStmt->fetchColumn();
     $totalPages = max(1, ceil($totalDates / $limit));
 
-    // 날짜 목록 (최신순)
+    // 날짜 목록 (최신순, cohort 기간 내만)
     $dateStmt = $db->prepare("
         SELECT DISTINCT check_date
         FROM member_mission_checks
-        WHERE member_id = ? AND check_date <= ?
+        WHERE member_id = ? AND check_date >= ? AND check_date <= ?
         ORDER BY check_date DESC
         LIMIT ? OFFSET ?
     ");
-    $dateStmt->execute([$memberId, $today, $limit, $offset]);
+    $dateStmt->execute([$memberId, $cohortStart, $endDate, $limit, $offset]);
     $dates = $dateStmt->fetchAll(PDO::FETCH_COLUMN);
 
     if (empty($dates)) {
