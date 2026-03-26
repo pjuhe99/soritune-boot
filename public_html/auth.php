@@ -9,16 +9,20 @@ require_once __DIR__ . '/config.php';
 
 // ── Session Configuration ──────────────────────────────────
 
+define('SESSION_SAVE_BASE', '/var/lib/php/sessions/boot');
+
 define('SESSION_CONFIGS', [
     'member' => [
         'cookie_name' => 'BOOT_MEMBER_SID',
         'lifetime'    => 86400 * 30,  // 30 days
         'samesite'    => 'Lax',
+        'save_path'   => SESSION_SAVE_BASE . '/member',
     ],
     'admin' => [
         'cookie_name' => 'BOOT_ADMIN_SID',
         'lifetime'    => 86400,       // 24 hours
         'samesite'    => 'Lax',
+        'save_path'   => SESSION_SAVE_BASE . '/admin',
     ],
 ]);
 
@@ -30,6 +34,10 @@ function startSessionFor(string $tier): void {
         session_write_close();
     }
     $cfg = SESSION_CONFIGS[$tier];
+    if (!is_dir($cfg['save_path'])) {
+        mkdir($cfg['save_path'], 0700, true);
+    }
+    session_save_path($cfg['save_path']);
     session_name($cfg['cookie_name']);
     ini_set('session.gc_maxlifetime', $cfg['lifetime']);
     session_set_cookie_params([
