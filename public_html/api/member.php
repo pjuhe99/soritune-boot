@@ -28,7 +28,7 @@ case 'login':
 
     loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
 
-    // Get current score + coin
+    // Get current score + coin + completed count + bravo grade
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
     $scoreStmt->execute([$member['id']]);
     $scoreRow = $scoreStmt->fetch();
@@ -37,6 +37,17 @@ case 'login':
     $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
     $coinStmt->execute([$member['id']]);
     $coin = (int)($coinStmt->fetchColumn() ?: 0);
+
+    $statsStmt = $db->prepare("
+        SELECT COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+        FROM bootcamp_members bm
+        LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
+        WHERE bm.id = ?
+    ");
+    $statsStmt->execute([$member['id']]);
+    $statsRow = $statsStmt->fetch();
 
     jsonSuccess([
         'member' => [
@@ -48,6 +59,8 @@ case 'login':
             'kakao_link'  => $member['kakao_link'] ?: null,
             'score'       => $score,
             'coin'        => $coin,
+            'completed_count' => $statsRow ? (int)$statsRow['completed_bootcamp_count'] : 0,
+            'bravo_grade' => $statsRow ? $statsRow['bravo_grade'] : null,
             'needs_nickname' => !hasNickname($member['nickname']),
         ],
     ], '로그인 성공');

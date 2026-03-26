@@ -382,13 +382,14 @@ function handleMemberBootees() {
         SELECT bm.id, bm.nickname, bm.group_id, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS score,
                COALESCE(mcb.current_coin, 0) AS coin,
-               COALESCE(mhs.completed_bootcamp_count, 0) AS completed_count,
-               mhs.bravo_grade
+               COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_count,
+               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
-        LEFT JOIN member_history_stats mhs ON bm.phone = mhs.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
           AND bm.member_status = 'active'
