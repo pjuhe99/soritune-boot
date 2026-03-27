@@ -17,6 +17,13 @@ function handleChecklist() {
     if (!empty($_GET['group_id'])) { $where[] = "bm.group_id = ?"; $params[] = (int)$_GET['group_id']; }
     if (!empty($_GET['stage_no'])) { $where[] = "bm.stage_no = ?"; $params[] = (int)$_GET['stage_no']; }
 
+    $sortMap = [
+        'name_asc'     => 'bm.real_name ASC, bm.nickname ASC',
+        'nickname_asc' => 'bm.nickname ASC, bm.real_name ASC',
+        'score_asc'    => 'current_score ASC, bm.nickname ASC',
+    ];
+    $orderBy = $sortMap[$_GET['sort'] ?? ''] ?? 'bg.name, bm.nickname';
+
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
                bm.group_id, bg.name AS group_name,
@@ -27,7 +34,7 @@ function handleChecklist() {
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY bg.name, bm.nickname
+        ORDER BY {$orderBy}
     ");
     $stmt->execute($params);
     $members = $stmt->fetchAll();
@@ -155,6 +162,13 @@ function handleStatusBoard() {
     if (!empty($_GET['group_id'])) { $where[] = "bm.group_id = ?"; $params[] = (int)$_GET['group_id']; }
     if (!empty($_GET['stage_no'])) { $where[] = "bm.stage_no = ?"; $params[] = (int)$_GET['stage_no']; }
 
+    $sortMap = [
+        'name_asc'     => 'bm.real_name ASC, bm.nickname ASC',
+        'nickname_asc' => 'bm.nickname ASC, bm.real_name ASC',
+        'score_asc'    => 'current_score ASC, bm.nickname ASC',
+    ];
+    $orderBy = $sortMap[$_GET['sort'] ?? ''] ?? 'bg.name, bm.nickname';
+
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
                bm.group_id, bm.member_status, bg.name AS group_name,
@@ -165,7 +179,7 @@ function handleStatusBoard() {
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY bg.name, bm.nickname
+        ORDER BY {$orderBy}
     ");
     $stmt->execute($params);
     $members = $stmt->fetchAll();

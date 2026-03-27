@@ -21,6 +21,7 @@ const BootcampApp = (() => {
     let selectedGroupId = 0;
     let selectedStageNo = 0;
     let selectedDate = App.today();
+    let selectedSort = '';
     let checklistInitialState = {};
 
     // ── Init ──
@@ -310,6 +311,15 @@ const BootcampApp = (() => {
                         <option value="2" ${selectedStageNo === 2 ? 'selected' : ''}>2단계</option>
                     </select>
                 </div>` : ''}
+                <div class="filter-item">
+                    <span class="filter-label">정렬</span>
+                    <select id="fl-sort">
+                        <option value="">기본(조→닉네임)</option>
+                        <option value="name_asc" ${selectedSort === 'name_asc' ? 'selected' : ''}>이름순</option>
+                        <option value="nickname_asc" ${selectedSort === 'nickname_asc' ? 'selected' : ''}>닉네임순</option>
+                        <option value="score_asc" ${selectedSort === 'score_asc' ? 'selected' : ''}>점수 낮은 순</option>
+                    </select>
+                </div>
             </div>
         `;
     }
@@ -333,6 +343,8 @@ const BootcampApp = (() => {
         if (dateEl) dateEl.onchange = () => { selectedDate = dateEl.value; onFilter(); };
         if (groupEl) groupEl.onchange = () => { selectedGroupId = parseInt(groupEl.value); onFilter(); };
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
+        const sortEl = document.getElementById('fl-sort');
+        if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
     }
 
     function scoreClass(score) {
@@ -372,6 +384,7 @@ const BootcampApp = (() => {
         const params = { cohort_id: selectedCohortId, date: selectedDate };
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
+        if (selectedSort) params.sort = selectedSort;
 
         const r = await App.get(API + 'checklist', params);
         if (!r.success) return;
@@ -497,6 +510,7 @@ const BootcampApp = (() => {
         const params = { cohort_id: selectedCohortId, date: selectedDate };
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
+        if (selectedSort) params.sort = selectedSort;
 
         const r = await App.get(API + 'status_board', params);
         if (!r.success) return;
