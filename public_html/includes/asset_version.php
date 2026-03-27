@@ -10,5 +10,13 @@ define('ASSET_BUST', 1);
 function v(string $path): string {
     $file = $_SERVER['DOCUMENT_ROOT'] . $path;
     $mtime = @filemtime($file);
+    // aggregator CSS: 같은 디렉토리 내 모든 css 중 최신 mtime 사용
+    if ($mtime && str_ends_with($path, '.css')) {
+        $dir = dirname($file);
+        foreach (glob($dir . '/*.css') as $f) {
+            $t = @filemtime($f);
+            if ($t > $mtime) $mtime = $t;
+        }
+    }
     return $mtime ? '?v=' . $mtime . '.' . ASSET_BUST : '';
 }
