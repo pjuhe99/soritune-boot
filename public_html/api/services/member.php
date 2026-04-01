@@ -105,10 +105,7 @@ function handleMemberUpdate($method) {
     $params[] = $id;
     $db->prepare("UPDATE bootcamp_members SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
 
-    // role이 실제로 변경되었으면 코인 처리
-    if ($beforeRole !== null && $beforeRole !== $input['member_role'] && function_exists('handleRoleChangeCoin')) {
-        handleRoleChangeCoin($db, $id, $beforeRole, $input['member_role'], $admin['admin_id']);
-    }
+    // 리더 코인은 코인 관리 화면에서 수동 일괄 지급 (역할 변경 시 자동 지급하지 않음)
 
     // 집계 테이블 갱신 (stats 영향 필드 변경 시)
     $statsFields = ['stage_no', 'is_active', 'phone', 'user_id', 'cohort_id'];
