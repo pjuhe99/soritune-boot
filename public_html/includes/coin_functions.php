@@ -19,6 +19,10 @@ if (!defined('COIN_CHEER_AMOUNT'))       define('COIN_CHEER_AMOUNT', 10);
 if (!defined('COIN_CHEER_MAX_TARGETS'))  define('COIN_CHEER_MAX_TARGETS', 3);
 if (!defined('COIN_CYCLE_MAX'))          define('COIN_CYCLE_MAX', 200);
 
+// 복습스터디 개설 의무 횟수 (이 횟수까지는 코인 미지급)
+if (!defined('COIN_STUDY_OPEN_DUTY_LEADER'))    define('COIN_STUDY_OPEN_DUTY_LEADER', 4);
+if (!defined('COIN_STUDY_OPEN_DUTY_SUBLEADER')) define('COIN_STUDY_OPEN_DUTY_SUBLEADER', 2);
+
 // ══════════════════════════════════════════════════════════════
 // Cycle 조회
 // ══════════════════════════════════════════════════════════════
@@ -165,10 +169,22 @@ function processCoinForCheck($db, $memberId, $checkDate, $missionCode, $newStatu
     $cycleId = (int)$cycle['id'];
     $mcc = getOrCreateMemberCycleCoins($db, $memberId, $cycleId);
 
+    // bookclub_open 의무 횟수 체크 (조장/부조장)
+    $dutyCount = 0;
+    if ($missionCode === 'bookclub_open') {
+        $dutyCount = getStudyOpenDutyCount($db, $memberId);
+    }
+
     if ($isChecked) {
         // 체크: 지급
         $currentCount = (int)$mcc[$config['counter']];
         if ($currentCount >= $config['max']) return; // 캡 도달
+
+        // 의무 횟수 이내이면 코인 미지급
+        if ($dutyCount > 0) {
+            $totalChecks = countMissionChecksInCycle($db, $memberId, $missionCode, $cycle['start_date'], $cycle['end_date']);
+            if ($totalChecks <= $dutyCount) return; // 의무 범위 내 → 스킵
+        }
 
         $result = applyCoinChange($db, $memberId, $cycleId, $config['amount'], $config['reason'],
             "{$missionCode} check {$checkDate}", $adminId);
@@ -185,6 +201,12 @@ function processCoinForCheck($db, $memberId, $checkDate, $missionCode, $newStatu
         $currentCount = (int)$mcc[$config['counter']];
         if ($currentCount <= 0) return; // 차감할 것 없음
 
+        // 해제 후 남은 체크 수가 의무 이상일 때만 차감 (의무 범위로 돌아가면 차감 불필요)
+        if ($dutyCount > 0) {
+            $totalChecks = countMissionChecksInCycle($db, $memberId, $missionCode, $cycle['start_date'], $cycle['end_date']);
+            if ($totalChecks < $dutyCount) return; // 이미 의무 범위 내 → 차감 불필요
+        }
+
         applyCoinChange($db, $memberId, $cycleId, -$config['amount'], $config['reason'],
             "{$missionCode} uncheck {$checkDate}", $adminId);
 
@@ -194,6 +216,36 @@ function processCoinForCheck($db, $memberId, $checkDate, $missionCode, $newStatu
             WHERE member_id = ? AND cycle_id = ?
         ")->execute([$memberId, $cycleId]);
     }
+}
+
+/**
+ * 멤버의 역할에 따른 복습스터디 개설 의무 횟수 반환
+ */
+function getStudyOpenDutyCount($db, $memberId) {
+    $stmt = $db->prepare("SELECT member_role FROM bootcamp_members WHERE id = ?");
+    $stmt->execute([$memberId]);
+    $role = $stmt->fetchColumn();
+
+    if ($role === 'leader')    return COIN_STUDY_OPEN_DUTY_LEADER;
+    if ($role === 'subleader') return COIN_STUDY_OPEN_DUTY_SUBLEADER;
+    return 0;
+}
+
+/**
+ * 사이클 기간 내 특정 미션의 체크(status=1) 횟수
+ */
+function countMissionChecksInCycle($db, $memberId, $missionCode, $startDate, $endDate) {
+    $codeToId = getMissionCodeToIdMap($db);
+    $typeId = $codeToId[$missionCode] ?? null;
+    if (!$typeId) return 0;
+
+    $stmt = $db->prepare("
+        SELECT COUNT(*) FROM member_mission_checks
+        WHERE member_id = ? AND mission_type_id = ? AND status = 1
+          AND check_date >= ? AND check_date <= ?
+    ");
+    $stmt->execute([$memberId, $typeId, $startDate, $endDate]);
+    return (int)$stmt->fetchColumn();
 }
 
 // ══════════════════════════════════════════════════════════════
