@@ -34,6 +34,7 @@
     <script src="/js/member-tabs.js<?= v('/js/member-tabs.js') ?>"></script>
     <script src="/js/member-home.js<?= v('/js/member-home.js') ?>"></script>
     <script src="/js/member-shortcuts.js<?= v('/js/member-shortcuts.js') ?>"></script>
+    <script src="/js/study-create.js<?= v('/js/study-create.js') ?>"></script>
     <script src="/js/member-calendar-detail.js<?= v('/js/member-calendar-detail.js') ?>"></script>
     <script src="/js/member-calendar.js<?= v('/js/member-calendar.js') ?>"></script>
     <script src="/js/member-issue.js<?= v('/js/member-issue.js') ?>"></script>

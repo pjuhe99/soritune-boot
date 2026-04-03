@@ -35,7 +35,7 @@ const MemberCalendar = (() => {
                         <button class="filter-chip" data-stage="1">1단계</button>
                         <button class="filter-chip" data-stage="2">2단계</button>
                     </div>
-                    <a href="/study" class="btn btn-primary btn-sm" style="text-decoration:none;white-space:nowrap">복습스터디 관리 →</a>
+                    <button class="btn btn-primary btn-sm" id="btn-cal-create-study" style="white-space:nowrap">복습스터디 예약</button>
                 </div>
                 <div id="member-cal-container"></div>
             </div>
@@ -47,6 +47,12 @@ const MemberCalendar = (() => {
             applyFilterAndRender();
         });
         MemberUtils.logEvent('open_tab_calendar');
+
+        document.getElementById('btn-cal-create-study').onclick = () => {
+            StudyCreate.open({
+                onCreated() { loadData(); },
+            });
+        };
 
         cal = CalendarUI.create(document.getElementById('member-cal-container'), {
             onMonthChange: () => loadData(),
