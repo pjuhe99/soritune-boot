@@ -139,7 +139,7 @@ function handleStudySessionDetail() {
     $endAt = new DateTime($session['study_date'] . ' ' . $session['end_time'], new DateTimeZone('Asia/Seoul'));
 
     $canCancel = $isHost && $now < $startAt && $session['status'] === 'active';
-    $canStartQr = $isHost && $now <= $endAt && $session['status'] === 'active';
+    $canStartQr = $isHost && $session['status'] === 'active';
     $hasQrSession = !empty($session['qr_session_id']);
 
     jsonSuccess([
@@ -419,12 +419,8 @@ function handleStudySessionQr($method) {
         jsonError('본인이 개설한 복습스터디만 출석체크를 시작할 수 있습니다.', 403);
     }
 
-    // 종료시각 이후에는 QR 생성 불가
     $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
     $endAt = new DateTime($session['study_date'] . ' ' . $session['end_time'], new DateTimeZone('Asia/Seoul'));
-    if ($now > $endAt) {
-        jsonError('스터디 종료 이후에는 출석체크를 시작할 수 없습니다.');
-    }
 
     // 이미 QR 세션이 있으면 재사용
     if ($session['qr_session_id']) {

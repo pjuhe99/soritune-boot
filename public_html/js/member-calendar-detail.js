@@ -101,14 +101,11 @@ const MemberCalendarDetail = (() => {
 
         // ── QR attendance section (host only) ──
         if (isHost && s.status === 'active') {
-            if (canStartQr) {
-                body += `<button class="btn btn-primary btn-block mt-md" id="btn-start-qr">출석체크 진행하기</button>`;
-            } else {
-                body += `
-                    <button class="btn btn-secondary btn-block mt-md" disabled>출석체크 진행하기</button>
-                    <p class="lec-notice muted">복습스터디 시간에만 출석체크를 진행할 수 있습니다</p>
-                `;
-            }
+            body += `
+                <div class="lec-detail-actions">
+                    <button class="btn btn-primary btn-block" id="btn-start-qr">출석체크 진행하기</button>
+                </div>
+            `;
         }
 
         // ── Participants list ──
@@ -170,6 +167,8 @@ const MemberCalendarDetail = (() => {
     }
 
     // ── QR ──
+    let qrPollTimer = null;
+
     async function startQr(sessionId) {
         App.showLoading();
         const r = await App.post(API + 'study_session_qr', { session_id: sessionId });
@@ -185,10 +184,16 @@ const MemberCalendarDetail = (() => {
                 <div id="qr-code-area" style="margin:16px 0;"></div>
                 <button class="btn btn-secondary btn-sm" id="btn-copy-qr-url">링크 복사</button>
             </div>
+            <div id="qr-participant-list" style="width:100%;margin-top:var(--space-4);"></div>
         `;
         App.openModal('출석체크 QR', qrBody,
-            `<button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>`
+            `<button class="btn btn-secondary btn-sm" id="btn-close-qr">닫기</button>`
         );
+
+        document.getElementById('btn-close-qr').onclick = () => {
+            stopQrPolling();
+            App.closeModal();
+        };
 
         document.getElementById('btn-copy-qr-url').onclick = async () => {
             try {
@@ -209,6 +214,22 @@ const MemberCalendarDetail = (() => {
         } else {
             generateQR(r.scan_url);
         }
+
+        // 참여자 목록 폴링 시작
+        pollParticipants(sessionId);
+        qrPollTimer = setInterval(() => pollParticipants(sessionId), 5000);
+    }
+
+    async function pollParticipants(sessionId) {
+        const r = await App.get(API + 'study_session_detail', { session_id: sessionId });
+        if (!r.success) return;
+        const el = document.getElementById('qr-participant-list');
+        if (!el) { stopQrPolling(); return; }
+        el.innerHTML = renderParticipants(r.participants || []);
+    }
+
+    function stopQrPolling() {
+        if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
     }
 
     function generateQR(url) {
