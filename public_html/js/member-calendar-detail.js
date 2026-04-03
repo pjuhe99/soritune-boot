@@ -103,7 +103,7 @@ const MemberCalendarDetail = (() => {
         if (isHost && s.status === 'active') {
             body += `
                 <div class="lec-detail-actions">
-                    <button class="btn btn-primary btn-block" id="btn-start-qr">출석체크 진행하기</button>
+                    <button class="lec-btn-zoom" id="btn-start-qr" style="width:100%;border:none;">출석체크 진행하기</button>
                 </div>
             `;
         }
