@@ -1,22 +1,10 @@
 /* ══════════════════════════════════════════════════════════════
    StudyCreate — 복습스터디 예약 모달 (공유 모듈)
    study.js, member-calendar.js 양쪽에서 사용
+   로그인된 본인 이름으로 예약, 비밀번호 없음
    ══════════════════════════════════════════════════════════════ */
 const StudyCreate = (() => {
     const API = '/api/bootcamp.php?action=';
-
-    let groupsCache = null;
-    let allMembersCache = null;
-
-    async function loadGroupsAndMembers() {
-        if (groupsCache && allMembersCache) return;
-        const [gRes, mRes] = await Promise.all([
-            App.get(API + 'study_groups'),
-            App.get(API + 'study_members'),
-        ]);
-        groupsCache = gRes.success ? gRes.groups : [];
-        allMembersCache = mRes.success ? mRes.members : [];
-    }
 
     /**
      * 복습스터디 예약 모달 열기
@@ -24,17 +12,9 @@ const StudyCreate = (() => {
      * @param {function} opts.onCreated - 생성 완료 콜백 (studyDate, response)
      */
     async function open(opts = {}) {
-        App.showLoading();
-        await loadGroupsAndMembers();
-        App.hideLoading();
-
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const defaultDate = App.formatDate(tomorrow);
-
-        const groupOpts = groupsCache.map(g =>
-            `<option value="${g.id}">${App.esc(g.name)}</option>`
-        ).join('');
 
         const hourOpts = Array.from({ length: 18 }, (_, i) => {
             const h = String(i + 6).padStart(2, '0');
@@ -42,20 +22,6 @@ const StudyCreate = (() => {
         }).join('');
 
         const body = `
-            <div class="form-group">
-                <label class="form-label">개설자</label>
-                <div class="study-host-select">
-                    <select class="form-select" id="create-group" style="margin-bottom:6px;">
-                        <option value="">조 선택</option>
-                        ${groupOpts}
-                    </select>
-                    <div class="study-search-wrap" style="position:relative;">
-                        <input type="text" class="form-input" id="create-member-search" placeholder="닉네임 검색..." autocomplete="off">
-                        <div class="study-member-dropdown" id="member-dropdown"></div>
-                    </div>
-                    <div id="selected-host-display" class="study-selected-host"></div>
-                </div>
-            </div>
             <div class="form-group">
                 <label class="form-label">단계</label>
                 <div style="display:flex;gap:8px;">
@@ -79,11 +45,6 @@ const StudyCreate = (() => {
                     </select>
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">비밀번호</label>
-                <input type="tel" class="form-input" id="create-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" style="text-align:center;font-size:20px;letter-spacing:6px;" inputmode="numeric">
-                <p class="text-sub mt-xs" style="font-size:var(--sm-font-size)">스터디를 취소할 때 확인하기 위한 비밀번호입니다. 4자리로 등록해주세요</p>
-            </div>
         `;
         const footer = `
             <button class="btn btn-secondary" onclick="App.closeModal()">닫기</button>
@@ -91,78 +52,8 @@ const StudyCreate = (() => {
         `;
         App.openModal('복습스터디 예약', body, footer);
 
-        // ── Host selection state ──
-        const state = { hostMemberId: null, hostNickname: '', hasOverlap: false, overlapSessions: [] };
-        const groupSelect = document.getElementById('create-group');
-        const searchInput = document.getElementById('create-member-search');
-        const dropdown = document.getElementById('member-dropdown');
-        const hostDisplay = document.getElementById('selected-host-display');
-
-        function getFilteredMembers() {
-            const groupId = groupSelect.value;
-            const keyword = searchInput.value.trim().toLowerCase();
-            return allMembersCache.filter(m => {
-                if (groupId && String(m.group_id) !== groupId) return false;
-                if (keyword) {
-                    const nick = (m.nickname || '').toLowerCase();
-                    const real = (m.real_name || '').toLowerCase();
-                    if (!nick.includes(keyword) && !real.includes(keyword)) return false;
-                }
-                return true;
-            });
-        }
-
-        function showDropdown() {
-            const filtered = getFilteredMembers();
-            if (!filtered.length) {
-                dropdown.innerHTML = '<div class="study-dd-empty">검색 결과가 없습니다</div>';
-            } else {
-                dropdown.innerHTML = filtered.map(m =>
-                    `<div class="study-dd-item" data-id="${m.id}" data-nick="${App.esc(m.nickname)}">
-                        <span class="study-dd-nick">${App.esc(m.nickname)}</span>
-                        <span class="study-dd-group">${App.esc(m.group_name || '')}</span>
-                    </div>`
-                ).join('');
-            }
-            dropdown.classList.add('open');
-        }
-
-        function hideDropdown() {
-            setTimeout(() => dropdown.classList.remove('open'), 150);
-        }
-
-        function selectHost(id, nickname) {
-            state.hostMemberId = id;
-            state.hostNickname = nickname;
-            searchInput.value = '';
-            dropdown.classList.remove('open');
-            hostDisplay.innerHTML = `
-                <span class="badge badge-light">${App.esc(nickname)}</span>
-                <button class="study-host-clear" title="선택 해제">&times;</button>
-            `;
-            hostDisplay.querySelector('.study-host-clear').onclick = () => {
-                state.hostMemberId = null;
-                state.hostNickname = '';
-                hostDisplay.innerHTML = '';
-            };
-        }
-
-        searchInput.onfocus = () => showDropdown();
-        searchInput.oninput = () => showDropdown();
-        searchInput.onblur = hideDropdown;
-        groupSelect.onchange = () => {
-            if (dropdown.classList.contains('open')) showDropdown();
-        };
-
-        dropdown.onmousedown = (e) => {
-            e.preventDefault();
-            const item = e.target.closest('.study-dd-item');
-            if (item) {
-                selectHost(parseInt(item.dataset.id), item.dataset.nick);
-            }
-        };
-
-        // ── Overlap check ──
+        // ── Overlap check state ──
+        const state = { hasOverlap: false, overlapSessions: [] };
         const dateInput = document.getElementById('create-date');
         const hourSelect = document.getElementById('create-hour');
         const minuteSelect = document.getElementById('create-minute');
@@ -196,11 +87,8 @@ const StudyCreate = (() => {
         document.getElementById('btn-submit-create').onclick = async () => {
             const studyDate = dateInput.value;
             const startTime = `${hourSelect.value}:${minuteSelect.value}`;
-            const password = document.getElementById('create-pw').value.trim();
 
-            if (!state.hostMemberId) return Toast.warning('개설자를 선택해주세요.');
             if (!studyDate) return Toast.warning('날짜를 선택해주세요.');
-            if (password.length !== 4 || !/^\d{4}$/.test(password)) return Toast.warning('4자리 숫자 비밀번호를 입력해주세요.');
 
             const startDt = new Date(`${studyDate}T${startTime}:00`);
             const now = new Date();
@@ -221,10 +109,8 @@ const StudyCreate = (() => {
 
             App.showLoading();
             const r = await App.post(API + 'study_session_create', {
-                host_member_id: state.hostMemberId,
                 study_date: studyDate,
                 start_time: startTime,
-                password: password,
                 level: level,
             });
             App.hideLoading();
@@ -247,11 +133,5 @@ const StudyCreate = (() => {
         return h * 60 + m;
     }
 
-    /** 캐시 초기화 (로그아웃 시) */
-    function clearCache() {
-        groupsCache = null;
-        allMembersCache = null;
-    }
-
-    return { open, clearCache };
+    return { open };
 })();

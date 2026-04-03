@@ -160,15 +160,16 @@ function handleStudySessionCreate($method) {
     $member = requireMember();
     $input = getJsonInput();
 
+    // host_member_id가 없으면 로그인된 본인으로 자동 설정
     $hostMemberId = (int)($input['host_member_id'] ?? 0);
+    if (!$hostMemberId) $hostMemberId = (int)$member['member_id'];
     $studyDate = $input['study_date'] ?? '';
     $startTime = $input['start_time'] ?? '';
-    $password = $input['password'] ?? '';
     $level = (int)($input['level'] ?? 1);
 
     // 기본 검증
-    if (!$hostMemberId || !$studyDate || !$startTime || !$password) {
-        jsonError('host_member_id, study_date, start_time, password 필요');
+    if (!$studyDate || !$startTime) {
+        jsonError('study_date, start_time 필요');
     }
     if (!in_array($level, [1, 2])) {
         jsonError('level은 1 또는 2만 가능합니다.');
@@ -178,9 +179,6 @@ function handleStudySessionCreate($method) {
     }
     if (!preg_match('/^\d{2}:(00|30)$/', $startTime)) {
         jsonError('start_time은 00분 또는 30분 단위만 허용됩니다.');
-    }
-    if (!preg_match('/^\d{4}$/', $password)) {
-        jsonError('비밀번호는 4자리 숫자여야 합니다.');
     }
 
     // 과거 날짜 검증
@@ -228,9 +226,9 @@ function handleStudySessionCreate($method) {
     // DB 저장 (status=pending, zoom_status=pending)
     $db->prepare("
         INSERT INTO study_sessions
-            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, password, status, zoom_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
-    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime, $password]);
+            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, status, zoom_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
+    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime]);
 
     $sessionId = (int)$db->lastInsertId();
 
@@ -359,8 +357,7 @@ function handleStudySessionCancel($method) {
     $input = getJsonInput();
 
     $sessionId = (int)($input['session_id'] ?? 0);
-    $password = $input['password'] ?? '';
-    if (!$sessionId || !$password) jsonError('session_id, password 필요');
+    if (!$sessionId) jsonError('session_id 필요');
 
     $db = getDB();
     $stmt = $db->prepare("SELECT * FROM study_sessions WHERE id = ? AND status IN ('pending','active')");
@@ -368,14 +365,9 @@ function handleStudySessionCancel($method) {
     $session = $stmt->fetch();
     if (!$session) jsonError('스터디를 찾을 수 없습니다.', 404);
 
-    // 개설자 확인
+    // 개설자 본인만 취소 가능
     if ((int)$session['host_member_id'] !== (int)$member['member_id']) {
         jsonError('본인이 개설한 복습스터디만 취소할 수 있습니다.', 403);
-    }
-
-    // 비밀번호 확인
-    if ($session['password'] !== $password) {
-        jsonError('비밀번호가 일치하지 않습니다.');
     }
 
     // 시작 30분 전까지만 취소 가능

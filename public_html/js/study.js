@@ -93,7 +93,6 @@ const StudyApp = (() => {
             await App.post('/api/member.php?action=logout');
             Toast.info('로그아웃 되었습니다.');
             member = null;
-            StudyCreate.clearCache();
             showLogin();
         };
 
@@ -287,7 +286,7 @@ const StudyApp = (() => {
 
         const cancelBtn = document.getElementById('btn-cancel-study');
         if (cancelBtn) {
-            cancelBtn.onclick = () => openCancelFlow(s.id, s.title, s.study_date, s.start_time);
+            cancelBtn.onclick = () => openCancelFlow(s.id, s.title);
         }
     }
 
@@ -356,24 +355,12 @@ const StudyApp = (() => {
     }
 
     // ── Cancel Flow ──
-    async function openCancelFlow(sessionId, title, studyDate, startTime) {
-        // 시작 30분 전부터는 취소 불가
-        if (studyDate && startTime) {
-            const startDt = new Date(`${studyDate}T${startTime.substring(0, 5)}:00`);
-            if (startDt.getTime() - Date.now() < 30 * 60 * 1000) {
-                return Toast.warning('복습스터디 시작 30분 전부터는 취소할 수 없습니다.');
-            }
-        }
-
+    async function openCancelFlow(sessionId, title) {
         App.closeModal();
         const body = `
             <p style="font-size:var(--md-font-size);line-height:1.6;margin-bottom:16px;">
-                <strong>${App.esc(title)}</strong>을(를) 취소하시겠습니까?<br>
-                취소하려면 복습스터디를 예약할 때 입력한 비밀번호 4자리를 입력해주세요.
+                <strong>${App.esc(title)}</strong>을(를) 취소하시겠습니까?
             </p>
-            <div class="form-group">
-                <input type="tel" class="form-input" id="cancel-pw" maxlength="4" pattern="[0-9]{4}" placeholder="0000" inputmode="numeric" style="text-align:center;font-size:24px;letter-spacing:8px;">
-            </div>
         `;
         const footer = `
             <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">닫기</button>
@@ -381,16 +368,9 @@ const StudyApp = (() => {
         `;
         App.openModal('복습스터디 취소', body, footer);
 
-        document.getElementById('cancel-pw').focus();
         document.getElementById('btn-confirm-cancel').onclick = async () => {
-            const pw = document.getElementById('cancel-pw').value.trim();
-            if (pw.length !== 4) {
-                Toast.warning('4자리 비밀번호를 입력해주세요.');
-                return;
-            }
-
             App.showLoading();
-            const r = await App.post(API + 'study_session_cancel', { session_id: sessionId, password: pw });
+            const r = await App.post(API + 'study_session_cancel', { session_id: sessionId });
             App.hideLoading();
             if (r.success) {
                 Toast.success('복습스터디가 취소되었습니다.');
