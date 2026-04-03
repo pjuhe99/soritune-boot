@@ -82,30 +82,27 @@ const MemberCalendarDetail = (() => {
             </div>
         `;
 
-        // ── Zoom section ──
-        if (s.zoom_status === 'ready' && s.zoom_join_url) {
-            body += `
-                <div class="lec-detail-actions">
-                    <a href="${App.esc(s.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>
-                    <button class="lec-btn-copy" id="btn-copy-zoom">Zoom 링크 복사</button>
-                </div>
-            `;
-        } else if (s.zoom_status === 'pending') {
-            body += '<div class="lec-notice muted">Zoom 준비 중입니다.</div>';
-        } else if (s.zoom_status === 'failed' && isHost) {
-            body += `
-                <div class="lec-notice muted">Zoom 생성에 실패했습니다.</div>
-                <button class="btn btn-primary btn-block btn-sm mt-sm" id="btn-retry-zoom">Zoom 다시 생성하기</button>
-            `;
-        }
+        // ── Zoom + QR section ──
+        {
+            const actionItems = [];
 
-        // ── QR attendance section (host only) ──
-        if (isHost && s.status === 'active') {
-            body += `
-                <div class="lec-detail-actions">
-                    <button class="lec-btn-zoom" id="btn-start-qr" style="width:100%;border:none;">출석체크 진행하기</button>
-                </div>
-            `;
+            if (s.zoom_status === 'ready' && s.zoom_join_url) {
+                actionItems.push(`<a href="${App.esc(s.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>`);
+                actionItems.push(`<button class="lec-btn-copy" id="btn-copy-zoom">Zoom 링크 복사</button>`);
+            } else if (s.zoom_status === 'pending') {
+                actionItems.push('<div class="lec-notice muted">Zoom 준비 중입니다.</div>');
+            } else if (s.zoom_status === 'failed' && isHost) {
+                actionItems.push('<div class="lec-notice muted">Zoom 생성에 실패했습니다.</div>');
+                actionItems.push(`<button class="lec-btn-zoom" id="btn-retry-zoom" style="width:100%;border:none;">Zoom 다시 생성하기</button>`);
+            }
+
+            if (isHost && s.status === 'active') {
+                actionItems.push(`<button class="lec-btn-zoom" id="btn-start-qr" style="width:100%;border:none;">출석체크 진행하기</button>`);
+            }
+
+            if (actionItems.length) {
+                body += `<div class="lec-detail-actions">${actionItems.join('')}</div>`;
+            }
         }
 
         // ── Participants list ──
