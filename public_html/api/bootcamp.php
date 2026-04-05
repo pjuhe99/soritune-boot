@@ -208,6 +208,7 @@ case 'warning_note_create':
 // ── Revival ──────────────────────────────────────────────────
 
 case 'revival_candidates': handleRevivalCandidates(); break;
+case 'revival_manual':     handleManualRevival(); break;
 case 'revival_logs':       handleRevivalLogs(); break;
 
 // ── Coins ────────────────────────────────────────────────────

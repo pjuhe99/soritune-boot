@@ -764,9 +764,25 @@ const BootcampApp = (() => {
                         <div class="revival-detail">${App.esc(c.group_name || '-')} · ${c.stage_no}단계 · ${App.esc(ROLE_LABELS[c.member_role] || '')}</div>
                     </div>
                     <div class="revival-score">${c.current_score}</div>
+                    <button class="btn btn-primary btn-sm btn-revival-manual" data-id="${c.id}" data-name="${App.esc(c.nickname)}">부활</button>
                 </div>
             `).join('')}
         `;
+
+        list.querySelectorAll('.btn-revival-manual').forEach(btn => {
+            btn.onclick = () => doManualRevival(btn.dataset.id, btn.dataset.name);
+        });
+    }
+
+    async function doManualRevival(memberId, nickname) {
+        if (!await App.confirm(`${nickname}님을 패자부활 처리하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'revival_manual', { member_id: parseInt(memberId) });
+        App.hideLoading();
+        if (r.success) {
+            Toast.success(r.message);
+            fetchRevivalCandidates();
+        }
     }
 
     // ── 패자부활 QR 관리 ──
@@ -975,19 +991,24 @@ const BootcampApp = (() => {
         sec.innerHTML = `
             <div style="overflow-x:auto" class="mt-md">
                 <table class="bc-log-table">
-                    <thead><tr><th>일시</th><th>회원</th><th>조</th><th>전</th><th>후</th><th>처리자</th><th>메모</th></tr></thead>
+                    <thead><tr><th>일시</th><th>구분</th><th>회원</th><th>조</th><th>전</th><th>후</th><th>처리자</th></tr></thead>
                     <tbody>
-                        ${logs.map(l => `
+                        ${logs.map(l => {
+                            const isQr = (l.note || '').startsWith('QR');
+                            const badge = isQr
+                                ? '<span class="badge-blue" style="font-size:11px">QR</span>'
+                                : '<span class="badge-yellow" style="font-size:11px">수동</span>';
+                            return `
                             <tr>
                                 <td style="white-space:nowrap">${(l.created_at || '').substring(0, 16)}</td>
+                                <td>${badge}</td>
                                 <td>${App.esc(l.nickname)}</td>
                                 <td>${App.esc(l.group_name || '-')}</td>
                                 <td class="log-negative">${l.before_score}</td>
                                 <td>${l.after_score}</td>
                                 <td>${App.esc(l.operator_name || '-')}</td>
-                                <td>${App.esc(l.note || '-')}</td>
-                            </tr>
-                        `).join('')}
+                            </tr>`;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
