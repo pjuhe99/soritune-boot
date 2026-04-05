@@ -178,6 +178,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-attendance" data-hash="attendance">출석 현황</button>
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
                             <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
@@ -196,6 +197,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-attendance"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
+                        <div class="tab-content" id="bc-tab-revival"></div>
                         <div class="tab-content" id="tab-members"></div>
                         <div class="tab-content" id="tab-group-assign"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
@@ -259,6 +261,7 @@ const AdminApp = (() => {
                             <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
+                            <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
                             <button class="tab" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-attendance" data-hash="attendance">출석 현황</button>
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
@@ -271,6 +274,7 @@ const AdminApp = (() => {
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
+                        <div class="tab-content" id="bc-tab-revival"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-attendance"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
