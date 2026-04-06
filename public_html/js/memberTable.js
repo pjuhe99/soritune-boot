@@ -17,8 +17,8 @@ const MemberTable = (() => {
         const s = parseInt(score);
         let cls = '';
         if (s <= -25) cls = 'out';
-        else if (s <= -15) cls = 'danger';
-        else if (s <= -13) cls = 'revival-warning';
+        else if (s <= -10) cls = 'danger';
+        else if (s <= -8) cls = 'revival-warning';
         else if (s < 0) cls = 'negative';
         else if (s > 0) cls = 'positive';
         return `<span class="score-val ${cls}">${s}</span>`;

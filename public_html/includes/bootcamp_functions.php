@@ -9,9 +9,9 @@
 if (!defined('SCORE_START'))              define('SCORE_START', 0);
 if (!defined('SCORE_ADAPTATION_DAYS'))    define('SCORE_ADAPTATION_DAYS', 3);
 if (!defined('SCORE_OUT_THRESHOLD'))      define('SCORE_OUT_THRESHOLD', -25);
-if (!defined('SCORE_REVIVAL_CANDIDATE'))  define('SCORE_REVIVAL_CANDIDATE', -13);
-if (!defined('SCORE_REVIVAL_ELIGIBLE'))   define('SCORE_REVIVAL_ELIGIBLE', -15);
-if (!defined('SCORE_REVIVAL_AFTER'))      define('SCORE_REVIVAL_AFTER', -10);
+if (!defined('SCORE_REVIVAL_CANDIDATE'))  define('SCORE_REVIVAL_CANDIDATE', -8);
+if (!defined('SCORE_REVIVAL_ELIGIBLE'))   define('SCORE_REVIVAL_ELIGIBLE', -10);
+if (!defined('SCORE_REVIVAL_AFTER'))      define('SCORE_REVIVAL_AFTER', -5);
 if (!defined('SCORE_REVIVAL_BONUS'))     define('SCORE_REVIVAL_BONUS', 7);
 
 /**

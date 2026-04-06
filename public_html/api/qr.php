@@ -395,7 +395,7 @@ case 'revival_record':
     $scoreRow = $scoreStmt->fetch();
     $beforeScore = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
-    // 대상 여부 확인: -15점 이하만
+    // 대상 여부 확인: -10점 이하만
     if ($beforeScore > SCORE_REVIVAL_ELIGIBLE) {
         jsonSuccess([
             'member_name'  => $member['nickname'],

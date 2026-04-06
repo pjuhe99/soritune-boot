@@ -400,7 +400,7 @@ if (!$code) {
                     const name = result.member_name || '';
                     if (result.not_eligible) {
                         // 대상이 아닌 경우
-                        showError('\u26D4', '\uD328\uC790\uBD80\uD65C\uC804 \uB300\uC0C1\uC774 \uC544\uB2D9\uB2C8\uB2E4', '\uD604\uC7AC \uC810\uC218: ' + result.current_score + '\uC810 (-15\uC810 \uC774\uD558\uB9CC \uB300\uC0C1)');
+                        showError('\u26D4', '\uD328\uC790\uBD80\uD65C\uC804 \uB300\uC0C1\uC774 \uC544\uB2D9\uB2C8\uB2E4', '\uD604\uC7AC \uC810\uC218: ' + result.current_score + '\uC810 (-10\uC810 \uC774\uD558\uB9CC \uB300\uC0C1)');
                     } else {
                         // 부활 성공
                         document.getElementById('success-icon').innerHTML = '&#x1F3C6;';

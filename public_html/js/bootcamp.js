@@ -349,8 +349,8 @@ const BootcampApp = (() => {
 
     function scoreClass(score) {
         if (score <= -25) return 'out';
-        if (score <= -15) return 'danger';
-        if (score <= -13) return 'revival-warning';
+        if (score <= -10) return 'danger';
+        if (score <= -8) return 'revival-warning';
         if (score < 0) return 'negative';
         if (score > 0) return 'positive';
         return '';
@@ -527,8 +527,8 @@ const BootcampApp = (() => {
             const missCount = missDays[m.id] || 0;
             const hasNote = !!warnNotes[m.id];
             const isOut = m.member_status === 'out_of_group_management';
-            const isRevivalCandidate = score <= (thresholds?.revival_candidate ?? -13);
-            const isRevivalEligible = score <= (thresholds?.revival_eligible ?? -15);
+            const isRevivalCandidate = score <= (thresholds?.revival_candidate ?? -8);
+            const isRevivalEligible = score <= (thresholds?.revival_eligible ?? -10);
             const sc = scoreClass(score);
 
             // 경고 레벨: black > red > yellow
@@ -749,13 +749,13 @@ const BootcampApp = (() => {
 
         const candidates = r.candidates || [];
         if (!candidates.length) {
-            list.innerHTML = `<div class="empty-state">패자부활 대상자가 없습니다. (기준: -15점 이하)</div>`;
+            list.innerHTML = `<div class="empty-state">패자부활 대상자가 없습니다. (기준: -10점 이하)</div>`;
             return;
         }
 
         list.innerHTML = `
             <div class="revival-summary" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-light,#f5f5f5);border-radius:8px;font-size:var(--sm-font-size)">
-                대상자 <strong>${candidates.length}</strong>명 (기준: -15점 이하)
+                대상자 <strong>${candidates.length}</strong>명 (기준: -10점 이하)
             </div>
             ${candidates.map(c => `
                 <div class="bc-revival-row">
@@ -1672,7 +1672,6 @@ const BootcampApp = (() => {
         function scoreColor(score) {
             if (score > -5) return '';
             if (score > -10) return 'negative';
-            if (score > -15) return 'negative';
             if (score <= -25) return 'danger';
             return 'danger';
         }
@@ -1828,8 +1827,8 @@ const BootcampApp = (() => {
     }
 
     // 점수 임계값 상수 (경고 표시용)
-    const SCORE_REVIVAL_CANDIDATE = -13;
-    const SCORE_REVIVAL_ELIGIBLE = -15;
+    const SCORE_REVIVAL_CANDIDATE = -8;
+    const SCORE_REVIVAL_ELIGIBLE = -10;
     const SCORE_OUT_THRESHOLD = -25;
 
     function renderGroupMembers(members, mode) {
