@@ -223,12 +223,15 @@ function handleStudySessionCreate($method) {
     $levelLabel = "{$level}단계";
     $title = "[{$timeLabel}] {$levelLabel} {$nickname}님의 복습 스터디";
 
-    // DB 저장 (status=pending, zoom_status=pending)
+    // 고정 Zoom 링크 조회
+    $fixedZoomUrl = getSetting('study_fixed_zoom_url');
+
+    // DB 저장 (고정 Zoom 링크 사용 → 즉시 active/ready)
     $db->prepare("
         INSERT INTO study_sessions
-            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, status, zoom_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
-    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime]);
+            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, status, zoom_status, zoom_join_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'ready', ?)
+    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime, $fixedZoomUrl]);
 
     $sessionId = (int)$db->lastInsertId();
 
@@ -238,33 +241,11 @@ function handleStudySessionCreate($method) {
         saveCheck($db, $hostMemberId, $studyDate, $openTypeId, 1, 'automation', "study:{$sessionId}", null);
     }
 
-    // n8n webhook 호출하여 Zoom 생성
-    $zoomResult = callZoomWebhook($db, $sessionId, [
-        'study_session_id' => $sessionId,
+    jsonSuccess([
+        'session_id' => $sessionId,
         'title' => $title,
-        'study_date' => $studyDate,
-        'start_time' => $timeLabel,
-        'end_time' => $endAt->format('H:i'),
-        'duration' => 60,
-        'host_nickname' => $nickname,
-        'scheduled_at' => $startAt->format('c'),
-    ]);
-
-    if ($zoomResult['success']) {
-        jsonSuccess([
-            'session_id' => $sessionId,
-            'title' => $title,
-            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        ], '복습스터디가 생성되었습니다.');
-    } else {
-        // Zoom 실패해도 세션은 pending으로 유지
-        jsonSuccess([
-            'session_id' => $sessionId,
-            'title' => $title,
-            'zoom_status' => 'failed',
-            'zoom_error' => $zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다.',
-        ], '복습스터디가 생성되었지만 Zoom 회의실 생성에 실패했습니다. 상세에서 다시 시도할 수 있습니다.');
-    }
+        'zoom_join_url' => $fixedZoomUrl,
+    ], '복습스터디가 생성되었습니다.');
 }
 
 /**
@@ -304,15 +285,17 @@ function handleStudySessionRetryZoom($method) {
         jsonError('본인이 개설한 스터디만 재시도할 수 있습니다.', 403);
     }
 
-    $zoomResult = retryZoomForSession($db, $row);
+    // 고정 Zoom 링크로 재설정
+    $fixedZoomUrl = getSetting('study_fixed_zoom_url');
+    $db->prepare("
+        UPDATE study_sessions
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL, status = 'active'
+        WHERE id = ?
+    ")->execute([$fixedZoomUrl, $sessionId]);
 
-    if ($zoomResult['success']) {
-        jsonSuccess([
-            'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        ], 'Zoom 회의실이 생성되었습니다.');
-    } else {
-        jsonError($zoomResult['error'] ?? 'Zoom 회의실 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
-    }
+    jsonSuccess([
+        'zoom_join_url' => $fixedZoomUrl,
+    ], 'Zoom 링크가 설정되었습니다.');
 }
 
 /**
