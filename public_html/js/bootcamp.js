@@ -467,7 +467,7 @@ const BootcampApp = (() => {
 
         body.innerHTML = `
             ${scoringNotice}
-            <div style="overflow-x:auto">
+            <div class="bc-table-scroll">
                 <table class="bc-checklist-table">
                     <thead>
                         <tr>
@@ -535,7 +535,7 @@ const BootcampApp = (() => {
 
         // 날짜 헤더: MM/DD 형식, 최신 날짜가 오른쪽
         body.innerHTML = `
-            <div style="overflow-x:auto">
+            <div class="bc-table-scroll">
                 <table class="bc-checklist-table bc-checklist-mission-table">
                     <thead>
                         <tr>
