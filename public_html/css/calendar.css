@@ -99,6 +99,38 @@
 .cal-cell.today .cal-day { color: #fff !important; }
 .cal-cell.other-month .cal-day { color: var(--color-text-muted) !important; }
 
+/* ── Study Chip (shared across study page & admin pages) ─── */
+.study-chip {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 3px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    line-height: var(--leading-tight);
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: opacity var(--transition-fast);
+}
+.study-chip .chip-line1 { white-space: nowrap; }
+.study-chip .chip-line2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.study-chip:hover { opacity: 0.75; }
+
+.study-chip.status-active {
+    background: var(--color-primary-100);
+    color: var(--color-primary-700);
+}
+.study-chip.status-pending {
+    background: var(--color-accent-100);
+    color: var(--color-accent-600);
+}
+.study-chip.status-closed {
+    background: var(--color-gray-100);
+    color: var(--color-text-muted);
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 640px) {
     .cal-cell {
@@ -106,4 +138,8 @@
         padding: 2px;
     }
     .cal-day { font-size: var(--text-xs); }
+    .study-chip {
+        font-size: 10px;
+        padding: 1px 3px;
+    }
 }
