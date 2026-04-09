@@ -13,7 +13,7 @@
  * coach, sub_coach, head, subhead1, subhead2 역할을 가진 admin만 반환
  */
 function handleLectureCoaches() {
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $db = getDB();
 
     $stmt = $db->query("
@@ -33,7 +33,7 @@ function handleLectureCoaches() {
  */
 function handleLectureScheduleCreate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     // ── 입력값 추출 ──
@@ -253,7 +253,7 @@ function handleLectureSessionDetail() {
  */
 function handleLectureScheduleCancel($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $scheduleId = (int)($input['schedule_id'] ?? 0);
@@ -298,7 +298,7 @@ function handleLectureScheduleCancel($method) {
  */
 function handleLectureZoomRetry($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $scheduleId = (int)($input['schedule_id'] ?? 0);
@@ -338,7 +338,7 @@ function handleLectureZoomRetry($method) {
  */
 function handleLectureEventCreate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     // ── 입력값 추출 ──
@@ -445,7 +445,7 @@ function handleLectureEventCreate($method) {
  */
 function handleLectureEventCancel($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $eventId = (int)($input['event_id'] ?? 0);
@@ -498,7 +498,7 @@ function handleLectureEventDetail() {
  */
 function handleLectureEventZoomRetry($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $eventId = (int)($input['event_id'] ?? 0);

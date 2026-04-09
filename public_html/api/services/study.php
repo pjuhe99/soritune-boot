@@ -265,7 +265,7 @@ function handleStudySessionRetryZoom($method) {
     if ($adminHeader || !empty($_COOKIE['BOOT_ADMIN_SID'])) {
         // 관리자 인증 시도
         try {
-            $admin = requireAdmin(['operation', 'coach']);
+            $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
             $isAdmin = true;
         } catch (\Exception $e) {
             // admin 인증 실패 시 member로 fallback
@@ -302,7 +302,7 @@ function handleStudySessionRetryZoom($method) {
  * Zoom 실패 세션 목록 (관리자 전용)
  */
 function handleStudyZoomFailed() {
-    requireAdmin(['operation', 'coach']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $db = getDB();
 
     $cohortId = (int)($_GET['cohort_id'] ?? 0);

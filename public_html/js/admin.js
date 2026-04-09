@@ -225,6 +225,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
+                            <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
@@ -237,6 +238,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
                         <div class="tab-content" id="bc-tab-group-assign"></div>
+                        <div class="tab-content" id="tab-curriculum"></div>
                     </div>
                     </div>
                     ` : (role === 'leader' || role === 'subleader') ? `

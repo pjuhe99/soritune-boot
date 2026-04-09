@@ -104,7 +104,7 @@ function handleIntegrationCheckBulk($method) {
 }
 
 function handleIntegrationMemberMap() {
-    requireAdmin(['operation', 'coach']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $cohortId = (int)($_GET['cohort_id'] ?? 0);
     if (!$cohortId) jsonError('cohort_id 필요');
 
@@ -131,7 +131,7 @@ function handleIntegrationMemberMap() {
 }
 
 function handleIntegrationLogs() {
-    requireAdmin(['operation', 'coach']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $db = getDB();
     $stmt = $db->query("
         SELECT * FROM integration_logs
@@ -241,7 +241,7 @@ function handleIntegrationCafePosts($method) {
 
 function handleCafeRemapUnmapped($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    requireAdmin(['operation', 'coach']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
 
     $db = getDB();
 
@@ -304,7 +304,7 @@ function handleCafeRemapUnmapped($method) {
 }
 
 function handleCafePosts() {
-    requireAdmin(['operation', 'coach']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $db = getDB();
 
     $page = max(1, (int)($_GET['page'] ?? 1));

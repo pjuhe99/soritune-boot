@@ -24,7 +24,7 @@ function handleScoreLogs() {
 
 function handleScoreAdjust($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     $scoreChange = (int)($input['score_change'] ?? 0);
@@ -58,7 +58,7 @@ function handleScoreAdjust($method) {
 
 function handleScoreRecalculate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    $admin = requireAdmin(['operation', 'coach']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
     $memberId = (int)($input['member_id'] ?? 0);
     if (!$memberId) jsonError('member_id 필요');
