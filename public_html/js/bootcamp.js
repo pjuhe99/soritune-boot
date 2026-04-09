@@ -1915,7 +1915,7 @@ const BootcampApp = (() => {
         html += `<div class="db-section-title">필수 과제율 - 조별 비교</div>`;
         html += `<div style="overflow-x:auto"><table class="db-group-table">
             <thead><tr>
-                <th>조</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th>
+                <th>조</th><th>코치</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th>
             </tr></thead><tbody>`;
 
         const myGroupIds = (admin && admin.assigned_group_ids) || [];
@@ -1924,12 +1924,13 @@ const BootcampApp = (() => {
             html += `
                 <tr class="db-group-row${isMine ? ' db-my-group' : ''}" data-group-id="${g.id}">
                     <td><span class="db-chevron" id="chev-req-${g.id}">&#9654;</span> ${App.esc(g.name)}${isMine ? ' <span class="badge badge-primary badge-xs">MY</span>' : ''}</td>
+                    <td>${App.esc(g.coach || '-')}</td>
                     <td>${g.member_count}</td>
                     <td>${g.zoom_daily_rate}%</td>
                     <td>${g.inner33_rate}%</td>
                     <td>${g.speak_rate}%</td>
                 </tr>
-                <tr class="db-member-panel" id="panel-req-${g.id}"><td colspan="5">
+                <tr class="db-member-panel" id="panel-req-${g.id}"><td colspan="6">
                     <div class="db-member-list">${renderGroupMembers(d.members.filter(m => m.group_id === g.id), 'required')}</div>
                 </td></tr>
             `;
@@ -1940,12 +1941,12 @@ const BootcampApp = (() => {
         html += `<div class="db-section-title">선택 참여 현황 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(1인 평균 횟수)</span></div>`;
         html += `<div style="overflow-x:auto"><table class="db-group-table">
             <thead><tr>
-                <th>조</th><th>인원</th><th>복스 개설</th><th>복스 참여</th><th>하멈말</th>
+                <th>조</th><th>코치</th><th>인원</th><th>복스 개설</th><th>복스 참여</th><th>하멈말</th>
             </tr></thead><tbody>`;
 
         // 전체 행
         html += `<tr style="font-weight:var(--font-bold);background:var(--color-gray-50)">
-            <td>전체</td><td>${cs.member_count}</td>
+            <td>전체</td><td></td><td>${cs.member_count}</td>
             <td>${cs.optional_avg.bookclub_open}회</td>
             <td>${cs.optional_avg.bookclub_join}회</td>
             <td>${cs.optional_avg.hamemmal}회</td>
@@ -1957,12 +1958,13 @@ const BootcampApp = (() => {
             html += `
                 <tr class="db-group-row${isMine2 ? ' db-my-group' : ''}" data-group-id="opt-${g.id}">
                     <td><span class="db-chevron" id="chev-opt-${g.id}">&#9654;</span> ${App.esc(g.name)}${isMine2 ? ' <span class="badge badge-primary badge-xs">MY</span>' : ''}</td>
+                    <td>${App.esc(g.coach || '-')}</td>
                     <td>${g.member_count}</td>
                     <td>${oa.bookclub_open}회</td>
                     <td>${oa.bookclub_join}회</td>
                     <td>${oa.hamemmal}회</td>
                 </tr>
-                <tr class="db-member-panel" id="panel-opt-${g.id}"><td colspan="5">
+                <tr class="db-member-panel" id="panel-opt-${g.id}"><td colspan="6">
                     <div class="db-member-list">${renderGroupMembers(d.members.filter(m => m.group_id === g.id), 'optional')}</div>
                 </td></tr>
             `;

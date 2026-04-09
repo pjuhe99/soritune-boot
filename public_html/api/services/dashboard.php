@@ -208,6 +208,25 @@ function handleDashboardStats() {
         $groupAgg[$gid]['hamemmal_sum'] += $hamemmalCount;
     }
 
+    // 6.5. 조별 코치 조회
+    $groupIds = array_keys($groupAgg);
+    $coachMap = []; // group_id => "코치1, 코치2"
+    if ($groupIds) {
+        $gph = implode(',', array_fill(0, count($groupIds), '?'));
+        $stmt = $db->prepare("
+            SELECT cga.group_id, a.name
+            FROM coach_group_assignments cga
+            JOIN admins a ON cga.admin_id = a.id AND a.is_active = 1
+            WHERE cga.group_id IN ({$gph})
+            ORDER BY a.name
+        ");
+        $stmt->execute($groupIds);
+        foreach ($stmt->fetchAll() as $row) {
+            $gid = (int)$row['group_id'];
+            $coachMap[$gid] = isset($coachMap[$gid]) ? $coachMap[$gid] . ', ' . $row['name'] : $row['name'];
+        }
+    }
+
     // 7. 조별 비율 계산
     $groupResults = [];
     foreach ($groupAgg as $g) {
@@ -215,6 +234,7 @@ function handleDashboardStats() {
         $groupResults[] = [
             'id' => $g['id'],
             'name' => $g['name'],
+            'coach' => $coachMap[$g['id']] ?? '',
             'member_count' => $mc,
             'zoom_daily_rate' => ($mc * $totalDays > 0) ? round($g['zoom_sum'] / ($mc * $totalDays) * 100, 1) : 0,
             'inner33_rate' => ($mc * $totalDays > 0) ? round($g['inner33_sum'] / ($mc * $totalDays) * 100, 1) : 0,
