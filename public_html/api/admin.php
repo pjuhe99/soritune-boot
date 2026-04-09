@@ -1247,7 +1247,7 @@ case 'calendar_delete':
 // ── Curriculum (진도 관리) ───────────────────────────────────
 
 case 'curriculum_task_types':
-    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $types = [
         ['key' => 'progress',              'label' => '진도'],
         ['key' => 'event',                 'label' => '이벤트'],
@@ -1261,7 +1261,7 @@ case 'curriculum_task_types':
     break;
 
 case 'curriculum_list':
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $cohort = getEffectiveCohort($admin);
     $db = getDB();
     $stmt = $db->prepare('
@@ -1293,7 +1293,7 @@ case 'curriculum_list':
 
 case 'curriculum_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $cohort     = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
@@ -1342,7 +1342,7 @@ case 'curriculum_create':
 
 case 'curriculum_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $id         = (int)($input['id'] ?? 0);
@@ -1394,7 +1394,7 @@ case 'curriculum_update':
 
 case 'curriculum_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $id = (int)($input['id'] ?? 0);
