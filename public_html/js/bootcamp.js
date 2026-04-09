@@ -359,24 +359,76 @@ const BootcampApp = (() => {
     // ══════════════════════════════════════════════════════════
     // ── 체크리스트 ──
     // ══════════════════════════════════════════════════════════
+    let checklistViewMode = 'daily'; // 'daily' | 'mission'
+    let selectedMissionCode = '';
+
     async function loadChecklist() {
         const sec = document.getElementById('bc-tab-checklist');
         await loadGroups();
 
+        // 과제별 뷰에서 미션 선택용
+        const missionOpts = missionTypes.map(m =>
+            `<option value="${App.esc(m.code)}" ${m.code === selectedMissionCode ? 'selected' : ''}>${App.esc(m.name)}</option>`
+        ).join('');
+
         sec.innerHTML = `
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">체크리스트</span>
+                <div class="bc-view-toggle">
+                    <button class="btn btn-sm ${checklistViewMode === 'daily' ? 'btn-primary' : 'btn-secondary'}" id="bc-view-daily">일별</button>
+                    <button class="btn btn-sm ${checklistViewMode === 'mission' ? 'btn-primary' : 'btn-secondary'}" id="bc-view-mission">과제별</button>
+                </div>
                 <button class="btn btn-primary btn-sm" id="bc-checklist-save">저장</button>
             </div>
-            ${filterBarHtml()}
+            ${filterBarHtml({ date: checklistViewMode === 'daily' })}
+            <div class="bc-filters" id="bc-mission-filter" style="display:${checklistViewMode === 'mission' ? '' : 'none'}">
+                <div class="filter-item">
+                    <span class="filter-label">과제</span>
+                    <select id="fl-mission">${missionOpts}</select>
+                </div>
+            </div>
             <div id="bc-checklist-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
-        bindFilterEvents(renderChecklist);
+        // 뷰 토글 이벤트
+        document.getElementById('bc-view-daily').onclick = () => { checklistViewMode = 'daily'; loadChecklist(); };
+        document.getElementById('bc-view-mission').onclick = () => {
+            checklistViewMode = 'mission';
+            if (!selectedMissionCode && missionTypes.length) selectedMissionCode = missionTypes[0].code;
+            loadChecklist();
+        };
+
+        // 미션 필터 이벤트
+        const flMission = document.getElementById('fl-mission');
+        if (flMission) {
+            if (!selectedMissionCode && missionTypes.length) selectedMissionCode = missionTypes[0].code;
+            flMission.onchange = () => { selectedMissionCode = flMission.value; renderCurrentChecklist(); };
+        }
+
+        const renderCurrentChecklist = checklistViewMode === 'daily' ? renderChecklist : renderChecklistByMission;
+        bindFilterEvents(renderCurrentChecklist);
         document.getElementById('bc-checklist-save').onclick = saveChecklist;
-        renderChecklist();
+        renderCurrentChecklist();
     }
 
+    function memberCellHtml(m) {
+        return `
+            <button class="bc-member-btn" data-member-id="${m.id}" type="button">
+                <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
+                <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
+            </button>`;
+    }
+
+    function bindMemberButtons(container) {
+        container.querySelectorAll('.bc-member-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                showMemberChecklistPopup(parseInt(btn.dataset.memberId));
+            };
+        });
+    }
+
+    // ── 일별 뷰 (기존) ──
     async function renderChecklist() {
         const body = document.getElementById('bc-checklist-body');
         body.innerHTML = '<div class="empty-state">로딩 중...</div>';
@@ -395,7 +447,6 @@ const BootcampApp = (() => {
             return;
         }
 
-        // 감점 기간 안내
         const isOutOfScoring = (scoring_start && selectedDate < scoring_start) || (scoring_end && selectedDate > scoring_end);
         let scoringNotice = '';
         if (isOutOfScoring) {
@@ -405,12 +456,11 @@ const BootcampApp = (() => {
             scoringNotice = `<div class="bc-scoring-notice">이 날짜는 점수에 반영되지 않습니다. ${reason}</div>`;
         }
 
-        // 초기 체크 상태 저장 (변경 감지용)
         checklistInitialState = {};
         members.forEach(m => {
             const mc = checks[m.id] || {};
             mt.forEach(mi => {
-                const key = `${m.id}_${mi.code}`;
+                const key = `${m.id}_${mi.code}_${selectedDate}`;
                 checklistInitialState[key] = !!(mc[mi.id] && mc[mi.id].status);
             });
         });
@@ -433,16 +483,13 @@ const BootcampApp = (() => {
                             const sc = scoreClass(parseInt(m.current_score));
                             return `
                             <tr>
-                                <td>
-                                    <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
-                                    <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
-                                </td>
+                                <td>${memberCellHtml(m)}</td>
                                 <td class="score-cell ${sc}">${m.current_score}</td>
                                 <td>${m.current_coin || 0}</td>
                                 ${mt.map(mi => {
                                     const cv = mc[mi.id];
                                     const checked = cv && cv.status ? 'checked' : '';
-                                    return `<td><input type="checkbox" class="bc-check" data-member="${m.id}" data-mission="${mi.code}" ${checked}></td>`;
+                                    return `<td><input type="checkbox" class="bc-check" data-member="${m.id}" data-mission="${mi.code}" data-date="${selectedDate}" ${checked}></td>`;
                                 }).join('')}
                             </tr>`;
                         }).join('')}
@@ -450,19 +497,91 @@ const BootcampApp = (() => {
                 </table>
             </div>
         `;
+        bindMemberButtons(body);
     }
 
+    // ── 과제별 뷰 ──
+    async function renderChecklistByMission() {
+        const body = document.getElementById('bc-checklist-body');
+        body.innerHTML = '<div class="empty-state">로딩 중...</div>';
+
+        if (!selectedMissionCode) {
+            body.innerHTML = '<div class="empty-state">과제를 선택해주세요.</div>';
+            return;
+        }
+
+        const params = { cohort_id: selectedCohortId, mission_code: selectedMissionCode };
+        if (selectedGroupId) params.group_id = selectedGroupId;
+        if (selectedStageNo) params.stage_no = selectedStageNo;
+        if (selectedSort) params.sort = selectedSort;
+
+        const r = await App.get(API + 'checklist_by_mission', params);
+        if (!r.success) return;
+
+        const { members, checks, dates } = r;
+        if (!members.length) {
+            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+            return;
+        }
+
+        checklistInitialState = {};
+        members.forEach(m => {
+            const mc = checks[m.id] || {};
+            dates.forEach(d => {
+                const key = `${m.id}_${selectedMissionCode}_${d}`;
+                checklistInitialState[key] = !!(mc[d]);
+            });
+        });
+
+        // 날짜 헤더: MM/DD 형식, 최신 날짜가 오른쪽
+        body.innerHTML = `
+            <div style="overflow-x:auto">
+                <table class="bc-checklist-table bc-checklist-mission-table">
+                    <thead>
+                        <tr>
+                            <th class="sticky-col">회원</th>
+                            <th>점수</th>
+                            ${dates.map(d => {
+                                const dd = d.substring(5).replace('-', '/');
+                                const dow = ['일','월','화','수','목','금','토'][new Date(d + 'T00:00:00').getDay()];
+                                return `<th title="${d}"><div>${dd}</div><div style="font-size:10px;color:#888">${dow}</div></th>`;
+                            }).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${members.map(m => {
+                            const mc = checks[m.id] || {};
+                            const sc = scoreClass(parseInt(m.current_score));
+                            return `
+                            <tr>
+                                <td class="sticky-col">${memberCellHtml(m)}</td>
+                                <td class="score-cell ${sc}">${m.current_score}</td>
+                                ${dates.map(d => {
+                                    const checked = mc[d] ? 'checked' : '';
+                                    return `<td><input type="checkbox" class="bc-check" data-member="${m.id}" data-mission="${selectedMissionCode}" data-date="${d}" ${checked}></td>`;
+                                }).join('')}
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        bindMemberButtons(body);
+    }
+
+    // ── 저장 (일별/과제별 공통) ──
     async function saveChecklist() {
         const checkboxes = document.querySelectorAll('.bc-check');
         const items = [];
         let hasChanges = false;
         checkboxes.forEach(cb => {
-            const key = `${cb.dataset.member}_${cb.dataset.mission}`;
+            const key = `${cb.dataset.member}_${cb.dataset.mission}_${cb.dataset.date}`;
             const initial = checklistInitialState[key] || false;
             if (cb.checked !== initial) hasChanges = true;
             items.push({
                 member_id: parseInt(cb.dataset.member),
                 mission_type_code: cb.dataset.mission,
+                check_date: cb.dataset.date,
                 status: cb.checked,
             });
         });
@@ -474,14 +593,100 @@ const BootcampApp = (() => {
 
         App.showLoading();
         const r = await App.post(API + 'check_bulk_save', {
-            check_date: selectedDate,
+            check_date: checklistViewMode === 'daily' ? selectedDate : '',
             items,
         });
         App.hideLoading();
         if (r.success) {
             Toast.success(r.message);
-            renderChecklist();
+            if (checklistViewMode === 'daily') renderChecklist();
+            else renderChecklistByMission();
         }
+    }
+
+    // ── 회원별 전체 체크리스트 팝업 ──
+    async function showMemberChecklistPopup(memberId) {
+        App.showLoading();
+        const r = await App.get(API + 'member_checklist_all', { cohort_id: selectedCohortId, member_id: memberId });
+        App.hideLoading();
+        if (!r.success) return;
+
+        const { member, checks, dates, mission_types: mt } = r;
+        const reversedDates = [...dates].reverse(); // 최신 날짜가 위
+
+        let popupInitial = {};
+        reversedDates.forEach(d => {
+            const dc = checks[d] || {};
+            mt.forEach(mi => {
+                const key = `${memberId}_${mi.code}_${d}`;
+                popupInitial[key] = !!(dc[mi.id]);
+            });
+        });
+
+        const title = `${member.nickname}${member.real_name ? ` (${member.real_name})` : ''} — ${member.group_name || '-'} · ${member.stage_no}단계 · 점수: ${member.current_score}`;
+
+        const tableHtml = `
+            <div style="overflow:auto;max-height:60vh">
+                <table class="bc-checklist-table bc-popup-table">
+                    <thead>
+                        <tr>
+                            <th class="sticky-col">날짜</th>
+                            ${mt.map(m => `<th title="${App.esc(m.name)}">${App.esc(missionShort(m.name))}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${reversedDates.map(d => {
+                            const dc = checks[d] || {};
+                            const dd = d.substring(5).replace('-', '/');
+                            const dow = ['일','월','화','수','목','금','토'][new Date(d + 'T00:00:00').getDay()];
+                            return `
+                            <tr>
+                                <td class="sticky-col" style="white-space:nowrap">${dd} (${dow})</td>
+                                ${mt.map(mi => {
+                                    const checked = dc[mi.id] ? 'checked' : '';
+                                    return `<td><input type="checkbox" class="bc-popup-check" data-member="${memberId}" data-mission="${mi.code}" data-date="${d}" ${checked}></td>`;
+                                }).join('')}
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        App.modal(title, tableHtml, async () => {
+            // 저장
+            const cbs = document.querySelectorAll('.bc-popup-check');
+            const items = [];
+            let hasChanges = false;
+            cbs.forEach(cb => {
+                const key = `${cb.dataset.member}_${cb.dataset.mission}_${cb.dataset.date}`;
+                const initial = popupInitial[key] || false;
+                if (cb.checked !== initial) {
+                    hasChanges = true;
+                    items.push({
+                        member_id: parseInt(cb.dataset.member),
+                        mission_type_code: cb.dataset.mission,
+                        check_date: cb.dataset.date,
+                        status: cb.checked,
+                    });
+                }
+            });
+
+            if (!hasChanges) {
+                Toast.info('변경된 항목이 없습니다.');
+                return false;
+            }
+
+            const sr = await App.post(API + 'check_bulk_save', { check_date: '', items });
+            if (sr.success) {
+                Toast.success(sr.message);
+                // 메인 체크리스트도 갱신
+                if (checklistViewMode === 'daily') renderChecklist();
+                else renderChecklistByMission();
+                return true; // 모달 닫기
+            }
+            return false;
+        }, '저장');
     }
 
     // ══════════════════════════════════════════════════════════

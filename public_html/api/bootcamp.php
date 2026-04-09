@@ -186,7 +186,9 @@ case 'mission_types':
 
 // ── Checklist & Status Board ─────────────────────────────────
 
-case 'checklist':        handleChecklist(); break;
+case 'checklist':               handleChecklist(); break;
+case 'checklist_by_mission':    handleChecklistByMission(); break;
+case 'member_checklist_all':    handleMemberChecklistAll(); break;
 case 'check_save':
     $admin = requireAdmin(['operation', 'leader', 'subleader', 'coach', 'head', 'subhead1', 'subhead2']);
     handleCheckSave($method, $admin);

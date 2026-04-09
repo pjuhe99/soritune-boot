@@ -106,7 +106,9 @@ function handleCheckBulkSave($method, $admin) {
     $checkDate = $input['check_date'] ?? '';
     $items = $input['items'] ?? [];
 
-    if (!$checkDate || empty($items)) jsonError('check_date, items 필요');
+    if (empty($items)) jsonError('items 필요');
+    // check_date는 top-level 또는 item-level에서 제공 가능
+    if (!$checkDate && empty($items[0]['check_date'])) jsonError('check_date 필요');
 
     $db = getDB();
     $leaderGroup = getLeaderGroupScope($admin);
@@ -131,7 +133,10 @@ function handleCheckBulkSave($method, $admin) {
         $missionTypeId = getMissionTypeId($db, $missionCode);
         if (!$missionTypeId) { $results['error']++; continue; }
 
-        $r = saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, 'manual', null, $admin['admin_id'], true);
+        $itemDate = $item['check_date'] ?? $checkDate;
+        if (!$itemDate) { $results['error']++; continue; }
+
+        $r = saveCheck($db, $memberId, $itemDate, $missionTypeId, $status, 'manual', null, $admin['admin_id'], true);
         if ($r['action'] === 'skipped') $results['skipped']++;
         elseif ($r['action'] === 'error') $results['error']++;
         else {
@@ -147,6 +152,159 @@ function handleCheckBulkSave($method, $admin) {
     }
 
     jsonSuccess($results, "처리 완료: {$results['success']}건 저장, {$results['skipped']}건 스킵, {$results['error']}건 오류");
+}
+
+/**
+ * 과제별 체크리스트: 특정 미션의 전체 기간 체크 현황
+ */
+function handleChecklistByMission() {
+    requireAdmin();
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    $missionCode = $_GET['mission_code'] ?? '';
+    if (!$cohortId || !$missionCode) jsonError('cohort_id, mission_code 필요');
+
+    $db = getDB();
+
+    // 기수 기간
+    $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
+    $stmt->execute([$cohortId]);
+    $ci = $stmt->fetch();
+    if (!$ci) jsonError('기수를 찾을 수 없습니다.');
+
+    $startDate = $ci['start_date'];
+    $today = date('Y-m-d');
+    $endDate = ($ci['end_date'] && $ci['end_date'] < $today) ? $ci['end_date'] : $today;
+
+    // 날짜 배열 생성
+    $dates = [];
+    $cur = $startDate;
+    while ($cur <= $endDate) {
+        $dates[] = $cur;
+        $cur = date('Y-m-d', strtotime($cur . ' +1 day'));
+    }
+
+    // 회원 목록
+    $where = ["bm.cohort_id = ?", "bm.is_active = 1"];
+    $params = [$cohortId];
+    if (!empty($_GET['group_id'])) { $where[] = "bm.group_id = ?"; $params[] = (int)$_GET['group_id']; }
+    if (!empty($_GET['stage_no'])) { $where[] = "bm.stage_no = ?"; $params[] = (int)$_GET['stage_no']; }
+
+    $sortMap = [
+        'name_asc'     => 'bm.real_name ASC, bm.nickname ASC',
+        'nickname_asc' => 'bm.nickname ASC, bm.real_name ASC',
+        'score_asc'    => 'current_score ASC, bm.nickname ASC',
+    ];
+    $orderBy = $sortMap[$_GET['sort'] ?? ''] ?? 'bg.name, bm.nickname';
+
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
+               bm.group_id, bg.name AS group_name,
+               COALESCE(ms.current_score, 0) AS current_score,
+               COALESCE(mcb.current_coin, 0) AS current_coin
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY {$orderBy}
+    ");
+    $stmt->execute($params);
+    $members = $stmt->fetchAll();
+    $memberIds = array_column($members, 'id');
+
+    // 미션 타입 ID
+    $missionTypeId = getMissionTypeId($db, $missionCode);
+    if (!$missionTypeId) jsonError("유효하지 않은 mission_code: {$missionCode}");
+
+    // 체크 데이터
+    $checks = [];
+    if ($memberIds) {
+        $ph = implode(',', array_fill(0, count($memberIds), '?'));
+        $stmt = $db->prepare("
+            SELECT member_id, check_date, status
+            FROM member_mission_checks
+            WHERE member_id IN ({$ph}) AND mission_type_id = ? AND check_date BETWEEN ? AND ?
+        ");
+        $stmt->execute(array_merge($memberIds, [$missionTypeId, $startDate, $endDate]));
+        foreach ($stmt->fetchAll() as $c) {
+            $checks[$c['member_id']][$c['check_date']] = (int)$c['status'];
+        }
+    }
+
+    $missionTypes = $db->query("SELECT id, code, name FROM mission_types WHERE is_active = 1 ORDER BY display_order")->fetchAll();
+
+    jsonSuccess([
+        'members' => $members,
+        'checks' => $checks,
+        'dates' => $dates,
+        'mission_code' => $missionCode,
+        'mission_types' => $missionTypes,
+    ]);
+}
+
+/**
+ * 회원별 전체 체크리스트: 특정 회원의 모든 미션 × 모든 날짜
+ */
+function handleMemberChecklistAll() {
+    requireAdmin();
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    $memberId = (int)($_GET['member_id'] ?? 0);
+    if (!$cohortId || !$memberId) jsonError('cohort_id, member_id 필요');
+
+    $db = getDB();
+
+    // 회원 정보
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.nickname, bm.real_name, bm.stage_no,
+               bm.group_id, bg.name AS group_name,
+               COALESCE(ms.current_score, 0) AS current_score,
+               COALESCE(mcb.current_coin, 0) AS current_coin
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
+        WHERE bm.id = ? AND bm.cohort_id = ?
+    ");
+    $stmt->execute([$memberId, $cohortId]);
+    $member = $stmt->fetch();
+    if (!$member) jsonError('회원을 찾을 수 없습니다.');
+
+    // 기수 기간
+    $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
+    $stmt->execute([$cohortId]);
+    $ci = $stmt->fetch();
+    $startDate = $ci['start_date'];
+    $today = date('Y-m-d');
+    $endDate = ($ci['end_date'] && $ci['end_date'] < $today) ? $ci['end_date'] : $today;
+
+    $dates = [];
+    $cur = $startDate;
+    while ($cur <= $endDate) {
+        $dates[] = $cur;
+        $cur = date('Y-m-d', strtotime($cur . ' +1 day'));
+    }
+
+    // 미션 타입
+    $missionTypes = $db->query("SELECT id, code, name FROM mission_types WHERE is_active = 1 ORDER BY display_order")->fetchAll();
+
+    // 전체 체크 데이터
+    $stmt = $db->prepare("
+        SELECT check_date, mission_type_id, status
+        FROM member_mission_checks
+        WHERE member_id = ? AND check_date BETWEEN ? AND ?
+    ");
+    $stmt->execute([$memberId, $startDate, $endDate]);
+    $checks = [];
+    foreach ($stmt->fetchAll() as $c) {
+        $checks[$c['check_date']][$c['mission_type_id']] = (int)$c['status'];
+    }
+
+    jsonSuccess([
+        'member' => $member,
+        'checks' => $checks,
+        'dates' => $dates,
+        'mission_types' => $missionTypes,
+    ]);
 }
 
 function handleStatusBoard() {
