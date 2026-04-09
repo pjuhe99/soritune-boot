@@ -537,9 +537,12 @@ const BootcampApp = (() => {
             if (isOut) {
                 warningClass = 'warning-out';
                 warningBadge = '<span class="badge badge-out">OUT</span>';
-            } else if (isRevivalCandidate) {
+            } else if (isRevivalEligible) {
                 warningClass = 'warning-black';
                 warningBadge = '<span class="badge badge-black">부활대상</span>';
+            } else if (isRevivalCandidate) {
+                warningClass = 'warning-yellow';
+                warningBadge = '<span class="badge badge-yellow">부활후보</span>';
             }
             if (missCount >= 5) {
                 warningClass = warningClass || 'warning-red';
