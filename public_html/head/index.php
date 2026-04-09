@@ -31,6 +31,7 @@
     <script src="/js/admin.js<?= v('/js/admin.js') ?>"></script>
     <script src="/js/coin.js<?= v('/js/coin.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
+    <script src="/js/admin-study.js<?= v('/js/admin-study.js') ?>"></script>
     <script src="/js/lecture.js<?= v('/js/lecture.js') ?>"></script>
     <script>AdminApp.init();</script>
 </body>

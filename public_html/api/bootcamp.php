@@ -260,6 +260,21 @@ case 'study_session_qr':        handleStudySessionQr($method); break;
 case 'study_session_retry_zoom': handleStudySessionRetryZoom($method); break;
 case 'study_zoom_failed':        handleStudyZoomFailed(); break;
 
+// ── Admin Study (어드민 복습스터디 관리) ────────────────────
+
+case 'admin_study_groups':      handleAdminStudyGroups(); break;
+case 'admin_study_members':     handleAdminStudyMembers(); break;
+case 'admin_study_sessions':    handleAdminStudySessions(); break;
+case 'admin_study_detail':      handleAdminStudyDetail(); break;
+case 'admin_study_create':
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    handleAdminStudyCreate($method, $admin);
+    break;
+case 'admin_study_cancel':
+    $admin = requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    handleAdminStudyCancel($method, $admin);
+    break;
+
 // ── Lecture (코치 강의) ────────────────────────────────────
 
 case 'lecture_coaches':           handleLectureCoaches(); break;

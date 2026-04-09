@@ -493,6 +493,227 @@ function retryZoomForSession($db, $sessionRow) {
     ]);
 }
 
+// ══════════════════════════════════════════════════════════════
+// Admin Study API
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 어드민용 월별 스터디 목록
+ */
+function handleAdminStudySessions() {
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    $month = $_GET['month'] ?? date('Y-m');
+    if (!$cohortId) jsonError('cohort_id 필요');
+    if (!preg_match('/^\d{4}-\d{2}$/', $month)) jsonError('month 형식: YYYY-MM');
+
+    $startDate = $month . '-01';
+    $endDate = date('Y-m-t', strtotime($startDate));
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT ss.id, ss.title, ss.level, ss.study_date, ss.start_time, ss.end_time,
+               ss.status, ss.zoom_status, ss.host_member_id,
+               bm.nickname AS host_nickname,
+               (SELECT COUNT(*) FROM qr_attendance qa WHERE qa.qr_session_id = ss.qr_session_id) AS participant_count
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.cohort_id = ?
+          AND ss.study_date BETWEEN ? AND ?
+          AND ss.status != 'cancelled'
+        ORDER BY ss.study_date, ss.start_time
+    ");
+    $stmt->execute([$cohortId, $startDate, $endDate]);
+    jsonSuccess(['month' => $month, 'sessions' => $stmt->fetchAll()]);
+}
+
+/**
+ * 어드민용 스터디 상세
+ */
+function handleAdminStudyDetail() {
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    $sessionId = (int)($_GET['session_id'] ?? 0);
+    if (!$sessionId) jsonError('session_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT ss.*, bm.nickname AS host_nickname, bm.real_name AS host_real_name
+        FROM study_sessions ss
+        JOIN bootcamp_members bm ON ss.host_member_id = bm.id
+        WHERE ss.id = ?
+    ");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('스터디를 찾을 수 없습니다.', 404);
+
+    unset($session['password']);
+
+    // 참여자 목록
+    $participants = [];
+    if ($session['qr_session_id']) {
+        $pStmt = $db->prepare("
+            SELECT qa.member_id, qa.scanned_at, bm.nickname, bm.real_name, bg.name AS group_name
+            FROM qr_attendance qa
+            JOIN bootcamp_members bm ON qa.member_id = bm.id
+            LEFT JOIN bootcamp_groups bg ON qa.group_id = bg.id
+            WHERE qa.qr_session_id = ?
+            ORDER BY qa.scanned_at
+        ");
+        $pStmt->execute([$session['qr_session_id']]);
+        $participants = $pStmt->fetchAll();
+    }
+
+    jsonSuccess([
+        'session' => $session,
+        'participants' => $participants,
+        'can_cancel' => in_array($session['status'], ['pending', 'active']),
+    ]);
+}
+
+/**
+ * 어드민용 스터디 생성 (회원 선택 가능, 3시간 제한 없음)
+ */
+function handleAdminStudyCreate($method, $admin) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $input = getJsonInput();
+
+    $hostMemberId = (int)($input['host_member_id'] ?? 0);
+    $studyDate = $input['study_date'] ?? '';
+    $startTime = $input['start_time'] ?? '';
+    $level = (int)($input['level'] ?? 1);
+
+    if (!$hostMemberId) jsonError('host_member_id (회원) 필요');
+    if (!$studyDate || !$startTime) jsonError('study_date, start_time 필요');
+    if (!in_array($level, [1, 2])) jsonError('level은 1 또는 2만 가능합니다.');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) jsonError('study_date 형식: YYYY-MM-DD');
+    if (!preg_match('/^\d{2}:(00|30)$/', $startTime)) jsonError('start_time은 00분 또는 30분 단위만 허용됩니다.');
+
+    // 과거 시간 체크
+    $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
+    $startAt = new DateTime("{$studyDate} {$startTime}", new DateTimeZone('Asia/Seoul'));
+    if ($startAt <= $now) {
+        jsonError('과거 시간에는 복습스터디를 생성할 수 없습니다.');
+    }
+
+    $endAt = clone $startAt;
+    $endAt->modify('+1 hour');
+    $endTime = $endAt->format('H:i:s');
+    $startTimeFull = $startAt->format('H:i:s');
+
+    $db = getDB();
+
+    $hostRow = $db->prepare("SELECT id, nickname, cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $hostRow->execute([$hostMemberId]);
+    $hostData = $hostRow->fetch();
+    if (!$hostData) jsonError('회원 정보를 찾을 수 없습니다.');
+
+    $cohortId = (int)$hostData['cohort_id'];
+    $nickname = $hostData['nickname'];
+
+    $overlap = checkTimeOverlap($db, $cohortId, $studyDate, $startTimeFull, $endTime);
+    if ($overlap) {
+        jsonError("이미 해당 날짜/시간에 예약된 복습스터디가 있습니다: {$overlap['title']}");
+    }
+
+    $timeLabel = substr($startTime, 0, 5);
+    $title = "[{$timeLabel}] {$level}단계 {$nickname}님의 복습 스터디";
+    $fixedZoomUrl = getSetting('study_fixed_zoom_url');
+
+    $db->prepare("
+        INSERT INTO study_sessions
+            (cohort_id, host_member_id, level, title, study_date, start_time, end_time, status, zoom_status, zoom_join_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'ready', ?)
+    ")->execute([$cohortId, $hostMemberId, $level, $title, $studyDate, $startTimeFull, $endTime, $fixedZoomUrl]);
+
+    $sessionId = (int)$db->lastInsertId();
+
+    $openTypeId = getMissionTypeId($db, 'bookclub_open');
+    if ($openTypeId) {
+        saveCheck($db, $hostMemberId, $studyDate, $openTypeId, 1, 'automation', "study:{$sessionId}", null);
+    }
+
+    jsonSuccess([
+        'session_id' => $sessionId,
+        'title' => $title,
+    ], '복습스터디가 생성되었습니다.');
+}
+
+/**
+ * 어드민용 스터디 취소 (호스트 제한 없음, 시간 제한 없음)
+ */
+function handleAdminStudyCancel($method, $admin) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $input = getJsonInput();
+    $sessionId = (int)($input['session_id'] ?? 0);
+    if (!$sessionId) jsonError('session_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM study_sessions WHERE id = ? AND status IN ('pending','active')");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('스터디를 찾을 수 없거나 이미 취소되었습니다.', 404);
+
+    $db->prepare("UPDATE study_sessions SET status = 'cancelled' WHERE id = ?")->execute([$sessionId]);
+
+    if ($session['qr_session_id']) {
+        $db->prepare("UPDATE qr_sessions SET status = 'closed', closed_at = NOW() WHERE id = ? AND status = 'active'")
+           ->execute([$session['qr_session_id']]);
+    }
+
+    $openTypeId = getMissionTypeId($db, 'bookclub_open');
+    if ($openTypeId) {
+        saveCheck($db, $session['host_member_id'], $session['study_date'], $openTypeId, 0, 'automation', "study_cancel:{$sessionId}", null);
+    }
+
+    jsonSuccess([], '복습스터디가 취소되었습니다.');
+}
+
+/**
+ * 어드민용 조 목록
+ */
+function handleAdminStudyGroups() {
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    if (!$cohortId) jsonError('cohort_id 필요');
+
+    $db = getDB();
+    $stmt = $db->prepare("SELECT id, name FROM bootcamp_groups WHERE cohort_id = ? ORDER BY name");
+    $stmt->execute([$cohortId]);
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
+}
+
+/**
+ * 어드민용 회원 목록 (스터디 생성시 회원 선택용)
+ */
+function handleAdminStudyMembers() {
+    requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    if (!$cohortId) jsonError('cohort_id 필요');
+
+    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'withdrawn'"];
+    $params = [$cohortId];
+
+    if (!empty($_GET['group_id'])) {
+        $where[] = "bm.group_id = ?";
+        $params[] = (int)$_GET['group_id'];
+    }
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.nickname, bm.real_name, bm.group_id, bg.name AS group_name
+        FROM bootcamp_members bm
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        WHERE " . implode(' AND ', $where) . "
+        ORDER BY bg.name, bm.nickname
+    ");
+    $stmt->execute($params);
+    jsonSuccess(['members' => $stmt->fetchAll()]);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Helpers
+// ══════════════════════════════════════════════════════════════
+
 /**
  * 동일 시작시간 중복 검증
  * 같은 날짜, 같은 시작 시간에 이미 세션이 있으면 차단

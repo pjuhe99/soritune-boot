@@ -189,6 +189,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                             <button class="tab" data-tab="#tab-issues" data-hash="issues">오류 문의</button>
                             <button class="tab" data-tab="#tab-bulk-register" data-hash="bulk-register">일괄 등록</button>
+                            <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
@@ -208,6 +209,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-curriculum"></div>
                         <div class="tab-content" id="tab-issues"></div>
                         <div class="tab-content" id="tab-bulk-register"></div>
+                        <div class="tab-content" id="bc-tab-study"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -226,6 +228,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
+                            <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
@@ -239,6 +242,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-groups"></div>
                         <div class="tab-content" id="bc-tab-group-assign"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
+                        <div class="tab-content" id="bc-tab-study"></div>
                     </div>
                     </div>
                     ` : (role === 'leader' || role === 'subleader') ? `
@@ -272,6 +276,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">특강 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
+                            <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
@@ -285,6 +290,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-group-assign"></div>
                         <div class="tab-content" id="tab-head-lectures"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
+                        <div class="tab-content" id="bc-tab-study"></div>
                     </div>
                     </div>
                     `}
@@ -531,6 +537,25 @@ const AdminApp = (() => {
                     }
                 });
                 curObserver.observe(curTab, { attributes: true, attributeFilter: ['class'] });
+            }
+        }
+
+        // Admin Study 탭 lazy load (coach/head/operation 공통)
+        if (typeof AdminStudyApp !== 'undefined') {
+            const studyTab = document.getElementById('bc-tab-study');
+            if (studyTab) {
+                const studyObs = new MutationObserver(async () => {
+                    if (studyTab.classList.contains('active') && !studyTab.dataset.loaded) {
+                        studyTab.dataset.loaded = '1';
+                        const rCohorts = await App.get('/api/bootcamp.php?action=cohorts');
+                        const cohorts = rCohorts.cohorts || [];
+                        const activeCohort = cohorts.find(c => c.is_active) || cohorts[0];
+                        if (activeCohort) {
+                            AdminStudyApp.initTab(studyTab, admin, parseInt(activeCohort.id));
+                        }
+                    }
+                });
+                studyObs.observe(studyTab, { attributes: true, attributeFilter: ['class'] });
             }
         }
 
