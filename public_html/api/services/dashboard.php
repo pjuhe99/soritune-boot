@@ -166,6 +166,7 @@ function handleDashboardStats() {
         $zoomRate = $totalDays > 0 ? round($zoomDone / $totalDays * 100, 1) : 0;
         $inner33Rate = $totalDays > 0 ? round($inner33Done / $totalDays * 100, 1) : 0;
         $speakRate = $totalMondays > 0 ? round($speakDone / $totalMondays * 100, 1) : 0;
+        $avgRate = round(($zoomRate + $inner33Rate + $speakRate) / 3, 1);
 
         $memberResult = [
             'id' => $mid,
@@ -180,6 +181,7 @@ function handleDashboardStats() {
                 'zoom_daily' => ['done' => $zoomDone, 'total' => $totalDays, 'rate' => $zoomRate],
                 'inner33' => ['done' => $inner33Done, 'total' => $totalDays, 'rate' => $inner33Rate],
                 'speak_mission' => ['done' => $speakDone, 'total' => $totalMondays, 'rate' => $speakRate],
+                'avg_rate' => $avgRate,
             ],
             'optional' => [
                 'bookclub_open' => $bookOpenCount,
@@ -236,9 +238,10 @@ function handleDashboardStats() {
             'name' => $g['name'],
             'coach' => $coachMap[$g['id']] ?? '',
             'member_count' => $mc,
-            'zoom_daily_rate' => ($mc * $totalDays > 0) ? round($g['zoom_sum'] / ($mc * $totalDays) * 100, 1) : 0,
-            'inner33_rate' => ($mc * $totalDays > 0) ? round($g['inner33_sum'] / ($mc * $totalDays) * 100, 1) : 0,
-            'speak_rate' => ($mc * $totalMondays > 0) ? round($g['speak_sum'] / ($mc * $totalMondays) * 100, 1) : 0,
+            'zoom_daily_rate' => $zdr = ($mc * $totalDays > 0) ? round($g['zoom_sum'] / ($mc * $totalDays) * 100, 1) : 0,
+            'inner33_rate' => $i3r = ($mc * $totalDays > 0) ? round($g['inner33_sum'] / ($mc * $totalDays) * 100, 1) : 0,
+            'speak_rate' => $spr = ($mc * $totalMondays > 0) ? round($g['speak_sum'] / ($mc * $totalMondays) * 100, 1) : 0,
+            'avg_rate' => round(($zdr + $i3r + $spr) / 3, 1),
             'optional_avg' => [
                 'bookclub_open' => $mc > 0 ? round($g['book_open_sum'] / $mc, 1) : 0,
                 'bookclub_join' => $mc > 0 ? round($g['book_join_sum'] / $mc, 1) : 0,
@@ -260,9 +263,10 @@ function handleDashboardStats() {
 
     $cohortSummary = [
         'member_count' => $totalMembers,
-        'zoom_daily_rate' => ($totalMembers * $totalDays > 0) ? round($cohortZoomSum / ($totalMembers * $totalDays) * 100, 1) : 0,
-        'inner33_rate' => ($totalMembers * $totalDays > 0) ? round($cohortInner33Sum / ($totalMembers * $totalDays) * 100, 1) : 0,
-        'speak_rate' => ($totalMembers * $totalMondays > 0) ? round($cohortSpeakSum / ($totalMembers * $totalMondays) * 100, 1) : 0,
+        'zoom_daily_rate' => $csZdr = ($totalMembers * $totalDays > 0) ? round($cohortZoomSum / ($totalMembers * $totalDays) * 100, 1) : 0,
+        'inner33_rate' => $csI3r = ($totalMembers * $totalDays > 0) ? round($cohortInner33Sum / ($totalMembers * $totalDays) * 100, 1) : 0,
+        'speak_rate' => $csSpr = ($totalMembers * $totalMondays > 0) ? round($cohortSpeakSum / ($totalMembers * $totalMondays) * 100, 1) : 0,
+        'avg_rate' => round(($csZdr + $csI3r + $csSpr) / 3, 1),
         'optional_avg' => [
             'bookclub_open' => $totalMembers > 0 ? round($cohortBookOpenSum / $totalMembers, 1) : 0,
             'bookclub_join' => $totalMembers > 0 ? round($cohortBookJoinSum / $totalMembers, 1) : 0,

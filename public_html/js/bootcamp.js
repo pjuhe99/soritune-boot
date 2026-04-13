@@ -1908,6 +1908,12 @@ const BootcampApp = (() => {
                     <div class="db-metric-bar"><div class="db-metric-bar-fill" style="width:${cs.speak_rate}%"></div></div>
                     <div class="db-metric-sub">총 ${d.total_mondays}주 (월요일)</div>
                 </div>
+                <div class="db-metric-card">
+                    <div class="db-metric-label">평균</div>
+                    <div class="db-metric-value">${cs.avg_rate}%</div>
+                    <div class="db-metric-bar"><div class="db-metric-bar-fill" style="width:${cs.avg_rate}%"></div></div>
+                    <div class="db-metric-sub">3개 과제 평균</div>
+                </div>
             </div>
         `;
 
@@ -1915,7 +1921,7 @@ const BootcampApp = (() => {
         html += `<div class="db-section-title">필수 과제율 - 조별 비교</div>`;
         html += `<div style="overflow-x:auto"><table class="db-group-table">
             <thead><tr>
-                <th>조</th><th>코치</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th>
+                <th>조</th><th>코치</th><th>인원</th><th>줌/데일리</th><th>내맛33</th><th>말까미션</th><th>평균</th>
             </tr></thead><tbody>`;
 
         const myGroupIds = (admin && admin.assigned_group_ids) || [];
@@ -1929,8 +1935,9 @@ const BootcampApp = (() => {
                     <td>${g.zoom_daily_rate}%</td>
                     <td>${g.inner33_rate}%</td>
                     <td>${g.speak_rate}%</td>
+                    <td><strong>${g.avg_rate}%</strong></td>
                 </tr>
-                <tr class="db-member-panel" id="panel-req-${g.id}"><td colspan="6">
+                <tr class="db-member-panel" id="panel-req-${g.id}"><td colspan="7">
                     <div class="db-member-list">${renderGroupMembers(d.members.filter(m => m.group_id === g.id), 'required')}</div>
                 </td></tr>
             `;
@@ -2056,6 +2063,7 @@ const BootcampApp = (() => {
                         ${miniBar('줌', rq.zoom_daily.rate)}
                         ${miniBar('내맛', rq.inner33.rate)}
                         ${miniBar('말까', rq.speak_mission.rate)}
+                        ${miniBar('평균', rq.avg_rate)}
                     </div>
                 </div>`;
             } else {
