@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../includes/bootcamp_functions.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
