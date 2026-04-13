@@ -29,6 +29,13 @@ case 'login':
 
     loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
 
+    // 조장/부조장이면 admin 세션도 동시 생성 (조장 페이지에서 별도 로그인 불필요)
+    if (in_array($member['member_role'] ?? '', ['leader', 'subleader'])) {
+        $displayName = $member['nickname'] ?: $member['real_name'];
+        $bcGroupId = $member['group_id'] ? (int)$member['group_id'] : null;
+        loginAdmin($member['id'], $displayName, [$member['member_role']], $member['cohort'], $bcGroupId);
+    }
+
     // Get current score + coin + completed count + bravo grade
     ensureMemberScoreFresh($db, $member['id']);
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
