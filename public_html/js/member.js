@@ -163,6 +163,9 @@ const MemberApp = (() => {
                     <div id="member-home-area"></div>
                     <div id="member-tabs-area"></div>
                     <div class="member-logout-wrap">
+                        ${member.member_role === 'leader' || member.member_role === 'subleader'
+                            ? '<a href="/leader" class="btn btn-primary" id="btn-goto-leader">조장 페이지로</a>'
+                            : ''}
                         <button class="btn btn-secondary" id="btn-member-logout">로그아웃</button>
                     </div>
                 </div>
