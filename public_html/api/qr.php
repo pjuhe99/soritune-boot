@@ -187,7 +187,7 @@ case 'session_status':
     // 전체 활성 멤버 수 (해당 기수)
     $totalStmt = $db->prepare("
         SELECT COUNT(*) AS cnt FROM bootcamp_members
-        WHERE cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+        WHERE cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
     ");
     $totalStmt->execute([$session['cohort_id']]);
     $totalMembers = (int)$totalStmt->fetch()['cnt'];
@@ -265,7 +265,7 @@ case 'group_members':
 
     $stmt = $db->prepare("
         SELECT id, nickname FROM bootcamp_members
-        WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+        WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
         ORDER BY nickname
     ");
     $stmt->execute([$groupId, $session['cohort_id']]);
@@ -291,7 +291,7 @@ case 'record':
     // 멤버 확인
     $memberStmt = $db->prepare("
         SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
-        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
     ");
     $memberStmt->execute([$memberId, $session['cohort_id']]);
     $member = $memberStmt->fetch();
@@ -370,7 +370,7 @@ case 'revival_record':
     // 멤버 확인
     $memberStmt = $db->prepare("
         SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
-        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'withdrawn'
+        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
     ");
     $memberStmt->execute([$memberId, $session['cohort_id']]);
     $member = $memberStmt->fetch();

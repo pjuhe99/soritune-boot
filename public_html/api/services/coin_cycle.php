@@ -113,7 +113,7 @@ function handleCoinCycleMembers() {
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_cycle_coins mcc ON bm.id = mcc.member_id AND mcc.cycle_id = ?
-        WHERE bm.is_active = 1 AND bm.member_status != 'withdrawn'
+        WHERE bm.is_active = 1 AND bm.member_status != 'refunded'
         ORDER BY bg.name, bm.nickname
     ");
     $stmt->execute([$cycleId]);
@@ -139,7 +139,7 @@ function handleCoinLeaderGrant($method) {
     // leader/subleader 회원 조회
     $members = $db->prepare("
         SELECT id, member_role FROM bootcamp_members
-        WHERE member_role IN ('leader', 'subleader') AND is_active = 1 AND member_status != 'withdrawn'
+        WHERE member_role IN ('leader', 'subleader') AND is_active = 1 AND member_status != 'refunded'
     ");
     $members->execute();
     $leaders = $members->fetchAll();

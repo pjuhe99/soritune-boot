@@ -132,16 +132,41 @@ function handleMemberDelete($method) {
     if (!$id) jsonError('id 필요');
 
     $db = getDB();
+    $db->prepare("UPDATE bootcamp_members SET member_status = 'refunded', is_active = 0 WHERE id = ?")->execute([$id]);
 
-    // 삭제 전 식별자 보존
     $ident = getMemberIdentifiers($db, $id);
-
-    $db->prepare("DELETE FROM bootcamp_members WHERE id = ?")->execute([$id]);
-
-    // 삭제 후 해당 인물의 stats 갱신
     refreshMemberStats($db, $ident['phone'], $ident['user_id']);
 
-    jsonSuccess([], '회원이 삭제되었습니다.');
+    jsonSuccess([], '환불 처리되었습니다.');
+}
+
+function handleMemberRestore($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('id 필요');
+
+    $db = getDB();
+    $db->prepare("UPDATE bootcamp_members SET member_status = 'active', is_active = 1 WHERE id = ? AND member_status = 'refunded'")->execute([$id]);
+    jsonSuccess([], '회원이 복원되었습니다.');
+}
+
+function handleMemberSetStatus($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    $status = $input['status'] ?? '';
+    if (!$id) jsonError('id 필요');
+    if (!in_array($status, ['active', 'leaving'])) jsonError('유효하지 않은 상태입니다.');
+
+    $db = getDB();
+    $isActive = $status === 'active' ? 1 : 0;
+    $db->prepare("UPDATE bootcamp_members SET member_status = ?, is_active = ? WHERE id = ?")->execute([$status, $isActive, $id]);
+
+    $label = $status === 'leaving' ? '나가기' : '활성';
+    jsonSuccess([], "'{$label}' 상태로 변경되었습니다.");
 }
 
 // calcParticipationCount()는 member_create.php에서 공통 정의됨

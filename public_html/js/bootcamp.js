@@ -1406,6 +1406,8 @@ const BootcampApp = (() => {
             mode: 'bootcamp',
             editFn: 'BootcampApp._editMember',
             deleteFn: 'BootcampApp._deleteMember',
+            restoreFn: 'BootcampApp._restoreMember',
+            setStatusFn: 'BootcampApp._setMemberStatus',
         });
         MemberTable.bindToggle(body);
         MemberTable.bindSearch(body);
@@ -1502,9 +1504,26 @@ const BootcampApp = (() => {
     }
 
     async function _deleteMember(id, nickname) {
-        if (!await App.confirm(`'${nickname}' 회원을 삭제하시겠습니까?\n관련 체크/점수/코인 데이터도 모두 삭제됩니다.`)) return;
+        if (!await App.confirm(`'${nickname}' 회원을 환불 처리하시겠습니까?\n(데이터는 보존되며, 복원할 수 있습니다.)`)) return;
         App.showLoading();
         const r = await App.post(API + 'member_delete', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); renderMembersList(); }
+    }
+
+    async function _restoreMember(id, nickname) {
+        if (!await App.confirm(`'${nickname}' 회원을 복원하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'member_restore', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); renderMembersList(); }
+    }
+
+    async function _setMemberStatus(id, status, nickname) {
+        const label = status === 'leaving' ? '나가기' : '활성';
+        if (!await App.confirm(`'${nickname}' 회원을 '${label}' 상태로 변경하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post(API + 'member_set_status', { id, status });
         App.hideLoading();
         if (r.success) { Toast.success(r.message); renderMembersList(); }
     }
@@ -2054,10 +2073,12 @@ const BootcampApp = (() => {
         return members.map(m => {
             const scoreClass = m.current_score <= -25 ? 'danger' : m.current_score <= -10 ? 'negative' : '';
 
+            const leavingBadge = m.member_status === 'leaving' ? ' <span class="badge badge-warning-solid" style="font-size:10px">나가기</span>' : '';
+
             if (mode === 'required') {
                 const rq = m.required;
-                return `<div class="db-member-item">
-                    <span class="db-member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
+                return `<div class="db-member-item${m.member_status === 'leaving' ? ' db-member-leaving' : ''}">
+                    <span class="db-member-name">${App.esc(m.nickname)}${leavingBadge}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
                     <span class="db-member-score score-cell ${scoreClass}">${m.current_score}</span>
                     <div class="db-member-bars">
                         ${miniBar('줌', rq.zoom_daily.rate)}
@@ -2068,8 +2089,8 @@ const BootcampApp = (() => {
                 </div>`;
             } else {
                 const op = m.optional;
-                return `<div class="db-member-item">
-                    <span class="db-member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
+                return `<div class="db-member-item${m.member_status === 'leaving' ? ' db-member-leaving' : ''}">
+                    <span class="db-member-name">${App.esc(m.nickname)}${leavingBadge}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}</span>
                     <div class="db-member-optional">
                         <span class="db-opt-badge ${optLevel(op.bookclub_open)}">개설 ${op.bookclub_open}</span>
                         <span class="db-opt-badge ${optLevel(op.bookclub_join)}">참여 ${op.bookclub_join}</span>
@@ -2235,7 +2256,7 @@ const BootcampApp = (() => {
         initForCoach,
         initForLeader,
         loadDashboard,
-        _editMember, _deleteMember,
+        _editMember, _deleteMember, _restoreMember, _setMemberStatus,
         _coinAction, _coinLogs,
         _editGroup, _deleteGroup,
         showWarningNoteForm,

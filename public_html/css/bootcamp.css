@@ -579,6 +579,7 @@
     font-size: var(--text-sm);
 }
 .db-member-item:last-child { border-bottom: none; }
+.db-member-item.db-member-leaving { opacity: 0.55; }
 .db-member-name {
     min-width: 80px;
     font-weight: var(--font-semibold);

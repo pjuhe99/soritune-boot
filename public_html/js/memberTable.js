@@ -25,6 +25,8 @@ const MemberTable = (() => {
     }
 
     function statusBadge(m) {
+        if (m.member_status === 'refunded') return '<span class="badge badge-danger">환불</span>';
+        if (m.member_status === 'leaving') return '<span class="badge badge-warning-solid">나가기</span>';
         if (m.is_active == 0) return '<span class="badge badge-danger">비활성</span>';
         if (m.member_status === 'out_of_group_management') return '<span class="badge badge-danger">탈락</span>';
         return '<span class="badge badge-success">활성</span>';
@@ -133,7 +135,14 @@ const MemberTable = (() => {
                         </div>
                         <div class="mt-detail-actions">
                             <button class="btn btn-sm btn-secondary" onclick="${editFn}(${m.id})">수정</button>
-                            <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">삭제</button>
+                            ${m.member_status === 'refunded'
+                                ? `<button class="btn btn-sm btn-primary" onclick="${opts.restoreFn || 'AdminApp._restoreMember'}(${m.id}, '${App.esc(m.nickname)}')">복원</button>`
+                                : m.member_status === 'leaving'
+                                    ? `<button class="btn btn-sm btn-primary" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'active', '${App.esc(m.nickname)}')">활성으로</button>
+                                       <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
+                                    : `<button class="btn btn-sm btn-warning" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'leaving', '${App.esc(m.nickname)}')">나가기</button>
+                                       <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
+                            }
                         </div>
                     </div>
                 </td>

@@ -515,7 +515,7 @@ case 'member_list':
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
-               bm.member_role, bm.stage_no, bm.is_active, bm.created_at,
+               bm.member_role, bm.member_status, bm.stage_no, bm.is_active, bm.created_at,
                bm.participation_count, bm.entered,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin,
@@ -651,6 +651,7 @@ case 'member_update':
     break;
 
 case 'member_delete':
+    // 환불 처리 (소프트 삭제)
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation']);
     $input = getJsonInput();
@@ -658,16 +659,44 @@ case 'member_delete':
     if (!$id) jsonError('회원 ID가 필요합니다.');
 
     $db = getDB();
+    $db->prepare("UPDATE bootcamp_members SET member_status = 'refunded', is_active = 0 WHERE id = ?")->execute([$id]);
 
-    // 삭제 전 식별자 보존
     $ident = getMemberIdentifiers($db, $id);
-
-    $db->prepare('DELETE FROM bootcamp_members WHERE id = ?')->execute([$id]);
-
-    // 삭제 후 해당 인물의 stats 갱신
     refreshMemberStats($db, $ident['phone'], $ident['user_id']);
 
-    jsonSuccess([], '회원이 삭제되었습니다.');
+    jsonSuccess([], '환불 처리되었습니다.');
+    break;
+
+case 'member_restore':
+    // 환불 멤버 복원
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('회원 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare("UPDATE bootcamp_members SET member_status = 'active', is_active = 1 WHERE id = ? AND member_status = 'refunded'")->execute([$id]);
+
+    jsonSuccess([], '회원이 복원되었습니다.');
+    break;
+
+case 'member_set_status':
+    // 나가기 설정/해제
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    $status = $input['status'] ?? '';
+    if (!$id) jsonError('회원 ID가 필요합니다.');
+    if (!in_array($status, ['active', 'leaving'])) jsonError('유효하지 않은 상태입니다.');
+
+    $db = getDB();
+    $isActive = $status === 'active' ? 1 : 0;
+    $db->prepare("UPDATE bootcamp_members SET member_status = ?, is_active = ? WHERE id = ?")->execute([$status, $isActive, $id]);
+
+    $label = $status === 'leaving' ? '나가기' : '활성';
+    jsonSuccess([], "'{$label}' 상태로 변경되었습니다.");
     break;
 
 case 'fetch_cafe_info':

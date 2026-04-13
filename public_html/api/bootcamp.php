@@ -174,6 +174,8 @@ case 'members':          handleMembers(); break;
 case 'member_create':    handleMemberCreate($method); break;
 case 'member_update':    handleMemberUpdate($method); break;
 case 'member_delete':    handleMemberDelete($method); break;
+case 'member_restore':   handleMemberRestore($method); break;
+case 'member_set_status': handleMemberSetStatus($method); break;
 
 // ── Mission Types ────────────────────────────────────────────
 

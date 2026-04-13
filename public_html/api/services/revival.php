@@ -44,7 +44,7 @@ function handleManualRevival() {
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.group_id
         FROM bootcamp_members bm
-        WHERE bm.id = ? AND bm.is_active = 1 AND bm.member_status != 'withdrawn'
+        WHERE bm.id = ? AND bm.is_active = 1 AND bm.member_status != 'refunded'
     ");
     $stmt->execute([$memberId]);
     $member = $stmt->fetch();

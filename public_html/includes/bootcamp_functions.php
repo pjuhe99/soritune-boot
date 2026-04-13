@@ -84,7 +84,7 @@ function ensureScoresFresh($db, $cohortId) {
         SELECT bm.id
         FROM bootcamp_members bm
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
-        WHERE bm.cohort_id = ? AND bm.is_active = 1
+        WHERE bm.cohort_id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
           AND (ms.last_calculated_at IS NULL OR ms.last_calculated_at < CURDATE())
     ");
     $stmt->execute([$cohortId]);

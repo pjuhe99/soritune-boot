@@ -851,6 +851,8 @@ const AdminApp = (() => {
                     mode: 'operation',
                     editFn: 'AdminApp._editMember',
                     deleteFn: 'AdminApp._deleteMember',
+                    restoreFn: 'AdminApp._restoreMember',
+                    setStatusFn: 'AdminApp._setMemberStatus',
                 })}
             </div>
         `;
@@ -1030,9 +1032,26 @@ const AdminApp = (() => {
     }
 
     async function _deleteMember(id, name) {
-        if (!await App.confirm(`'${name}' 회원을 삭제하시겠습니까?`)) return;
+        if (!await App.confirm(`'${name}' 회원을 환불 처리하시겠습니까?\n(데이터는 보존되며, 복원할 수 있습니다.)`)) return;
         App.showLoading();
         const r = await App.post('/api/admin.php?action=member_delete', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); loadMembersMgmt(); }
+    }
+
+    async function _restoreMember(id, name) {
+        if (!await App.confirm(`'${name}' 회원을 복원하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post('/api/admin.php?action=member_restore', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); loadMembersMgmt(); }
+    }
+
+    async function _setMemberStatus(id, status, name) {
+        const label = status === 'leaving' ? '나가기' : '활성';
+        if (!await App.confirm(`'${name}' 회원을 '${label}' 상태로 변경하시겠습니까?`)) return;
+        App.showLoading();
+        const r = await App.post('/api/admin.php?action=member_set_status', { id, status });
         App.hideLoading();
         if (r.success) { Toast.success(r.message); loadMembersMgmt(); }
     }
@@ -1917,7 +1936,7 @@ const AdminApp = (() => {
     // ── Public API ──
     return {
         init,
-        _editMember, _deleteMember,
+        _editMember, _deleteMember, _restoreMember, _setMemberStatus,
         _editAdmin, _deleteAdmin,
         _editTask, _deleteTask,
         _editGuide, _deleteGuide,

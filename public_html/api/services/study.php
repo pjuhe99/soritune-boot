@@ -27,7 +27,7 @@ function handleStudyMembers() {
     $cohortId = getMemberCohortId($db, $member['member_id']);
     if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
 
-    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'withdrawn'"];
+    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'refunded'"];
     $params = [$cohortId];
 
     if (!empty($_GET['group_id'])) {
@@ -690,7 +690,7 @@ function handleAdminStudyMembers() {
     $cohortId = (int)($_GET['cohort_id'] ?? 0);
     if (!$cohortId) jsonError('cohort_id 필요');
 
-    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'withdrawn'"];
+    $where = ["bm.cohort_id = ?", "bm.is_active = 1", "bm.member_status != 'refunded'"];
     $params = [$cohortId];
 
     if (!empty($_GET['group_id'])) {
