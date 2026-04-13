@@ -389,7 +389,8 @@ case 'revival_record':
         jsonError('이 기기에서 이미 패자부활 처리를 완료했습니다.');
     }
 
-    // 현재 점수 조회
+    // 점수 최신화 후 조회
+    ensureMemberScoreFresh($db, $memberId);
     $scoreStmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
     $scoreStmt->execute([$memberId]);
     $scoreRow = $scoreStmt->fetch();

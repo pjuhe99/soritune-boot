@@ -377,6 +377,7 @@ function handleMemberBootees() {
 
     $cohortId = (int)$myInfo['cohort_id'];
     $myGroupId = $myInfo['group_id'] ? (int)$myInfo['group_id'] : null;
+    ensureScoresFresh($db, $cohortId);
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.group_id, bg.name AS group_name,

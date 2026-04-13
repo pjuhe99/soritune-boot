@@ -63,6 +63,9 @@ function handleDashboardStats() {
         $current = date('Y-m-d', strtotime($current . ' +1 day'));
     }
 
+    // 2.5. stale 점수 갱신
+    ensureScoresFresh($db, $cohortId);
+
     // 3. 멤버 조회
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,

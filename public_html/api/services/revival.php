@@ -10,6 +10,7 @@ function handleRevivalCandidates() {
     if (!$cohortId) jsonError('cohort_id 필요');
 
     $db = getDB();
+    ensureScoresFresh($db, $cohortId);
     $where = ["bm.cohort_id = ?", "bm.is_active = 1", "COALESCE(ms.current_score, 0) <= " . SCORE_REVIVAL_ELIGIBLE];
     $params = [$cohortId];
     if (!empty($_GET['group_id'])) { $where[] = "bm.group_id = ?"; $params[] = (int)$_GET['group_id']; }
@@ -49,7 +50,8 @@ function handleManualRevival() {
     $member = $stmt->fetch();
     if (!$member) jsonError('유효하지 않은 회원입니다.');
 
-    // 현재 점수 조회
+    // 점수 최신화 후 조회
+    ensureMemberScoreFresh($db, $memberId);
     $scoreStmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
     $scoreStmt->execute([$memberId]);
     $scoreRow = $scoreStmt->fetch();

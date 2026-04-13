@@ -11,6 +11,7 @@ function handleChecklist() {
     if (!$cohortId) jsonError('cohort_id 필요');
 
     $db = getDB();
+    ensureScoresFresh($db, $cohortId);
 
     $where = ["bm.cohort_id = ?", "bm.is_active = 1"];
     $params = [$cohortId];
@@ -164,6 +165,7 @@ function handleChecklistByMission() {
     if (!$cohortId || !$missionCode) jsonError('cohort_id, mission_code 필요');
 
     $db = getDB();
+    ensureScoresFresh($db, $cohortId);
 
     // 기수 기간
     $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
@@ -252,6 +254,7 @@ function handleMemberChecklistAll() {
     if (!$cohortId || !$memberId) jsonError('cohort_id, member_id 필요');
 
     $db = getDB();
+    ensureMemberScoreFresh($db, $memberId);
 
     // 회원 정보
     $stmt = $db->prepare("
@@ -314,6 +317,7 @@ function handleStatusBoard() {
     if (!$cohortId) jsonError('cohort_id 필요');
 
     $db = getDB();
+    ensureScoresFresh($db, $cohortId);
 
     $where = ["bm.cohort_id = ?", "bm.is_active = 1"];
     $params = [$cohortId];

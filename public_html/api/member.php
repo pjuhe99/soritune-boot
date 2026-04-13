@@ -29,6 +29,7 @@ case 'login':
     loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
 
     // Get current score + coin + completed count + bravo grade
+    ensureMemberScoreFresh($db, $member['id']);
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
     $scoreStmt->execute([$member['id']]);
     $scoreRow = $scoreStmt->fetch();
@@ -86,6 +87,7 @@ case 'check_session':
         $stmt->execute([$s['member_id']]);
         $member = $stmt->fetch();
         if ($member) {
+            ensureMemberScoreFresh($db, $member['id']);
             $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
             $scoreStmt->execute([$member['id']]);
             $scoreRow = $scoreStmt->fetch();
@@ -133,6 +135,7 @@ case 'dashboard':
     $stmt->execute([$s['member_id']]);
     $member = $stmt->fetch();
 
+    ensureMemberScoreFresh($db, $s['member_id']);
     $scoreStmt = $db->prepare('SELECT current_score FROM member_scores WHERE member_id = ?');
     $scoreStmt->execute([$s['member_id']]);
     $scoreRow = $scoreStmt->fetch();

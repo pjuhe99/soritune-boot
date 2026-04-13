@@ -507,6 +507,10 @@ case 'member_list':
     $admin = requireAdmin(['operation']);
     $cohort = getEffectiveCohort($admin);
     $db = getDB();
+    $cStmt = $db->prepare("SELECT id FROM cohorts WHERE cohort = ? LIMIT 1");
+    $cStmt->execute([$cohort]);
+    $cRow = $cStmt->fetch();
+    if ($cRow) ensureScoresFresh($db, (int)$cRow['id']);
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,

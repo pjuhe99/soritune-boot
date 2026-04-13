@@ -10,6 +10,7 @@ function handleMembers() {
     if (!$cohortId) jsonError('cohort_id 필요');
 
     $db = getDB();
+    ensureScoresFresh($db, $cohortId);
     $where = ["bm.cohort_id = ?"];
     $params = [$cohortId];
 

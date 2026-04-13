@@ -74,6 +74,44 @@ function calcConsecutiveMissDays($byDate, $codeToId) {
 }
 
 /**
+ * Stale 점수 일괄 갱신
+ * last_calculated_at < 오늘인 멤버만 재계산하여 점수를 최신화한다.
+ * 점수를 표시하는 API 진입부에서 호출.
+ */
+if (!function_exists('ensureScoresFresh')) {
+function ensureScoresFresh($db, $cohortId) {
+    $stmt = $db->prepare("
+        SELECT bm.id
+        FROM bootcamp_members bm
+        LEFT JOIN member_scores ms ON bm.id = ms.member_id
+        WHERE bm.cohort_id = ? AND bm.is_active = 1
+          AND (ms.last_calculated_at IS NULL OR ms.last_calculated_at < CURDATE())
+    ");
+    $stmt->execute([$cohortId]);
+    $staleIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($staleIds as $mid) {
+        recalculateMemberScore($db, (int)$mid);
+    }
+}
+}
+
+/**
+ * 단일 멤버 점수 최신화 (멤버 ID만 아는 경우)
+ */
+if (!function_exists('ensureMemberScoreFresh')) {
+function ensureMemberScoreFresh($db, $memberId) {
+    $stmt = $db->prepare("
+        SELECT 1 FROM member_scores
+        WHERE member_id = ? AND last_calculated_at >= CURDATE()
+    ");
+    $stmt->execute([$memberId]);
+    if (!$stmt->fetch()) {
+        recalculateMemberScore($db, $memberId);
+    }
+}
+}
+
+/**
  * 회원 점수 전체 재계산 (v2 - 감점 기반)
  */
 if (!function_exists('recalculateMemberScore')) {
