@@ -64,6 +64,7 @@ case 'login':
             'completed_count' => $statsRow ? (int)$statsRow['completed_bootcamp_count'] : 0,
             'bravo_grade' => $statsRow ? $statsRow['bravo_grade'] : null,
             'needs_nickname' => !hasNickname($member['nickname']),
+            'member_role' => $member['member_role'] ?? 'member',
         ],
     ], '로그인 성공');
     break;
@@ -73,7 +74,7 @@ case 'check_session':
     if ($s) {
         $db = getDB();
         $stmt = $db->prepare("
-            SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id,
+            SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.member_role,
                    COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
                    c.cohort, bg.name AS group_name,
                    COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
@@ -112,6 +113,7 @@ case 'check_session':
                     'completed_count' => (int)$member['completed_bootcamp_count'],
                     'bravo_grade' => $member['bravo_grade'] ?: null,
                     'needs_nickname' => !hasNickname($member['nickname']),
+                    'member_role' => $member['member_role'] ?? 'member',
                 ],
             ]);
         }
