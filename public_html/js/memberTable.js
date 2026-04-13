@@ -26,7 +26,7 @@ const MemberTable = (() => {
 
     function statusBadge(m) {
         if (m.member_status === 'refunded') return '<span class="badge badge-danger">환불</span>';
-        if (m.member_status === 'leaving') return '<span class="badge badge-warning-solid">나가기</span>';
+        if (m.member_status === 'leaving') return '<span class="badge badge-warning-solid">나간 회원</span>';
         if (m.is_active == 0) return '<span class="badge badge-danger">비활성</span>';
         if (m.member_status === 'out_of_group_management') return '<span class="badge badge-danger">탈락</span>';
         return '<span class="badge badge-success">활성</span>';

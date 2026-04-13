@@ -162,10 +162,15 @@ function handleMemberSetStatus($method) {
     if (!in_array($status, ['active', 'leaving'])) jsonError('유효하지 않은 상태입니다.');
 
     $db = getDB();
-    $isActive = $status === 'active' ? 1 : 0;
-    $db->prepare("UPDATE bootcamp_members SET member_status = ?, is_active = ? WHERE id = ?")->execute([$status, $isActive, $id]);
+    if ($status === 'leaving') {
+        // 나가기: is_active 유지(로그인 가능), 조 소속 해제
+        $db->prepare("UPDATE bootcamp_members SET member_status = 'leaving', group_id = NULL WHERE id = ?")->execute([$id]);
+    } else {
+        // 활성 복원
+        $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ?")->execute([$id]);
+    }
 
-    $label = $status === 'leaving' ? '나가기' : '활성';
+    $label = $status === 'leaving' ? '나간 회원' : '활성';
     jsonSuccess([], "'{$label}' 상태로 변경되었습니다.");
 }
 

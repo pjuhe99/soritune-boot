@@ -2073,7 +2073,7 @@ const BootcampApp = (() => {
         return members.map(m => {
             const scoreClass = m.current_score <= -25 ? 'danger' : m.current_score <= -10 ? 'negative' : '';
 
-            const leavingBadge = m.member_status === 'leaving' ? ' <span class="badge badge-warning-solid" style="font-size:10px">나가기</span>' : '';
+            const leavingBadge = m.member_status === 'leaving' ? ' <span class="badge badge-warning-solid" style="font-size:10px">나간 회원</span>' : '';
 
             if (mode === 'required') {
                 const rq = m.required;

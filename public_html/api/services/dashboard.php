@@ -74,7 +74,7 @@ function handleDashboardStats() {
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id
-        WHERE bm.cohort_id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+        WHERE bm.cohort_id = ? AND bm.is_active = 1
         ORDER BY bg.name, bm.nickname
     ");
     $stmt->execute([$cohortId]);
