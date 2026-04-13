@@ -94,6 +94,24 @@
     font-weight: var(--font-medium);
 }
 
+.admin-header .btn-member-page {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-primary);
+    background: var(--color-primary-bg, #eff6ff);
+    border: 1px solid var(--color-primary-light, #bfdbfe);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--transition-fast);
+}
+.admin-header .btn-member-page:hover {
+    background: #dbeafe;
+}
+
 .admin-header .btn-change-pw,
 .admin-header .btn-logout {
     background: none;
