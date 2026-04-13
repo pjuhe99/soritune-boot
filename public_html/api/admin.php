@@ -98,6 +98,9 @@ case 'login_phone':
     // Login directly using bootcamp_member info (no admins table needed)
     loginAdmin($member['id'], $displayName, [$role], $member['cohort'], $bcGroupId);
 
+    // 회원 세션도 동시 생성 (리더가 회원페이지에서 별도 로그인 불필요)
+    loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
+
     jsonSuccess([
         'admin' => [
             'admin_id'    => $member['id'],
