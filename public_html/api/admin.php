@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
+require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/services/member_stats.php';
 require_once __DIR__ . '/services/member_bulk.php';
 header('Content-Type: application/json; charset=utf-8');
