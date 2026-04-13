@@ -153,6 +153,7 @@ const AdminApp = (() => {
                     </div>
                     <div class="admin-header-right">
                         <span class="admin-name">${App.esc(admin.admin_name)}</span>
+                        ${role === 'leader' ? '<a href="/" class="btn-member-page" id="btn-goto-member">내 회원페이지</a>' : ''}
                         ${role !== 'leader' ? '<button class="btn-change-pw" id="btn-change-pw">비밀번호 변경</button>' : ''}
                         <button class="btn-logout" id="btn-logout">로그아웃</button>
                     </div>
