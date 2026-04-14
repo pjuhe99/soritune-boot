@@ -744,7 +744,7 @@ function checkTimeOverlap($db, $cohortId, $studyDate, $startTime, $endTime, $exc
  * 회원의 cohort_id 조회
  */
 function getMemberCohortId($db, $memberId) {
-    $stmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+    $stmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ? AND (is_active = 1 OR member_status = 'leaving')");
     $stmt->execute([$memberId]);
     $row = $stmt->fetch();
     return $row ? (int)$row['cohort_id'] : null;
