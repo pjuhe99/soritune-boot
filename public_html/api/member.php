@@ -91,7 +91,7 @@ case 'check_session':
             LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
             LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
             LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
-            WHERE bm.id = ? AND bm.is_active = 1
+            WHERE bm.id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
         ");
         $stmt->execute([$s['member_id']]);
         $member = $stmt->fetch();

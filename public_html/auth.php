@@ -191,7 +191,7 @@ function findMemberByPhone(PDO $db, string $phone): ?array {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
-        WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ? AND bm.is_active = 1
+        WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
         ORDER BY c.is_active DESC, bm.cohort_id DESC
         LIMIT 1
     ");

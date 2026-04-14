@@ -69,7 +69,7 @@ function handleMemberChecksSummary() {
         SELECT c.start_date, c.end_date
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
-        WHERE bm.id = ? AND bm.is_active = 1
+        WHERE bm.id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
     ");
     $cohortStmt->execute([$memberId]);
     $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
@@ -175,7 +175,7 @@ function handleMemberChecks() {
         SELECT c.start_date, c.end_date, bm.stage_no
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
-        WHERE bm.id = ? AND bm.is_active = 1
+        WHERE bm.id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
     ");
     $cohortStmt->execute([$memberId]);
     $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
