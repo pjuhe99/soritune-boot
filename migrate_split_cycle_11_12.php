@@ -69,9 +69,11 @@ foreach ($allLogs as $log) {
     } elseif (in_array($rtype, ['study_open', 'study_join'])) {
         if (preg_match('/(\d{4}-\d{2}-\d{2})/', $log['reason_detail'] ?? '', $m)) {
             if ($m[1] >= $cycle12Start) $moveIt = true;
-        } else {
+        } elseif ($log['d'] >= $cycle12Start) {
+            // 파싱 실패 + 4/20 이후 created_at → 운영자 수동 확인 필요
             $ambiguous[] = $log;
         }
+        // 파싱 실패 + 4/19 이전 created_at → 11기에 남김 (fix_study_open_duty 등 legacy 조정)
     } elseif (in_array($rtype, ['perfect_attendance', 'hamemmal_bonus', 'cheer_award', 'manual_adjustment', 'reward_distribution'])) {
         if ($log['d'] >= $cycle12Start) {
             $errorsByType[$rtype] = ($errorsByType[$rtype] ?? 0) + 1;
