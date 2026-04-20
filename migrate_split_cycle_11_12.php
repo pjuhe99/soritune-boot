@@ -65,7 +65,8 @@ foreach ($allLogs as $log) {
     $moveIt = false;
 
     if ($rtype === 'leader_coin') {
-        if ($log['d'] >= $cycle12Start) $moveIt = true;
+        // 리더코인은 "11기 역할 보상"이라 언제 버튼을 눌렀든 11기에 귀속.
+        // 12기 리더코인은 12기 마감 후 별도 [리더코인] batch로 지급.
     } elseif (in_array($rtype, ['study_open', 'study_join'])) {
         if (preg_match('/(\d{4}-\d{2}-\d{2})/', $log['reason_detail'] ?? '', $m)) {
             if ($m[1] >= $cycle12Start) $moveIt = true;
