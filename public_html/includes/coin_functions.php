@@ -592,3 +592,95 @@ function grantCheerAward($db, $cycleId, $leaderMemberId, $targetMemberIds, $admi
 
     return $results;
 }
+
+// ══════════════════════════════════════════════════════════════
+// Reward Groups (리워드 구간)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 회원의 현재 open reward group 반환 (해당 member가 member_cycle_coins row를 가진 cycle 중).
+ * 여러 open group에 걸쳐있으면 cycle end_date 최신 기준으로 하나 선택.
+ */
+function getCurrentRewardGroupForMember($db, $memberId) {
+    $stmt = $db->prepare("
+        SELECT rg.id, rg.name, rg.status
+        FROM reward_groups rg
+        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
+        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+        WHERE rg.status = 'open'
+        ORDER BY cc.end_date DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$memberId]);
+    $group = $stmt->fetch();
+    if (!$group) return null;
+
+    // 소속 cycle들 + 해당 회원의 earned, cycle status
+    $cStmt = $db->prepare("
+        SELECT cc.id, cc.name, cc.status,
+               COALESCE(mcc.earned_coin, 0) AS earned,
+               COALESCE(mcc.used_coin, 0)   AS used
+        FROM coin_cycles cc
+        LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+        WHERE cc.reward_group_id = ?
+        ORDER BY cc.start_date
+    ");
+    $cStmt->execute([$memberId, $group['id']]);
+    $cycles = [];
+    foreach ($cStmt->fetchAll() as $c) {
+        $cycles[] = [
+            'name'    => $c['name'],
+            'earned'  => (int)$c['earned'] - (int)$c['used'],
+            'settled' => $c['status'] === 'closed',
+        ];
+    }
+
+    return [
+        'name'   => $group['name'],
+        'cycles' => $cycles,
+    ];
+}
+
+/**
+ * reward group 조회 (속한 cycle 목록 포함)
+ */
+function getRewardGroupWithCycles($db, $groupId) {
+    $stmt = $db->prepare("SELECT * FROM reward_groups WHERE id = ?");
+    $stmt->execute([$groupId]);
+    $group = $stmt->fetch();
+    if (!$group) return null;
+
+    $cStmt = $db->prepare("
+        SELECT id, name, start_date, end_date, status
+        FROM coin_cycles WHERE reward_group_id = ?
+        ORDER BY start_date
+    ");
+    $cStmt->execute([$groupId]);
+    $group['cycles'] = $cStmt->fetchAll();
+
+    return $group;
+}
+
+/**
+ * 지급 사전조건 검사.
+ * @return array ['can_distribute' => bool, 'blockers' => [string, ...]]
+ */
+function checkDistributePrerequisites($group) {
+    $blockers = [];
+    if ($group['status'] !== 'open') {
+        $blockers[] = "이미 지급 완료된 group";
+    }
+    $cycles = $group['cycles'] ?? [];
+    if (count($cycles) !== 2) {
+        $blockers[] = "cycle이 정확히 2개여야 함 (현재 " . count($cycles) . "개)";
+    }
+    foreach ($cycles as $c) {
+        if ($c['status'] !== 'closed') {
+            $blockers[] = "{$c['name']} cycle이 아직 closed 아님";
+        }
+    }
+    return [
+        'can_distribute' => empty($blockers),
+        'blockers'       => $blockers,
+    ];
+}
