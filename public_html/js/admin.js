@@ -417,27 +417,6 @@ const AdminApp = (() => {
                     observer.observe(coinTab, { attributes: true, attributeFilter: ['class'] });
                 }
 
-                // 응원상 탭 (leader/subleader/coach/head/subhead* 공용)
-                const cheerTab = document.getElementById('bc-tab-cheer');
-                if (cheerTab) {
-                    const obs2 = new MutationObserver(() => {
-                        if (cheerTab.classList.contains('active') && !cheerTab.dataset.loaded) {
-                            cheerTab.dataset.loaded = '1';
-                            App.get('/api/bootcamp.php?action=coin_cycles').then(r => {
-                                const active = (r.cycles || []).find(c => c.status === 'active');
-                                if (!active) { cheerTab.innerHTML = '<p class="empty-state">active cycle 없음 — 응원상 지급 불가</p>'; return; }
-                                if (role === 'leader' || role === 'subleader') {
-                                    // 자기 조 자동 (group_id 없이 호출)
-                                    CoinApp.showCheerAward(cheerTab, active.id);
-                                } else {
-                                    // coach/head/subhead*: 조 선택 picker
-                                    CoinApp.showCheerPicker(cheerTab, active.id);
-                                }
-                            });
-                        }
-                    });
-                    obs2.observe(cheerTab, { attributes: true, attributeFilter: ['class'] });
-                }
             }
 
             // Lecture 탭 lazy load
@@ -592,6 +571,28 @@ const AdminApp = (() => {
                     }
                 });
                 studyObs.observe(studyTab, { attributes: true, attributeFilter: ['class'] });
+            }
+        }
+
+        // 응원상 탭 lazy load (leader/subleader/coach/head/subhead* 공용 — operation은 tab-coin-cycles 내 섹션 사용)
+        if (typeof CoinApp !== 'undefined' && !isOperation()) {
+            const cheerTab = document.getElementById('bc-tab-cheer');
+            if (cheerTab) {
+                const cheerObs = new MutationObserver(() => {
+                    if (cheerTab.classList.contains('active') && !cheerTab.dataset.loaded) {
+                        cheerTab.dataset.loaded = '1';
+                        App.get('/api/bootcamp.php?action=coin_cycles').then(r => {
+                            const active = (r.cycles || []).find(c => c.status === 'active');
+                            if (!active) { cheerTab.innerHTML = '<p class="empty-state">active cycle 없음 — 응원상 지급 불가</p>'; return; }
+                            if (role === 'leader' || role === 'subleader') {
+                                CoinApp.showCheerAward(cheerTab, active.id);
+                            } else {
+                                CoinApp.showCheerPicker(cheerTab, active.id);
+                            }
+                        });
+                    }
+                });
+                cheerObs.observe(cheerTab, { attributes: true, attributeFilter: ['class'] });
             }
         }
 
