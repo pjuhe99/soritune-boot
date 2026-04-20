@@ -13,6 +13,18 @@ const MemberTable = (() => {
         return `<span class="badge ${cls}">${App.esc(grade)}</span>`;
     }
 
+    function renderCoinSection(m) {
+        const rg = m.current_reward_group;
+        if (rg && Array.isArray(rg.cycles) && rg.cycles.length) {
+            const total = rg.cycles.reduce((s, c) => s + (parseInt(c.earned) || 0), 0);
+            const breakdown = rg.cycles.map(c =>
+                `${App.esc(c.name)} ${c.earned} (${c.settled ? '정산 완료' : '적립 중'})`
+            ).join(' · ');
+            return `<span>코인 (${App.esc(rg.name)}): ${total}<br><small style="opacity:0.7">└ ${breakdown}</small></span>`;
+        }
+        return `<span>코인: ${parseInt(m.current_coin) || 0}</span>`;
+    }
+
     function scoreHtml(score) {
         const s = parseInt(score);
         let cls = '';
@@ -130,7 +142,7 @@ const MemberTable = (() => {
                             <div class="mt-detail-label">점수 / 코인</div>
                             <div class="mt-detail-items">
                                 <span>점수: ${scoreHtml(m.current_score)}</span>
-                                <span>코인: ${m.current_coin || 0}</span>
+                                ${renderCoinSection(m)}
                             </div>
                         </div>
                         <div class="mt-detail-actions">
