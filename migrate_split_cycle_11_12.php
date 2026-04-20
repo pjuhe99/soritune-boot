@@ -194,13 +194,23 @@ function recalcMemberCycleCoins($db, $memberId, $cycleId) {
     $s1->execute([$memberId, $cycleId]);
     $earned = max(0, (int)$s1->fetchColumn());
 
-    $s2 = $db->prepare("SELECT COUNT(*) FROM coin_logs WHERE member_id=? AND cycle_id=? AND reason_type='study_open' AND coin_change > 0");
+    // study_open/join count = (체크 로그 수) - (체크 해제 로그 수), floor 0.
+    // processCoinForCheck 의도와 일치: 현재 활성 체크 건수.
+    $s2 = $db->prepare("
+        SELECT
+          SUM(CASE WHEN coin_change > 0 THEN 1 WHEN coin_change < 0 THEN -1 ELSE 0 END) AS net
+        FROM coin_logs WHERE member_id=? AND cycle_id=? AND reason_type='study_open'
+    ");
     $s2->execute([$memberId, $cycleId]);
-    $openCount = (int)$s2->fetchColumn();
+    $openCount = max(0, (int)($s2->fetchColumn() ?: 0));
 
-    $s3 = $db->prepare("SELECT COUNT(*) FROM coin_logs WHERE member_id=? AND cycle_id=? AND reason_type='study_join' AND coin_change > 0");
+    $s3 = $db->prepare("
+        SELECT
+          SUM(CASE WHEN coin_change > 0 THEN 1 WHEN coin_change < 0 THEN -1 ELSE 0 END) AS net
+        FROM coin_logs WHERE member_id=? AND cycle_id=? AND reason_type='study_join'
+    ");
     $s3->execute([$memberId, $cycleId]);
-    $joinCount = (int)$s3->fetchColumn();
+    $joinCount = max(0, (int)($s3->fetchColumn() ?: 0));
 
     $s4 = $db->prepare("SELECT COUNT(*) FROM coin_logs WHERE member_id=? AND cycle_id=? AND reason_type='leader_coin' AND coin_change > 0");
     $s4->execute([$memberId, $cycleId]);
