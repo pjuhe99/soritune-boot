@@ -195,7 +195,9 @@ try {
 function recalcMemberCycleCoins($db, $memberId, $cycleId) {
     $s1 = $db->prepare("SELECT COALESCE(SUM(coin_change), 0) FROM coin_logs WHERE member_id=? AND cycle_id=?");
     $s1->execute([$memberId, $cycleId]);
-    $earned = max(0, (int)$s1->fetchColumn());
+    // earned_coin = raw log sum. 음수 가능 (split으로 check/uncheck 비대칭 된 cycle 대비).
+    // 플로어하면 양쪽 cycle 합계가 원래와 어긋남.
+    $earned = (int)$s1->fetchColumn();
 
     // study_open/join count = (체크 로그 수) - (체크 해제 로그 수), floor 0.
     // processCoinForCheck 의도와 일치: 현재 활성 체크 건수.
