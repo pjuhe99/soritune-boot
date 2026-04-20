@@ -123,7 +123,7 @@ function applyCoinChange($db, $memberId, $cycleId, $coinChange, $reasonType, $re
  * member_coin_balances를 전체 cycle 합산으로 동기화
  */
 function syncMemberCoinBalance($db, $memberId) {
-    $stmt = $db->prepare("SELECT COALESCE(SUM(earned_coin), 0) AS total FROM member_cycle_coins WHERE member_id = ?");
+    $stmt = $db->prepare("SELECT COALESCE(SUM(earned_coin - used_coin), 0) AS total FROM member_cycle_coins WHERE member_id = ?");
     $stmt->execute([$memberId]);
     $total = (int)$stmt->fetchColumn();
 
