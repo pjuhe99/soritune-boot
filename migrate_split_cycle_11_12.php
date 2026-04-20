@@ -231,11 +231,8 @@ function recalcMemberCycleCoins($db, $memberId, $cycleId) {
     $s7->execute([$memberId, $cycleId]);
     $usedExisting = (int)($s7->fetchColumn() ?: 0);
 
-    // 이 회원이 이 cycle에 기록이 전혀 없고 used_coin도 0이면 row 건드리지 않음
-    if ($earned === 0 && $openCount === 0 && $joinCount === 0 && !$leaderGranted && !$paGranted && !$hmGranted && $usedExisting === 0) {
-        // 기존 row가 있으면 그대로 둠 (INSERT 안 함)
-        return;
-    }
+    // 로그가 빠져나간 cycle의 기존 row가 stale 상태로 남는 것 방지 → 항상 UPSERT.
+    // 빈 row가 생겨도 earned=0 / used=0이라 무해.
 
     $db->prepare("
         INSERT INTO member_cycle_coins
