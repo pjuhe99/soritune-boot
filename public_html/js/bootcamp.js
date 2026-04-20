@@ -1282,11 +1282,36 @@ const BootcampApp = (() => {
         `;
     }
 
-    function _coinAction(memberId, nickname, currentCoin) {
+    async function _coinAction(memberId, nickname, currentCoin) {
+        // Fetch active cycles first
+        App.showLoading();
+        const cyclesResp = await App.get(API + 'coin_cycles');
+        App.hideLoading();
+
+        if (!cyclesResp.success) {
+            return Toast.error(cyclesResp.message || '기수 정보를 불러올 수 없습니다.');
+        }
+
+        const activeCycles = (cyclesResp.cycles || []).filter(c => c.status === 'active');
+        if (activeCycles.length === 0) {
+            return Toast.error('활성 기수가 없습니다. 기수를 먼저 생성해주세요.');
+        }
+
+        // Build cycle options
+        const cycleOptions = activeCycles
+            .map(c => `<option value="${c.id}">${App.esc(c.name)} (${c.start_date}~${c.end_date})</option>`)
+            .join('');
+
         const body = `
             <div class="bc-coin-card">
                 <div class="coin-label">${App.esc(nickname)} 현재 코인</div>
                 <div class="coin-value">${currentCoin}</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">귀속 Cycle</label>
+                <select class="form-select" id="coin-cycle-id">
+                    ${cycleOptions}
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">변동량 (양수=적립, 음수=차감)</label>
@@ -1325,6 +1350,7 @@ const BootcampApp = (() => {
                 coin_change: amount,
                 reason_type: document.getElementById('coin-reason-type').value,
                 reason_detail: document.getElementById('coin-reason-detail').value.trim(),
+                cycle_id: parseInt(document.getElementById('coin-cycle-id').value),
             });
             App.hideLoading();
             if (r.success) {
