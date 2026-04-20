@@ -6,6 +6,7 @@
 
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
+require_once __DIR__ . '/../includes/coin_functions.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -72,6 +73,7 @@ case 'login':
             'bravo_grade' => $statsRow ? $statsRow['bravo_grade'] : null,
             'needs_nickname' => !hasNickname($member['nickname']),
             'member_role' => $member['member_role'] ?? 'member',
+            'current_reward_group' => getCurrentRewardGroupForMember($db, $member['id']),
         ],
     ], '로그인 성공');
     break;
@@ -121,6 +123,7 @@ case 'check_session':
                     'bravo_grade' => $member['bravo_grade'] ?: null,
                     'needs_nickname' => !hasNickname($member['nickname']),
                     'member_role' => $member['member_role'] ?? 'member',
+                    'current_reward_group' => getCurrentRewardGroupForMember($db, (int)$member['id']),
                 ],
             ]);
         }
@@ -157,6 +160,7 @@ case 'dashboard':
 
     $member['score'] = $score;
     $member['coin'] = $coin;
+    $member['current_reward_group'] = getCurrentRewardGroupForMember($db, $s['member_id']);
     jsonSuccess(['member' => $member]);
     break;
 
