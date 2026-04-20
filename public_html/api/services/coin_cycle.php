@@ -11,9 +11,11 @@ function handleCoinCycles() {
     $db = getDB();
     $stmt = $db->query("
         SELECT cc.*,
+               rg.name AS reward_group_name,
                (SELECT COUNT(*) FROM member_cycle_coins mcc WHERE mcc.cycle_id = cc.id) AS member_count,
                (SELECT COALESCE(SUM(mcc2.earned_coin), 0) FROM member_cycle_coins mcc2 WHERE mcc2.cycle_id = cc.id) AS total_earned
         FROM coin_cycles cc
+        LEFT JOIN reward_groups rg ON cc.reward_group_id = rg.id
         ORDER BY cc.start_date DESC
     ");
     jsonSuccess(['cycles' => $stmt->fetchAll()]);

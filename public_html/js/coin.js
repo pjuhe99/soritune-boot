@@ -33,13 +33,14 @@ const CoinApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>이름</th><th>기간</th><th>상태</th><th>참여자</th><th>총 코인</th><th></th></tr></thead>
+                    <thead><tr><th>이름</th><th>기간</th><th>상태</th><th>리워드 구간</th><th>참여자</th><th>총 코인</th><th></th></tr></thead>
                     <tbody>
                         ${r.cycles.map(c => `
                             <tr>
                                 <td><strong>${esc(c.name)}</strong></td>
                                 <td>${c.start_date} ~ ${c.end_date}</td>
                                 <td>${c.status === 'active' ? '<span class="badge badge-success">진행중</span>' : '<span class="badge badge-secondary">마감</span>'}</td>
+                                <td>${esc(c.reward_group_name || '-')}</td>
                                 <td>${c.member_count || 0}명</td>
                                 <td>${c.total_earned || 0}</td>
                                 <td class="actions">
@@ -57,7 +58,7 @@ const CoinApp = (() => {
             </div>
         `;
         if (!r.cycles.length) {
-            container.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">등록된 Coin Cycle이 없습니다.</td></tr>';
+            container.querySelector('tbody').innerHTML = '<tr><td colspan="7" class="empty-state">등록된 Coin Cycle이 없습니다.</td></tr>';
         }
         document.getElementById('btn-add-cycle').onclick = () => showCycleForm(container);
     }
