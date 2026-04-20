@@ -403,7 +403,9 @@ function handleMemberBootees() {
         $m['group_id'] = $m['group_id'] ? (int)$m['group_id'] : null;
         $m['score'] = (int)$m['score'];
         $m['coin'] = (int)$m['coin'];
+        $m['current_coin'] = $m['coin'];
         $m['completed_count'] = (int)$m['completed_count'];
+        $m['current_reward_group'] = getCurrentRewardGroupForMember($db, (int)$m['id']);
     }
     unset($m);
 
