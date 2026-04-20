@@ -17,6 +17,7 @@ require_once __DIR__ . '/services/score.php';
 require_once __DIR__ . '/services/revival.php';
 require_once __DIR__ . '/services/coin.php';
 require_once __DIR__ . '/services/coin_cycle.php';
+require_once __DIR__ . '/services/coin_reward_group.php';
 require_once __DIR__ . '/services/integration.php';
 require_once __DIR__ . '/services/study.php';
 require_once __DIR__ . '/services/lecture.php';
@@ -233,6 +234,17 @@ case 'coin_settlement_preview':  handleCoinSettlementPreview(); break;
 case 'coin_settlement_execute':  handleCoinSettlementExecute($method); break;
 case 'coin_cheer_award':         handleCoinCheerAward($method); break;
 case 'coin_cheer_status':        handleCoinCheerStatus(); break;
+
+// ── Coin Reward Groups ──────────────────────────────────────
+case 'coin_reward_groups':                    handleCoinRewardGroups(); break;
+case 'coin_reward_group_create':              handleCoinRewardGroupCreate($method); break;
+case 'coin_reward_group_update':              handleCoinRewardGroupUpdate($method); break;
+case 'coin_reward_group_delete':              handleCoinRewardGroupDelete($method); break;
+case 'coin_reward_group_attach_cycle':        handleCoinRewardGroupAttach($method); break;
+case 'coin_reward_group_detach_cycle':        handleCoinRewardGroupDetach($method); break;
+case 'coin_reward_group_preview':             handleCoinRewardGroupPreview(); break;
+case 'coin_reward_group_distribute':          handleCoinRewardGroupDistribute($method); break;
+case 'coin_reward_group_distribution_detail': handleCoinRewardGroupDistributionDetail(); break;
 
 // ── Scores ───────────────────────────────────────────────────
 
