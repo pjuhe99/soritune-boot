@@ -175,34 +175,35 @@ const CoinApp = (() => {
 
     // ── 응원상 ──────────────────────────────────────────────
 
-    async function showCheerAward(container, cycleId) {
-        const [statusR, membersR] = await Promise.all([
-            api('coin_cheer_status', { qs: `&cycle_id=${cycleId}` }),
-            api('study_members'),
-        ]);
+    /**
+     * 응원상 지급 UI.
+     * - groupId 없이 호출 (leader/subleader): 백엔드가 세션으로 자기 조 자동 결정
+     * - groupId 지정 (operation/coach/head/subhead*): 해당 조 대상
+     */
+    async function showCheerAward(container, cycleId, groupId = null) {
+        if (!cycleId) { container.innerHTML = '<p class="text-danger">active cycle이 없습니다.</p>'; return; }
+        const qs = `&cycle_id=${cycleId}` + (groupId ? `&group_id=${groupId}` : '');
+        const r = await api('coin_cheer_status', { qs });
+        if (!r.success) { container.innerHTML = `<p class="text-danger">${r.error || r.message}</p>`; return; }
 
-        if (!statusR.success) { container.innerHTML = `<p class="text-danger">${statusR.error || statusR.message}</p>`; return; }
-
-        const { awards, remaining } = statusR;
-        const members = membersR.success ? (membersR.members || []) : [];
+        const { awards, members, remaining, group } = r;
 
         container.innerHTML = `
-            <h3>응원상 (남은 선택: ${remaining}명)</h3>
+            <h3>${esc(group.name)} 응원상 <small style="font-weight:normal;opacity:0.7">(${awards.length}/${r.max_targets} 지급, 남은 자리: ${remaining})</small></h3>
             ${awards.length ? `
-                <div class="cheer-awarded" style="margin-bottom:16px">
-                    ${awards.map(a => `<span class="badge badge-primary" style="margin:2px">${esc(a.nickname)} (+${a.coin_amount})</span>`).join('')}
+                <div class="cheer-awarded" style="margin:8px 0 16px">
+                    ${awards.map(a => `<span class="badge badge-primary" style="margin:2px" title="by ${esc(a.granted_by_nickname || '-')}">${esc(a.nickname)} (+${a.coin_amount})</span>`).join('')}
                 </div>
             ` : ''}
             ${remaining > 0 ? `
-                <div class="cheer-select">
-                    <select id="cheer-target" class="form-control">
+                <div class="cheer-select" style="display:flex;gap:8px;align-items:center">
+                    <select id="cheer-target" class="form-control" style="max-width:280px">
                         <option value="">회원 선택...</option>
-                        ${members.filter(m => !awards.some(a => a.target_member_id == m.id))
-                            .map(m => `<option value="${m.id}">${esc(m.nickname)} (${esc(m.group_name || '-')})</option>`).join('')}
+                        ${members.map(m => `<option value="${m.id}">${esc(m.nickname)} (${esc(m.member_role || 'member')})</option>`).join('')}
                     </select>
-                    <button class="btn btn-primary btn-sm mt-sm" id="btn-cheer-grant">응원상 주기</button>
+                    <button class="btn btn-primary btn-sm" id="btn-cheer-grant">응원상 주기</button>
                 </div>
-            ` : '<p>선택 완료</p>'}
+            ` : '<p class="empty-state">이 조의 응원상이 모두 지급되었습니다.</p>'}
         `;
 
         const grantBtn = document.getElementById('btn-cheer-grant');
@@ -210,15 +211,47 @@ const CoinApp = (() => {
             grantBtn.onclick = async () => {
                 const targetId = document.getElementById('cheer-target').value;
                 if (!targetId) { App.toast('회원을 선택해주세요.', 'error'); return; }
-                const r = await api('coin_cheer_award', { body: {
-                    cycle_id: cycleId,
-                    target_member_ids: [parseInt(targetId)],
-                }});
+                const body = { cycle_id: cycleId, target_member_ids: [parseInt(targetId)] };
+                if (groupId) body.group_id = groupId;
+                const r = await api('coin_cheer_award', { body });
                 if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
                 App.toast(r.message);
-                showCheerAward(container, cycleId);
+                showCheerAward(container, cycleId, groupId);
             };
         }
+    }
+
+    /**
+     * 조 선택기 + 응원상 지급 UI (operation/coach/head/subhead* 전용).
+     * 현재 active cohort의 조 목록에서 선택.
+     */
+    async function showCheerPicker(container, cycleId) {
+        if (!cycleId) { container.innerHTML = '<p class="text-danger">active cycle이 없습니다.</p>'; return; }
+        const r = await api('coin_cheer_groups');
+        if (!r.success) { container.innerHTML = `<p class="text-danger">${r.error || r.message}</p>`; return; }
+
+        const options = (r.groups || []).map(g =>
+            `<option value="${g.id}">${esc(g.cohort_name)} ${esc(g.name)} (${g.stage_no}단계)</option>`
+        ).join('');
+
+        container.innerHTML = `
+            <div class="mgmt-toolbar" style="margin-bottom:12px">
+                <span style="font-weight:600">응원상 관리</span>
+                <select id="cheer-group-picker" class="form-control" style="max-width:300px;margin-left:auto">
+                    <option value="">조 선택...</option>
+                    ${options}
+                </select>
+            </div>
+            <div id="cheer-group-body"></div>
+        `;
+
+        const picker = document.getElementById('cheer-group-picker');
+        const body = document.getElementById('cheer-group-body');
+        picker.onchange = () => {
+            const gid = parseInt(picker.value) || null;
+            if (gid) showCheerAward(body, cycleId, gid);
+            else body.innerHTML = '';
+        };
     }
 
     // ── Reward Groups ───────────────────────────────────────
@@ -377,5 +410,6 @@ const CoinApp = (() => {
         rgAttachCycle,
         rgPreview,
         rgDetail,
+        showCheerPicker,
     };
 })();

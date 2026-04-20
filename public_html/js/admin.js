@@ -225,6 +225,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
+                            <button class="tab" data-tab="#bc-tab-cheer" data-hash="cheer">응원상</button>
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
@@ -239,6 +240,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-revival"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
+                        <div class="tab-content" id="bc-tab-cheer"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
                         <div class="tab-content" id="bc-tab-group-assign"></div>
@@ -254,11 +256,13 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-entrance" data-hash="entrance">입장 체크</button>
+                            <button class="tab" data-tab="#bc-tab-cheer" data-hash="cheer">응원상</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-entrance"></div>
+                        <div class="tab-content" id="bc-tab-cheer"></div>
                     </div>
                     </div>
                     ` : `
@@ -272,6 +276,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-qr" data-hash="qr">QR 출석</button>
                             <button class="tab" data-tab="#bc-tab-attendance" data-hash="attendance">출석 현황</button>
                             <button class="tab" data-tab="#bc-tab-coins" data-hash="coins">코인 관리</button>
+                            <button class="tab" data-tab="#bc-tab-cheer" data-hash="cheer">응원상</button>
                             <button class="tab" data-tab="#bc-tab-members" data-hash="members">회원 관리</button>
                             <button class="tab" data-tab="#bc-tab-groups" data-hash="groups">조 관리</button>
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
@@ -286,6 +291,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-qr"></div>
                         <div class="tab-content" id="bc-tab-attendance"></div>
                         <div class="tab-content" id="bc-tab-coins"></div>
+                        <div class="tab-content" id="bc-tab-cheer"></div>
                         <div class="tab-content" id="bc-tab-members"></div>
                         <div class="tab-content" id="bc-tab-groups"></div>
                         <div class="tab-content" id="bc-tab-group-assign"></div>
@@ -398,12 +404,39 @@ const AdminApp = (() => {
                     const observer = new MutationObserver(() => {
                         if (coinTab.classList.contains('active') && !coinTab.dataset.loaded) {
                             coinTab.dataset.loaded = '1';
-                            coinTab.innerHTML = '<div id="rg-section"></div><div id="cycles-section"></div>';
+                            coinTab.innerHTML = '<div id="rg-section"></div><div id="cheer-section" style="margin-top:20px"></div><div id="cycles-section" style="margin-top:20px"></div>';
                             CoinApp.showRewardGroups(document.getElementById('rg-section'));
                             CoinApp.showCycles(document.getElementById('cycles-section'));
+                            App.get('/api/bootcamp.php?action=coin_cycles').then(r => {
+                                const active = (r.cycles || []).find(c => c.status === 'active');
+                                if (active) CoinApp.showCheerPicker(document.getElementById('cheer-section'), active.id);
+                                else document.getElementById('cheer-section').innerHTML = '<p class="empty-state">active cycle 없음 — 응원상 지급 불가</p>';
+                            });
                         }
                     });
                     observer.observe(coinTab, { attributes: true, attributeFilter: ['class'] });
+                }
+
+                // 응원상 탭 (leader/subleader/coach/head/subhead* 공용)
+                const cheerTab = document.getElementById('bc-tab-cheer');
+                if (cheerTab) {
+                    const obs2 = new MutationObserver(() => {
+                        if (cheerTab.classList.contains('active') && !cheerTab.dataset.loaded) {
+                            cheerTab.dataset.loaded = '1';
+                            App.get('/api/bootcamp.php?action=coin_cycles').then(r => {
+                                const active = (r.cycles || []).find(c => c.status === 'active');
+                                if (!active) { cheerTab.innerHTML = '<p class="empty-state">active cycle 없음 — 응원상 지급 불가</p>'; return; }
+                                if (role === 'leader' || role === 'subleader') {
+                                    // 자기 조 자동 (group_id 없이 호출)
+                                    CoinApp.showCheerAward(cheerTab, active.id);
+                                } else {
+                                    // coach/head/subhead*: 조 선택 picker
+                                    CoinApp.showCheerPicker(cheerTab, active.id);
+                                }
+                            });
+                        }
+                    });
+                    obs2.observe(cheerTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 
