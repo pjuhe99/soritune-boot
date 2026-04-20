@@ -26,38 +26,46 @@ function handleCoinChange($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
     $admin = requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
-    $memberId = (int)($input['member_id'] ?? 0);
-    $coinChange = (int)($input['coin_change'] ?? 0);
-    $reasonType = trim($input['reason_type'] ?? '');
+    $memberId    = (int)($input['member_id'] ?? 0);
+    $cycleId     = (int)($input['cycle_id'] ?? 0);
+    $coinChange  = (int)($input['coin_change'] ?? 0);
+    $reasonType  = trim($input['reason_type'] ?? '');
     $reasonDetail = trim($input['reason_detail'] ?? '') ?: null;
 
-    if (!$memberId || !$coinChange || !$reasonType) jsonError('member_id, coin_change, reason_type 필요');
+    if (!$memberId || !$cycleId || !$coinChange || !$reasonType) {
+        jsonError('member_id, cycle_id, coin_change, reason_type 필요');
+    }
 
     $db = getDB();
 
-    $stmt = $db->prepare("SELECT current_coin FROM member_coin_balances WHERE member_id = ?");
-    $stmt->execute([$memberId]);
-    $row = $stmt->fetch();
-    $beforeCoin = $row ? (int)$row['current_coin'] : 0;
-    $afterCoin = $beforeCoin + $coinChange;
+    // cycle 존재 확인
+    $cStmt = $db->prepare("SELECT id FROM coin_cycles WHERE id = ?");
+    $cStmt->execute([$cycleId]);
+    if (!$cStmt->fetch()) jsonError('존재하지 않는 cycle');
 
-    if ($afterCoin < 0) jsonError('코인이 부족합니다. 현재: ' . $beforeCoin);
-    if ($afterCoin > 200) jsonError('최대 보유 코인(200)을 초과합니다. 현재: ' . $beforeCoin);
+    // 차감일 때 earned 부족 방지
+    if ($coinChange < 0) {
+        $mStmt = $db->prepare("SELECT earned_coin, used_coin FROM member_cycle_coins WHERE member_id = ? AND cycle_id = ?");
+        $mStmt->execute([$memberId, $cycleId]);
+        $row = $mStmt->fetch();
+        $current = $row ? ((int)$row['earned_coin'] - (int)$row['used_coin']) : 0;
+        if ($current + $coinChange < 0) {
+            jsonError("해당 cycle의 잔액({$current})을 초과 차감할 수 없습니다.");
+        }
+    }
 
-    $db->prepare("
-        INSERT INTO coin_logs (member_id, coin_change, before_coin, after_coin, reason_type, reason_detail, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ")->execute([$memberId, $coinChange, $beforeCoin, $afterCoin, $reasonType, $reasonDetail, $admin['admin_id']]);
+    $result = applyCoinChange($db, $memberId, $cycleId, $coinChange, $reasonType, $reasonDetail, $admin['admin_id']);
 
-    $db->prepare("
-        INSERT INTO member_coin_balances (member_id, current_coin)
-        VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE current_coin = VALUES(current_coin)
-    ")->execute([$memberId, $afterCoin]);
+    // 현재 전체 잔액 조회
+    $balStmt = $db->prepare("SELECT current_coin FROM member_coin_balances WHERE member_id = ?");
+    $balStmt->execute([$memberId]);
+    $afterCoin = (int)($balStmt->fetchColumn() ?: 0);
+    $beforeCoin = $afterCoin - $result['applied'];
 
     jsonSuccess([
         'before_coin' => $beforeCoin,
-        'after_coin' => $afterCoin,
+        'after_coin'  => $afterCoin,
+        'applied'     => $result['applied'],
     ], '코인이 처리되었습니다.');
 }
 
