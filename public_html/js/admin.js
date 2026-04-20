@@ -398,7 +398,9 @@ const AdminApp = (() => {
                     const observer = new MutationObserver(() => {
                         if (coinTab.classList.contains('active') && !coinTab.dataset.loaded) {
                             coinTab.dataset.loaded = '1';
-                            CoinApp.showCycles(coinTab);
+                            coinTab.innerHTML = '<div id="rg-section"></div><div id="cycles-section"></div>';
+                            CoinApp.showRewardGroups(document.getElementById('rg-section'));
+                            CoinApp.showCycles(document.getElementById('cycles-section'));
                         }
                     });
                     observer.observe(coinTab, { attributes: true, attributeFilter: ['class'] });

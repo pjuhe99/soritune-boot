@@ -221,6 +221,147 @@ const CoinApp = (() => {
         }
     }
 
+    // ── Reward Groups ───────────────────────────────────────
+
+    async function showRewardGroups(container) {
+        const r = await api('coin_reward_groups');
+        if (!r.success) { container.innerHTML = `<p class="text-danger">${r.error || r.message}</p>`; return; }
+
+        const groupsHtml = r.groups.length ? r.groups.map(g => {
+            const cycleBadges = (g.cycles || []).map(c =>
+                `<span class="badge">${esc(c.name)}</span>`
+            ).join(' ');
+            const statusBadge = g.status === 'open'
+                ? '<span class="badge badge-success">열림</span>'
+                : '<span class="badge badge-secondary">지급완료</span>';
+            const actions = g.status === 'open'
+                ? `<button class="btn-icon" onclick="CoinApp.rgAttachCycle(${g.id})">cycle 추가</button>
+                   <button class="btn-icon" onclick="CoinApp.rgPreview(${g.id})">지급</button>
+                   <button class="btn-icon" onclick="CoinApp.rgEdit(${g.id}, '${esc(g.name)}')">수정</button>
+                   <button class="btn-icon danger" onclick="CoinApp.rgDelete(${g.id})">삭제</button>`
+                : `<button class="btn-icon" onclick="CoinApp.rgDetail(${g.id})">내역</button>`;
+            return `
+                <tr>
+                    <td><strong>${esc(g.name)}</strong></td>
+                    <td>${cycleBadges} (${g.cycle_count}/2)</td>
+                    <td>${statusBadge}</td>
+                    <td>${g.active_total || 0}</td>
+                    <td class="actions">${actions}</td>
+                </tr>
+            `;
+        }).join('') : '<tr><td colspan="5" class="empty-state">등록된 reward group이 없습니다.</td></tr>';
+
+        container.innerHTML = `
+            <div class="mgmt-toolbar mt-md">
+                <span style="font-weight:600">Reward Groups</span>
+                <button class="btn btn-primary btn-sm" id="btn-add-rg">새 Reward Group</button>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr><th>이름</th><th>소속 Cycle</th><th>상태</th><th>활성 합계</th><th></th></tr></thead>
+                    <tbody>${groupsHtml}</tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('btn-add-rg').onclick = async () => {
+            const name = prompt('Reward Group 이름 (예: 11-12기 리워드)');
+            if (!name) return;
+            const r2 = await api('coin_reward_group_create', { body: { name } });
+            if (!r2.success) { App.toast(r2.error || r2.message, 'error'); return; }
+            App.toast(r2.message);
+            const rgSection = document.getElementById('rg-section');
+            if (rgSection) showRewardGroups(rgSection);
+        };
+    }
+
+    async function rgEdit(id, currentName) {
+        const name = prompt('새 이름', currentName);
+        if (!name || name === currentName) return;
+        const r = await api('coin_reward_group_update', { body: { id, name } });
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
+        App.toast(r.message);
+        const rgSection = document.getElementById('rg-section');
+        if (rgSection) showRewardGroups(rgSection);
+    }
+
+    async function rgDelete(id) {
+        if (!confirm('이 reward group을 삭제합니다. 계속하시겠습니까?')) return;
+        const r = await api('coin_reward_group_delete', { body: { id } });
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
+        App.toast(r.message);
+        const rgSection = document.getElementById('rg-section');
+        if (rgSection) showRewardGroups(rgSection);
+    }
+
+    async function rgAttachCycle(groupId) {
+        const cr = await api('coin_cycles');
+        if (!cr.success) { App.toast('cycle 조회 실패', 'error'); return; }
+        const freeCycles = (cr.cycles || []).filter(c => !c.reward_group_id);
+        if (!freeCycles.length) { App.toast('붙일 수 있는 cycle이 없습니다.', 'error'); return; }
+        const options = freeCycles.map(c => `<option value="${c.id}">${esc(c.name)} (${c.start_date}~${c.end_date})</option>`).join('');
+        App.modal('Cycle 추가', `
+            <div class="form-group"><label>Cycle</label><select id="rg-attach-cycle">${options}</select></div>
+        `, async () => {
+            const cycleId = parseInt(document.getElementById('rg-attach-cycle').value);
+            const r = await api('coin_reward_group_attach_cycle', { body: { group_id: groupId, cycle_id: cycleId } });
+            if (!r.success) { App.toast(r.error || r.message, 'error'); return false; }
+            App.toast(r.message);
+            const rgSection = document.getElementById('rg-section');
+            if (rgSection) showRewardGroups(rgSection);
+        });
+    }
+
+    async function rgPreview(groupId) {
+        const r = await api('coin_reward_group_preview', { qs: `&group_id=${groupId}` });
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
+        const membersHtml = r.members.length ? r.members.map(m => {
+            const perCycleStr = Object.entries(m.per_cycle).map(([k,v]) => `${esc(k)}: ${v}`).join(', ');
+            return `<tr><td>${esc(m.nickname)}</td><td>${perCycleStr}</td><td style="font-weight:700">${m.total}</td></tr>`;
+        }).join('') : '<tr><td colspan="3" class="empty-state">지급 대상이 없습니다.</td></tr>';
+
+        const blockerHtml = r.can_distribute ? '' :
+            `<div style="margin-bottom:12px;padding:10px;background:#fee;border-left:4px solid #c00">
+                <strong>지급 불가:</strong> ${r.blockers.map(esc).join(', ')}
+             </div>`;
+
+        const title = `리워드 지급 미리보기 — ${esc(r.group.name)}`;
+        App.modal(title, `
+            ${blockerHtml}
+            <div style="overflow-x:auto;max-height:50vh">
+                <table class="data-table" style="font-size:13px">
+                    <thead><tr><th>회원</th><th>Cycle별</th><th>합계</th></tr></thead>
+                    <tbody>${membersHtml}</tbody>
+                </table>
+            </div>
+        `, r.can_distribute && r.members.length ? async () => {
+            if (!confirm(`${r.members.length}명에게 지급합니다. 확정하시겠습니까?`)) return false;
+            const er = await api('coin_reward_group_distribute', { body: { group_id: groupId } });
+            if (!er.success) { App.toast(er.error || er.message, 'error'); return false; }
+            App.toast(er.message);
+            App.closeModal();
+            const rgSection = document.getElementById('rg-section');
+            if (rgSection) showRewardGroups(rgSection);
+        } : null, { wide: true });
+    }
+
+    async function rgDetail(groupId) {
+        const r = await api('coin_reward_group_distribution_detail', { qs: `&group_id=${groupId}` });
+        if (!r.success) { App.toast(r.error || r.message, 'error'); return; }
+        const rowsHtml = r.distributions.length ? r.distributions.map(d => {
+            const bd = Object.entries(d.cycle_breakdown || {}).map(([k,v]) => `${esc(k)}: ${v}`).join(', ');
+            return `<tr><td>${esc(d.nickname)}</td><td>${bd}</td><td style="font-weight:700">${d.total_amount}</td></tr>`;
+        }).join('') : '<tr><td colspan="3" class="empty-state">지급 내역 없음</td></tr>';
+        App.modal(`지급 내역 — ${esc(r.group.name)}`, `
+            <p>지급 시점: ${r.group.distributed_at || '-'} / 담당자: ${esc(r.group.distributor_name || '-')}</p>
+            <div style="overflow-x:auto;max-height:60vh">
+                <table class="data-table" style="font-size:13px">
+                    <thead><tr><th>회원</th><th>Cycle별</th><th>합계</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+        `, null, { wide: true });
+    }
+
     function esc(s) { return App.esc ? App.esc(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
     return {
@@ -230,5 +371,11 @@ const CoinApp = (() => {
         showSettlement,
         closeCycle,
         showCheerAward,
+        showRewardGroups,
+        rgEdit,
+        rgDelete,
+        rgAttachCycle,
+        rgPreview,
+        rgDetail,
     };
 })();
