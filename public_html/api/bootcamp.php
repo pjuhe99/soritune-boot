@@ -234,6 +234,7 @@ case 'coin_settlement_preview':  handleCoinSettlementPreview(); break;
 case 'coin_settlement_execute':  handleCoinSettlementExecute($method); break;
 case 'coin_cheer_award':         handleCoinCheerAward($method); break;
 case 'coin_cheer_status':        handleCoinCheerStatus(); break;
+case 'coin_cheer_groups':        handleCoinCheerGroups(); break;
 
 // ── Coin Reward Groups ──────────────────────────────────────
 case 'coin_reward_groups':                    handleCoinRewardGroups(); break;

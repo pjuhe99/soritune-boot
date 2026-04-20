@@ -186,68 +186,131 @@ function handleCoinSettlementExecute($method) {
 
 // ── 응원상 ──────────────────────────────────────────────────
 
+/**
+ * leader/subleader → 자기 조의 group_id 자동 결정.
+ * 나머지 롤 → 요청 파라미터의 group_id 사용 (필수).
+ *
+ * @return int|null group_id, 실패 시 null
+ */
+function resolveCheerGroupId($db, $admin, $requestedGroupId) {
+    // admin.member_id 조회
+    $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
+    $adminRow->execute([$admin['admin_id']]);
+    $aRow = $adminRow->fetch();
+    $myMemberId = $aRow ? (int)$aRow['member_id'] : 0;
+
+    if (hasRole($admin, 'leader') || hasRole($admin, 'subleader')) {
+        if (!$myMemberId) return null;
+        $mStmt = $db->prepare("SELECT group_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
+        $mStmt->execute([$myMemberId]);
+        $gid = (int)($mStmt->fetchColumn() ?: 0);
+        return $gid ?: null;
+    }
+
+    // operation / coach / head / subhead*: request group_id 필수
+    return $requestedGroupId ?: null;
+}
+
 function handleCoinCheerAward($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
-    // leader/subleader 인증 — admin으로 로그인한 조장
     $admin = requireAdmin(['leader', 'subleader', 'operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $input = getJsonInput();
 
     $cycleId = (int)($input['cycle_id'] ?? 0);
+    $reqGroupId = (int)($input['group_id'] ?? 0);
     $targetIds = $input['target_member_ids'] ?? [];
     if (!$cycleId || empty($targetIds)) jsonError('cycle_id, target_member_ids 필요');
 
-    // 조장의 member_id 확인 (admins.member_id)
     $db = getDB();
-    $leaderMemberId = null;
+    $groupId = resolveCheerGroupId($db, $admin, $reqGroupId);
+    if (!$groupId) jsonError('group_id가 필요하거나, 조장 계정의 조 정보가 없습니다.');
 
-    if (hasRole($admin, 'operation') || hasRole($admin, 'coach')) {
-        // operation/coach는 leader_member_id를 직접 전달해야 함
-        $leaderMemberId = (int)($input['leader_member_id'] ?? 0);
-        if (!$leaderMemberId) jsonError('operation/coach는 leader_member_id를 지정해야 합니다.');
-    } else {
-        // leader/subleader는 자기 member_id 사용
-        $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
-        $adminRow->execute([$admin['admin_id']]);
-        $aRow = $adminRow->fetch();
-        $leaderMemberId = $aRow ? (int)$aRow['member_id'] : 0;
-        if (!$leaderMemberId) jsonError('관리자 계정에 연결된 회원이 없습니다.');
-    }
+    // 실행자 member_id (admins.member_id — 없을 수도 있음, operation 전용 admin 등)
+    $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
+    $adminRow->execute([$admin['admin_id']]);
+    $aRow = $adminRow->fetch();
+    $grantedByMemberId = $aRow ? (int)$aRow['member_id'] : 0;
+    if (!$grantedByMemberId) jsonError('관리자 계정에 연결된 회원이 없습니다.');
 
-    $result = grantCheerAward($db, $cycleId, $leaderMemberId, $targetIds, $admin['admin_id']);
+    $result = grantCheerAward($db, $cycleId, $groupId, $targetIds, $grantedByMemberId, $admin['admin_id']);
     if (isset($result['error'])) jsonError($result['error']);
 
     jsonSuccess($result, "응원상 {$result['granted']}명 지급 완료");
 }
 
 function handleCoinCheerStatus() {
-    $admin = requireAdmin();
+    $admin = requireAdmin(['leader', 'subleader', 'operation', 'coach', 'head', 'subhead1', 'subhead2']);
     $cycleId = (int)($_GET['cycle_id'] ?? 0);
+    $reqGroupId = (int)($_GET['group_id'] ?? 0);
     if (!$cycleId) jsonError('cycle_id 필요');
 
     $db = getDB();
+    $groupId = resolveCheerGroupId($db, $admin, $reqGroupId);
+    if (!$groupId) jsonError('group_id가 필요하거나, 조장 계정의 조 정보가 없습니다.');
 
-    // 조장의 member_id
-    $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
-    $adminRow->execute([$admin['admin_id']]);
-    $aRow = $adminRow->fetch();
-    $leaderMemberId = $aRow ? (int)$aRow['member_id'] : 0;
+    // group 정보
+    $gStmt = $db->prepare("
+        SELECT bg.id, bg.name, bg.cohort_id, c.cohort AS cohort_name
+        FROM bootcamp_groups bg
+        JOIN cohorts c ON c.id = bg.cohort_id
+        WHERE bg.id = ?
+    ");
+    $gStmt->execute([$groupId]);
+    $group = $gStmt->fetch();
+    if (!$group) jsonError('조를 찾을 수 없습니다.');
 
-    $awards = [];
-    if ($leaderMemberId) {
-        $stmt = $db->prepare("
-            SELECT lca.target_member_id, bm.nickname, bm.real_name, lca.coin_amount, lca.created_at
-            FROM leader_cheer_awards lca
-            JOIN bootcamp_members bm ON lca.target_member_id = bm.id
-            WHERE lca.cycle_id = ? AND lca.leader_member_id = ?
-            ORDER BY lca.created_at
-        ");
-        $stmt->execute([$cycleId, $leaderMemberId]);
-        $awards = $stmt->fetchAll();
+    // 지급 내역
+    $stmt = $db->prepare("
+        SELECT lca.target_member_id, bm.nickname, bm.real_name, lca.coin_amount, lca.created_at,
+               gb.nickname AS granted_by_nickname
+        FROM leader_cheer_awards lca
+        JOIN bootcamp_members bm ON lca.target_member_id = bm.id
+        LEFT JOIN bootcamp_members gb ON lca.granted_by_member_id = gb.id
+        WHERE lca.cycle_id = ? AND lca.group_id = ?
+        ORDER BY lca.created_at
+    ");
+    $stmt->execute([$cycleId, $groupId]);
+    $awards = $stmt->fetchAll();
+
+    // 조원 (이미 지급받은 사람 제외)
+    $awardedIds = array_map(fn($a) => (int)$a['target_member_id'], $awards);
+    $memberQuery = "
+        SELECT id, nickname, real_name, member_role
+        FROM bootcamp_members
+        WHERE group_id = ? AND is_active = 1 AND member_status != 'refunded'
+    ";
+    $memberParams = [$groupId];
+    if ($awardedIds) {
+        $ph = implode(',', array_fill(0, count($awardedIds), '?'));
+        $memberQuery .= " AND id NOT IN ($ph)";
+        $memberParams = array_merge($memberParams, $awardedIds);
     }
+    $memberQuery .= " ORDER BY nickname";
+    $mStmt = $db->prepare($memberQuery);
+    $mStmt->execute($memberParams);
+    $members = $mStmt->fetchAll();
 
     jsonSuccess([
-        'awards' => $awards,
+        'group'       => $group,
+        'awards'      => $awards,
+        'members'     => $members,
         'max_targets' => COIN_CHEER_MAX_TARGETS,
-        'remaining' => COIN_CHEER_MAX_TARGETS - count($awards),
+        'remaining'   => COIN_CHEER_MAX_TARGETS - count($awards),
     ]);
+}
+
+/**
+ * active cohort의 조 목록 (응원상 지급용 picker)
+ */
+function handleCoinCheerGroups() {
+    requireAdmin(['operation', 'coach', 'head', 'subhead1', 'subhead2']);
+    $db = getDB();
+    $stmt = $db->query("
+        SELECT bg.id, bg.name, bg.stage_no, bg.cohort_id, c.cohort AS cohort_name
+        FROM bootcamp_groups bg
+        JOIN cohorts c ON c.id = bg.cohort_id
+        WHERE c.is_active = 1 AND bg.status = 'active'
+        ORDER BY bg.stage_no, bg.name
+    ");
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
 }

@@ -526,53 +526,49 @@ function executeSettlement($db, $cycleId, $adminId) {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 응원상 지급
- * @param array $targetMemberIds 대상 회원 ID 배열 (최대 3명)
- * @return array 결과
+ * 응원상 지급 — 조별 쿼터(3명) 정책.
+ * @param int   $cycleId
+ * @param int   $groupId             대상 조
+ * @param array $targetMemberIds     대상 회원 ID 배열 (해당 조의 조원이어야 함)
+ * @param int   $grantedByMemberId   실행자 member_id (조장/부조장/운영자/코치/총괄/부총괄)
+ * @param int   $adminId             coin_logs.created_by
+ * @return array
  */
-function grantCheerAward($db, $cycleId, $leaderMemberId, $targetMemberIds, $adminId) {
-    // 조장의 group_id 확인
-    $leaderStmt = $db->prepare("SELECT group_id, member_role FROM bootcamp_members WHERE id = ? AND is_active = 1");
-    $leaderStmt->execute([$leaderMemberId]);
-    $leader = $leaderStmt->fetch();
-    if (!$leader) return ['error' => '조장 정보를 찾을 수 없습니다.'];
-    if (!in_array($leader['member_role'], ['leader', 'subleader'])) return ['error' => '조장/부조장만 응원상을 줄 수 있습니다.'];
-    if (!$leader['group_id']) return ['error' => '조가 배정되지 않았습니다.'];
+function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMemberId, $adminId) {
+    // group 검증
+    $gStmt = $db->prepare("SELECT id, cohort_id FROM bootcamp_groups WHERE id = ? AND status = 'active'");
+    $gStmt->execute([$groupId]);
+    $group = $gStmt->fetch();
+    if (!$group) return ['error' => '조를 찾을 수 없습니다.'];
 
-    // 이미 선택한 수 확인
-    $existingStmt = $db->prepare("
-        SELECT COUNT(*) FROM leader_cheer_awards WHERE cycle_id = ? AND leader_member_id = ?
-    ");
-    $existingStmt->execute([$cycleId, $leaderMemberId]);
+    // 쿼터: cycle × group 기준
+    $existingStmt = $db->prepare("SELECT COUNT(*) FROM leader_cheer_awards WHERE cycle_id = ? AND group_id = ?");
+    $existingStmt->execute([$cycleId, $groupId]);
     $existingCount = (int)$existingStmt->fetchColumn();
     $remaining = COIN_CHEER_MAX_TARGETS - $existingCount;
 
     if (count($targetMemberIds) > $remaining) {
-        return ['error' => "응원상은 최대 " . COIN_CHEER_MAX_TARGETS . "명까지입니다. 남은 선택 가능: {$remaining}명"];
+        return ['error' => "응원상은 조당 최대 " . COIN_CHEER_MAX_TARGETS . "명까지입니다. 남은 자리: {$remaining}명"];
     }
 
     $results = ['granted' => 0, 'errors' => []];
     foreach ($targetMemberIds as $targetId) {
         $targetId = (int)$targetId;
-        if ($targetId === $leaderMemberId) {
-            $results['errors'][] = ['member_id' => $targetId, 'reason' => '본인에게는 줄 수 없습니다.'];
-            continue;
-        }
 
-        // 같은 조 확인
-        $tStmt = $db->prepare("SELECT id, group_id, nickname FROM bootcamp_members WHERE id = ? AND is_active = 1");
+        // 같은 조 조원 확인
+        $tStmt = $db->prepare("SELECT id, group_id, nickname FROM bootcamp_members WHERE id = ? AND is_active = 1 AND member_status != 'refunded'");
         $tStmt->execute([$targetId]);
         $target = $tStmt->fetch();
-        if (!$target || (int)$target['group_id'] !== (int)$leader['group_id']) {
-            $results['errors'][] = ['member_id' => $targetId, 'reason' => '같은 조의 회원만 선택할 수 있습니다.'];
+        if (!$target || (int)$target['group_id'] !== (int)$groupId) {
+            $results['errors'][] = ['member_id' => $targetId, 'reason' => '해당 조의 회원이 아닙니다.'];
             continue;
         }
 
-        // 중복 체크
+        // 중복 체크 — 같은 조에서 이미 지급된 경우
         $dupStmt = $db->prepare("
-            SELECT id FROM leader_cheer_awards WHERE cycle_id = ? AND leader_member_id = ? AND target_member_id = ?
+            SELECT id FROM leader_cheer_awards WHERE cycle_id = ? AND group_id = ? AND target_member_id = ?
         ");
-        $dupStmt->execute([$cycleId, $leaderMemberId, $targetId]);
+        $dupStmt->execute([$cycleId, $groupId, $targetId]);
         if ($dupStmt->fetch()) {
             $results['errors'][] = ['member_id' => $targetId, 'reason' => '이미 선택된 회원입니다.'];
             continue;
@@ -580,12 +576,12 @@ function grantCheerAward($db, $cycleId, $leaderMemberId, $targetMemberIds, $admi
 
         // 기록 + 코인 지급
         $db->prepare("
-            INSERT INTO leader_cheer_awards (cycle_id, leader_member_id, target_member_id, coin_amount)
-            VALUES (?, ?, ?, ?)
-        ")->execute([$cycleId, $leaderMemberId, $targetId, COIN_CHEER_AMOUNT]);
+            INSERT INTO leader_cheer_awards (cycle_id, group_id, granted_by_member_id, target_member_id, coin_amount)
+            VALUES (?, ?, ?, ?, ?)
+        ")->execute([$cycleId, $groupId, $grantedByMemberId, $targetId, COIN_CHEER_AMOUNT]);
 
         applyCoinChange($db, $targetId, $cycleId, COIN_CHEER_AMOUNT, 'cheer_award',
-            "응원상 from member:{$leaderMemberId}", $adminId);
+            "응원상 (granted_by:{$grantedByMemberId})", $adminId);
 
         $results['granted']++;
     }
