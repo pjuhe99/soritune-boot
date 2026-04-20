@@ -190,25 +190,36 @@ function handleCoinSettlementExecute($method) {
  * leader/subleader → 자기 조의 group_id 자동 결정.
  * 나머지 롤 → 요청 파라미터의 group_id 사용 (필수).
  *
+ * 조장/부조장은 member.php 로그인 플로우로 admin 세션을 생성 — `admin_id`가 곧 `bootcamp_members.id`.
+ * 일반 관리자(operation/coach/head/subhead*)는 `admin_id`가 `admins.id`.
+ *
  * @return int|null group_id, 실패 시 null
  */
 function resolveCheerGroupId($db, $admin, $requestedGroupId) {
-    // admin.member_id 조회
-    $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
-    $adminRow->execute([$admin['admin_id']]);
-    $aRow = $adminRow->fetch();
-    $myMemberId = $aRow ? (int)$aRow['member_id'] : 0;
-
     if (hasRole($admin, 'leader') || hasRole($admin, 'subleader')) {
-        if (!$myMemberId) return null;
+        // admin_id IS bootcamp_members.id (member.php loginAdmin 호출 결과)
         $mStmt = $db->prepare("SELECT group_id FROM bootcamp_members WHERE id = ? AND is_active = 1");
-        $mStmt->execute([$myMemberId]);
+        $mStmt->execute([$admin['admin_id']]);
         $gid = (int)($mStmt->fetchColumn() ?: 0);
         return $gid ?: null;
     }
-
     // operation / coach / head / subhead*: request group_id 필수
     return $requestedGroupId ?: null;
+}
+
+/**
+ * admin 세션에서 회원 ID 추출 (granted_by 용).
+ * leader/subleader: admin_id=member_id
+ * 나머지: admins.member_id (NULL 가능)
+ */
+function resolveGrantorMemberId($db, $admin) {
+    if (hasRole($admin, 'leader') || hasRole($admin, 'subleader')) {
+        return (int)$admin['admin_id'];
+    }
+    $stmt = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
+    $stmt->execute([$admin['admin_id']]);
+    $mid = (int)($stmt->fetchColumn() ?: 0);
+    return $mid ?: null;
 }
 
 function handleCoinCheerAward($method) {
@@ -225,12 +236,7 @@ function handleCoinCheerAward($method) {
     $groupId = resolveCheerGroupId($db, $admin, $reqGroupId);
     if (!$groupId) jsonError('group_id가 필요하거나, 조장 계정의 조 정보가 없습니다.');
 
-    // 실행자 member_id (admins.member_id — 없을 수도 있음, operation 전용 admin 등)
-    $adminRow = $db->prepare("SELECT member_id FROM admins WHERE id = ?");
-    $adminRow->execute([$admin['admin_id']]);
-    $aRow = $adminRow->fetch();
-    $grantedByMemberId = $aRow ? (int)$aRow['member_id'] : 0;
-    if (!$grantedByMemberId) jsonError('관리자 계정에 연결된 회원이 없습니다.');
+    $grantedByMemberId = resolveGrantorMemberId($db, $admin); // NULL 가능 (관리자 회원 미연결)
 
     $result = grantCheerAward($db, $cycleId, $groupId, $targetIds, $grantedByMemberId, $admin['admin_id']);
     if (isset($result['error'])) jsonError($result['error']);

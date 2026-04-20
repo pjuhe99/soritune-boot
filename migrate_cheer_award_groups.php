@@ -64,4 +64,14 @@ if (!$indexes) {
     echo "  - 이미 존재\n";
 }
 
+// 4. granted_by_member_id NULL 허용 (관리자 계정이 회원 미연결인 경우 대비)
+echo "\n[4] granted_by_member_id NULL 허용...\n";
+$col = $db->query("SHOW COLUMNS FROM leader_cheer_awards LIKE 'granted_by_member_id'")->fetch();
+if ($col && $col['Null'] === 'NO') {
+    $db->exec("ALTER TABLE leader_cheer_awards MODIFY COLUMN granted_by_member_id INT UNSIGNED NULL COMMENT '실행자 member_id (관리자 미연결 시 NULL)'");
+    echo "  - NULL 허용 완료\n";
+} else {
+    echo "  - 이미 NULL 허용\n";
+}
+
 echo "\n=== Migration 완료 ===\n";

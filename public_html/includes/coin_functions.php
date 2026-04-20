@@ -527,11 +527,11 @@ function executeSettlement($db, $cycleId, $adminId) {
 
 /**
  * 응원상 지급 — 조별 쿼터(3명) 정책.
- * @param int   $cycleId
- * @param int   $groupId             대상 조
- * @param array $targetMemberIds     대상 회원 ID 배열 (해당 조의 조원이어야 함)
- * @param int   $grantedByMemberId   실행자 member_id (조장/부조장/운영자/코치/총괄/부총괄)
- * @param int   $adminId             coin_logs.created_by
+ * @param int      $cycleId
+ * @param int      $groupId             대상 조
+ * @param array    $targetMemberIds     대상 회원 ID 배열 (해당 조의 조원이어야 함)
+ * @param int|null $grantedByMemberId   실행자 member_id (관리자가 회원 미연결이면 NULL)
+ * @param int      $adminId             coin_logs.created_by
  * @return array
  */
 function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMemberId, $adminId) {
@@ -578,10 +578,11 @@ function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMe
         $db->prepare("
             INSERT INTO leader_cheer_awards (cycle_id, group_id, granted_by_member_id, target_member_id, coin_amount)
             VALUES (?, ?, ?, ?, ?)
-        ")->execute([$cycleId, $groupId, $grantedByMemberId, $targetId, COIN_CHEER_AMOUNT]);
+        ")->execute([$cycleId, $groupId, $grantedByMemberId ?: null, $targetId, COIN_CHEER_AMOUNT]);
 
+        $grantorLabel = $grantedByMemberId ? "member:{$grantedByMemberId}" : "admin:{$adminId}";
         applyCoinChange($db, $targetId, $cycleId, COIN_CHEER_AMOUNT, 'cheer_award',
-            "응원상 (granted_by:{$grantedByMemberId})", $adminId);
+            "응원상 (granted_by:{$grantorLabel})", $adminId);
 
         $results['granted']++;
     }
