@@ -247,6 +247,9 @@ case 'coin_reward_group_preview':             handleCoinRewardGroupPreview(); br
 case 'coin_reward_group_distribute':          handleCoinRewardGroupDistribute($method); break;
 case 'coin_reward_group_distribution_detail': handleCoinRewardGroupDistributionDetail(); break;
 
+// ── Member-facing coin history ──────────────────────────────
+case 'my_coin_history':                       handleMyCoinHistory(); break;
+
 // ── Scores ───────────────────────────────────────────────────
 
 case 'score_logs':       handleScoreLogs(); break;

@@ -439,3 +439,15 @@ function handleMemberEventLog($method) {
 
     jsonSuccess([]);
 }
+
+/**
+ * 회원 본인의 코인 내역 조회 (open reward_group 기준, scope A)
+ * 응답 스펙: 2026-04-21-coin-history-view-design.md §5.1
+ */
+function handleMyCoinHistory() {
+    $member = requireMember();
+    $memberId = (int)$member['member_id'];
+    $db = getDB();
+    $groups = getMemberCoinHistory($db, $memberId);
+    jsonSuccess(['groups' => $groups]);
+}
