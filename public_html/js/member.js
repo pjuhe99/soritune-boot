@@ -169,6 +169,7 @@ const MemberApp = (() => {
                         <button class="btn btn-secondary" id="btn-member-logout">로그아웃</button>
                     </div>
                 </div>
+                <div id="member-coin-history-area" style="display:none"></div>
             </div>
         `;
 
@@ -187,5 +188,25 @@ const MemberApp = (() => {
         MemberTabs.init(document.getElementById('member-tabs-area'), member);
     }
 
-    return { init };
+    function openCoinHistory() {
+        const dashboardContent = root.querySelector('.member-content');
+        const historyArea = document.getElementById('member-coin-history-area');
+        if (!historyArea) return;
+        dashboardContent.style.display = 'none';
+        historyArea.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        MemberCoinHistory.render(historyArea, closeCoinHistory);
+    }
+
+    function closeCoinHistory() {
+        const dashboardContent = root.querySelector('.member-content');
+        const historyArea = document.getElementById('member-coin-history-area');
+        if (!historyArea) return;
+        historyArea.style.display = 'none';
+        historyArea.innerHTML = '';
+        dashboardContent.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+
+    return { init, openCoinHistory, closeCoinHistory };
 })();
