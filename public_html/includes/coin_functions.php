@@ -710,13 +710,20 @@ function coinReasonLabel($reasonType, $coinChange) {
 }
 
 /**
- * 특정 cycle 상태에 따른 회원용 지급 시점 안내 문구.
+ * 회원용 지급 시점 안내 문구.
+ * 회원의 open reward_group 목록에서 첫 group은 "이번 기수" — 그 cohort 마감 때 바로 지급.
+ * 두 번째 이후 group은 "다음 기수" — 해당 cohort가 끝나야 지급되며 "다음 기수에 함께 정산"을 덧붙임.
+ *
+ * @param string $cycleName     cycle 이름 (예: "11기")
+ * @param string $cycleStatus   'active' 또는 'closed'
+ * @param bool   $isFutureGroup true면 다음 기수(이월) group에 속한 cycle
  */
-function coinPayoutMessage($cycleName, $cycleStatus) {
+function coinPayoutMessage($cycleName, $cycleStatus, $isFutureGroup = false) {
+    $suffix = $isFutureGroup ? ' (다음 기수에 함께 정산)' : '';
     if ($cycleStatus === 'closed') {
-        return "{$cycleName} 마감 후 곧 적립금으로 지급됩니다";
+        return "{$cycleName} 마감 후 곧 적립금으로 지급됩니다{$suffix}";
     }
-    return "{$cycleName} 마감 시 적립금으로 지급됩니다 (다음 기수에 함께 정산)";
+    return "{$cycleName} 마감 시 적립금으로 지급됩니다{$suffix}";
 }
 
 /**
@@ -737,8 +744,9 @@ function getMemberCoinHistory($db, $memberId) {
     $groups = $gStmt->fetchAll();
 
     $result = [];
-    foreach ($groups as $g) {
+    foreach ($groups as $idx => $g) {
         $gid = (int)$g['id'];
+        $isFutureGroup = ($idx > 0);
 
         // 2. 해당 group의 cycles + 회원의 earned/used
         $cStmt = $db->prepare("
@@ -783,7 +791,7 @@ function getMemberCoinHistory($db, $memberId) {
                 'cycle_name'      => $c['name'],
                 'cycle_status'    => $c['status'],
                 'earned'          => $earned,
-                'payout_message'  => coinPayoutMessage($c['name'], $c['status']),
+                'payout_message'  => coinPayoutMessage($c['name'], $c['status'], $isFutureGroup),
                 'logs'            => $logs,
             ];
         }

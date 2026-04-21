@@ -144,9 +144,11 @@
 - cycle 내 `logs`: `coin_logs.created_at DESC` (최신 먼저). 페이징 없음 — 한 cycle당 로그 수는 ≤ 30 내외로 예상.
 - `earned` = `member_cycle_coins.earned_coin - member_cycle_coins.used_coin` (지급 전 = `used_coin`이 0).
 - `logs`는 **해당 cycle의 모든 coin_logs** (양수·음수 포함). 음수 로그(체크 해제 등)도 그대로 보이게 하여 합계 정합성 유지.
-- `payout_message`는 서버에서 생성:
-  - cycle `status='closed'` AND group `status='open'`: "{cycle_name} 마감 후 곧 적립금으로 지급됩니다"
-  - cycle `status='active'`: "{cycle_name} 마감 시 적립금으로 지급됩니다 (다음 기수에 함께 정산)"
+- `payout_message`는 서버에서 생성. 회원의 open reward_group 목록에서 **첫 group은 "이번 기수"**(그 cohort 마감 때 바로 지급), **두 번째 이후 group은 "다음 기수"**(해당 cohort가 끝나야 지급):
+  - 첫 group + cycle `status='closed'`: "{cycle_name} 마감 후 곧 적립금으로 지급됩니다"
+  - 첫 group + cycle `status='active'`: "{cycle_name} 마감 시 적립금으로 지급됩니다"
+  - 두 번째 이후 group + `closed`: "{cycle_name} 마감 후 곧 적립금으로 지급됩니다 (다음 기수에 함께 정산)"
+  - 두 번째 이후 group + `active`: "{cycle_name} 마감 시 적립금으로 지급됩니다 (다음 기수에 함께 정산)"
 - 회원에게 보유 코인이 있는 open group이 **0개**이면 `groups: []` 반환. 프론트는 "아직 받은 코인이 없습니다" 표시.
 - `legacy cycle` (reward_group_id=NULL) 코인은 이 응답에 포함 **안 됨** — 회원 불만 여지가 있지만 현재 운영 상황에서는 해당 케이스 없음 (이번 마이그 후 기존 cycle은 모두 group에 할당).
 
