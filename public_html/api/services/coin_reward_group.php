@@ -209,12 +209,27 @@ function handleCoinRewardGroupDistribute($method) {
     try {
         $ph = implode(',', array_fill(0, count($cycleIds), '?'));
         $stmt = $db->prepare("
-            SELECT mcc.member_id, mcc.cycle_id, mcc.earned_coin, mcc.used_coin
+            SELECT mcc.member_id, mcc.cycle_id, mcc.earned_coin, mcc.used_coin,
+                   bm.is_active, bm.member_status
             FROM member_cycle_coins mcc
+            JOIN bootcamp_members bm ON bm.id = mcc.member_id
             WHERE mcc.cycle_id IN ($ph)
         ");
         $stmt->execute($cycleIds);
-        $rows = $stmt->fetchAll();
+        $allRows = $stmt->fetchAll();
+
+        $INACTIVE_STATUSES = ['refunded', 'leaving', 'out_of_group_management'];
+        $activeRows   = [];
+        $forfeitRows  = [];
+        foreach ($allRows as $r) {
+            $isInactive = ((int)$r['is_active'] === 0) || in_array($r['member_status'], $INACTIVE_STATUSES, true);
+            if ($isInactive) {
+                $forfeitRows[] = $r;
+            } else {
+                $activeRows[] = $r;
+            }
+        }
+        $rows = $activeRows;
 
         $perMember = [];
         foreach ($rows as $r) {
@@ -260,8 +275,37 @@ function handleCoinRewardGroupDistribute($method) {
             syncMemberCoinBalance($db, $mid);
         }
 
+        // 비활성 회원 소각 (reward_forfeited)
+        $forfeitedMemberIds = [];
+        foreach ($forfeitRows as $r) {
+            $mid = (int)$r['member_id'];
+            $cid = (int)$r['cycle_id'];
+            $earnedBefore = (int)$r['earned_coin'];
+            $usedBefore   = (int)$r['used_coin'];
+            $active = $earnedBefore - $usedBefore;
+            if ($active <= 0) continue;
+
+            $db->prepare("UPDATE member_cycle_coins SET used_coin = earned_coin WHERE member_id = ? AND cycle_id = ?")
+               ->execute([$mid, $cid]);
+
+            $db->prepare("
+                INSERT INTO coin_logs (member_id, cycle_id, coin_change, before_coin, after_coin, reason_type, reason_detail, created_by)
+                VALUES (?, ?, ?, ?, ?, 'reward_forfeited', ?, ?)
+            ")->execute([$mid, $cid, -$active, $active, 0, "하차자 코인 소실 ({$group['name']})", $admin['admin_id']]);
+
+            $forfeitedMemberIds[$mid] = true;
+        }
+
+        foreach (array_keys($forfeitedMemberIds) as $mid) {
+            syncMemberCoinBalance($db, $mid);
+        }
+
         $db->commit();
-        jsonSuccess(['granted' => $grantedCount], "리워드 지급 완료: {$grantedCount}명");
+        $forfeitedCount = count($forfeitedMemberIds);
+        jsonSuccess(
+            ['granted' => $grantedCount, 'forfeited' => $forfeitedCount],
+            "리워드 지급 완료: 지급 {$grantedCount}명 / 소각 {$forfeitedCount}명"
+        );
     } catch (Throwable $e) {
         $db->rollBack();
         jsonError('지급 실패: ' . $e->getMessage());
