@@ -760,7 +760,7 @@ function getMemberCoinHistory($db, $memberId) {
 
             // 3. 해당 cycle의 해당 회원 coin_logs
             $lStmt = $db->prepare("
-                SELECT DATE(created_at) AS d, reason_type, reason_detail, coin_change
+                SELECT DATE(created_at) AS d, reason_type, coin_change
                 FROM coin_logs
                 WHERE member_id = ? AND cycle_id = ?
                 ORDER BY created_at DESC, id DESC
