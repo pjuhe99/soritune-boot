@@ -3,3 +3,4 @@ keys/
 logs/
 backups/
 migrate_from_bootcamp.php.done
+.superpowers/
