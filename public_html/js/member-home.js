@@ -36,13 +36,13 @@ const MemberHome = (() => {
                             <div class="stat-card-label">점수 <button class="cur-help-btn" data-guide="score_guide">?</button></div>
                         </div>
                     </div>
-                    <div class="stat-card stat-coin">
+                    <div class="stat-card stat-coin" data-action="open-coin-history" role="button" tabindex="0">
                         <div class="stat-card-icon">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.8" fill="none"/><text x="10" y="14" text-anchor="middle" font-size="10" font-weight="700" fill="currentColor">C</text></svg>
                         </div>
                         <div class="stat-card-body">
                             <div class="stat-card-value">${member.coin ?? 0}</div>
-                            <div class="stat-card-label">코인 <button class="cur-help-btn" data-guide="coin_guide">?</button></div>
+                            <div class="stat-card-label">코인 <button class="cur-help-btn" data-guide="coin_guide" onclick="event.stopPropagation()">?</button></div>
                         </div>
                     </div>
                     <div class="stat-card stat-completed">
@@ -72,6 +72,15 @@ const MemberHome = (() => {
         headerEl.querySelectorAll('.cur-help-btn[data-guide]').forEach(btn => {
             btn.onclick = () => showGuide(btn.dataset.guide);
         });
+
+        const coinCard = headerEl.querySelector('.stat-coin[data-action="open-coin-history"]');
+        if (coinCard) {
+            const openHistory = () => MemberApp.openCoinHistory();
+            coinCard.addEventListener('click', openHistory);
+            coinCard.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHistory(); }
+            });
+        }
 
         headerEl.querySelector('.nickname-edit-btn').onclick = () => showNicknameEditModal(headerEl, member);
 
