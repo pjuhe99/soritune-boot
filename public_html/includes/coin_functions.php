@@ -681,3 +681,119 @@ function checkDistributePrerequisites($group) {
         'blockers'       => $blockers,
     ];
 }
+
+// ══════════════════════════════════════════════════════════════
+// 회원 코인 내역 (my_coin_history)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * reason_type → 회원 노출용 한글 라벨.
+ * 음수 변동은 라벨 뒤에 "(취소)"를 붙여 구분.
+ */
+function coinReasonLabel($reasonType, $coinChange) {
+    $map = [
+        'study_open'          => '복습스터디 개설',
+        'study_join'          => '복습스터디 참여',
+        'leader_coin'         => '리더 코인',
+        'perfect_attendance'  => '찐완주 보너스',
+        'hamemmal_bonus'      => '하멈말 보너스',
+        'cheer_award'         => '응원상',
+        'manual_adjustment'   => '운영자 조정',
+        'reward_distribution' => '적립금 지급',
+        'reward_forfeited'    => '하차로 인한 소실',
+    ];
+    $label = $map[$reasonType] ?? $reasonType;
+    if ((int)$coinChange < 0 && $reasonType !== 'reward_distribution' && $reasonType !== 'reward_forfeited') {
+        $label .= ' (취소)';
+    }
+    return $label;
+}
+
+/**
+ * 특정 cycle 상태에 따른 회원용 지급 시점 안내 문구.
+ */
+function coinPayoutMessage($cycleName, $cycleStatus) {
+    if ($cycleStatus === 'closed') {
+        return "{$cycleName} 마감 후 곧 적립금으로 지급됩니다";
+    }
+    return "{$cycleName} 마감 시 적립금으로 지급됩니다 (다음 기수에 함께 정산)";
+}
+
+/**
+ * 회원의 open reward_group + 각 group의 cycle + 각 cycle의 earn log 반환.
+ * 스펙 5.1 참조.
+ */
+function getMemberCoinHistory($db, $memberId) {
+    // 1. 회원이 코인 행을 가진 open group들
+    $gStmt = $db->prepare("
+        SELECT DISTINCT rg.id, rg.name
+        FROM reward_groups rg
+        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
+        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+        WHERE rg.status = 'open'
+        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
+    ");
+    $gStmt->execute([$memberId]);
+    $groups = $gStmt->fetchAll();
+
+    $result = [];
+    foreach ($groups as $g) {
+        $gid = (int)$g['id'];
+
+        // 2. 해당 group의 cycles + 회원의 earned/used
+        $cStmt = $db->prepare("
+            SELECT cc.id, cc.name, cc.status,
+                   COALESCE(mcc.earned_coin, 0) AS earned_coin,
+                   COALESCE(mcc.used_coin, 0)   AS used_coin
+            FROM coin_cycles cc
+            LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+            WHERE cc.reward_group_id = ?
+            ORDER BY cc.start_date ASC
+        ");
+        $cStmt->execute([$memberId, $gid]);
+        $cycles = $cStmt->fetchAll();
+
+        $cycleList = [];
+        foreach ($cycles as $c) {
+            $cid = (int)$c['id'];
+            $earned = (int)$c['earned_coin'] - (int)$c['used_coin'];
+
+            // 3. 해당 cycle의 해당 회원 coin_logs
+            $lStmt = $db->prepare("
+                SELECT DATE(created_at) AS d, reason_type, reason_detail, coin_change
+                FROM coin_logs
+                WHERE member_id = ? AND cycle_id = ?
+                ORDER BY created_at DESC, id DESC
+            ");
+            $lStmt->execute([$memberId, $cid]);
+            $logRows = $lStmt->fetchAll();
+
+            $logs = [];
+            foreach ($logRows as $lr) {
+                $logs[] = [
+                    'date'        => $lr['d'],
+                    'reason_type' => $lr['reason_type'],
+                    'label'       => coinReasonLabel($lr['reason_type'], (int)$lr['coin_change']),
+                    'change'      => (int)$lr['coin_change'],
+                ];
+            }
+
+            $cycleList[] = [
+                'cycle_id'        => $cid,
+                'cycle_name'      => $c['name'],
+                'cycle_status'    => $c['status'],
+                'earned'          => $earned,
+                'payout_message'  => coinPayoutMessage($c['name'], $c['status']),
+                'logs'            => $logs,
+            ];
+        }
+
+        $result[] = [
+            'group_id'   => $gid,
+            'group_name' => $g['name'],
+            'cycles'     => $cycleList,
+        ];
+    }
+
+    return $result;
+}
