@@ -668,8 +668,8 @@ function checkDistributePrerequisites($group) {
         $blockers[] = "이미 지급 완료된 group";
     }
     $cycles = $group['cycles'] ?? [];
-    if (count($cycles) !== 2) {
-        $blockers[] = "cycle이 정확히 2개여야 함 (현재 " . count($cycles) . "개)";
+    if (count($cycles) < 1) {
+        $blockers[] = "group에 소속된 cycle이 없음";
     }
     foreach ($cycles as $c) {
         if ($c['status'] !== 'closed') {
