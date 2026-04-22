@@ -28,10 +28,10 @@ function handleMembers() {
                COALESCE(mcb.current_coin, 0) AS current_coin,
                CASE WHEN bm.cafe_member_key IS NOT NULL THEN 1 ELSE 0 END AS is_cafe_mapped,
                bm.participation_count,
-               COALESCE(mhs_p.stage1_participation_count, mhs_u.stage1_participation_count, 0) AS stage1_participation_count,
-               COALESCE(mhs_p.stage2_participation_count, mhs_u.stage2_participation_count, 0) AS stage2_participation_count,
-               COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+               COALESCE(mhs_u.stage1_participation_count, mhs_p.stage1_participation_count, 0) AS stage1_participation_count,
+               COALESCE(mhs_u.stage2_participation_count, mhs_p.stage2_participation_count, 0) AS stage2_participation_count,
+               COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id

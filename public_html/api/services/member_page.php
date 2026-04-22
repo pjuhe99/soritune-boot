@@ -383,8 +383,8 @@ function handleMemberBootees() {
         SELECT bm.id, bm.nickname, bm.group_id, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS score,
                COALESCE(mcb.current_coin, 0) AS coin,
-               COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_count,
-               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+               COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_count,
+               COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         LEFT JOIN member_scores ms ON bm.id = ms.member_id

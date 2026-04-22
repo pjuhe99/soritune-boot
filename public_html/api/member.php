@@ -49,8 +49,8 @@ case 'login':
     $coin = (int)($coinStmt->fetchColumn() ?: 0);
 
     $statsStmt = $db->prepare("
-        SELECT COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+        SELECT COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
         LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
@@ -86,8 +86,8 @@ case 'check_session':
             SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.member_role,
                    COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
                    c.cohort, bg.name AS group_name,
-                   COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-                   COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+                   COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+                   COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
             FROM bootcamp_members bm
             JOIN cohorts c ON bm.cohort_id = c.id
             LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id

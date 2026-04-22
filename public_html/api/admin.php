@@ -522,10 +522,10 @@ case 'member_list':
                bm.participation_count, bm.entered,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin,
-               COALESCE(mhs_p.stage1_participation_count, mhs_u.stage1_participation_count, 0) AS stage1_participation_count,
-               COALESCE(mhs_p.stage2_participation_count, mhs_u.stage2_participation_count, 0) AS stage2_participation_count,
-               COALESCE(mhs_p.completed_bootcamp_count, mhs_u.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-               COALESCE(mhs_p.bravo_grade, mhs_u.bravo_grade) AS bravo_grade
+               COALESCE(mhs_u.stage1_participation_count, mhs_p.stage1_participation_count, 0) AS stage1_participation_count,
+               COALESCE(mhs_u.stage2_participation_count, mhs_p.stage2_participation_count, 0) AS stage2_participation_count,
+               COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
