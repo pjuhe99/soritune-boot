@@ -17,6 +17,20 @@ const AdminReviews = (() => {
     async function init(container) {
         container.innerHTML = `
             <div class="admin-reviews-page">
+                <div class="admin-reviews-settings" id="ar-settings">
+                    <div class="ar-settings-title">접수 설정</div>
+                    <div class="ar-settings-row">
+                        <label class="ar-toggle">
+                            <input type="checkbox" id="ar-toggle-cafe" disabled>
+                            <span>카페 후기 접수</span>
+                        </label>
+                        <label class="ar-toggle">
+                            <input type="checkbox" id="ar-toggle-blog" disabled>
+                            <span>블로그 후기 접수</span>
+                        </label>
+                        <span class="ar-settings-hint">체크 해제 시 회원 화면에서 해당 섹션이 숨겨지고 제출이 거부됩니다.</span>
+                    </div>
+                </div>
                 <div class="admin-reviews-filters">
                     <label>Cycle:
                         <select id="ar-cycle"></select>
@@ -43,6 +57,9 @@ const AdminReviews = (() => {
             </div>
         `;
 
+        // 토글 로드
+        await loadSettings();
+
         // cycles 로드
         const cr = await App.get(API + 'coin_cycles');
         state.cycles = (cr.cycles || []).slice(0, 10);
@@ -62,8 +79,42 @@ const AdminReviews = (() => {
             state.q = document.getElementById('ar-q').value.trim();
             load();
         };
+        document.getElementById('ar-q').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('ar-reload').click();
+        });
 
         await load();
+    }
+
+    async function loadSettings() {
+        const cafe = document.getElementById('ar-toggle-cafe');
+        const blog = document.getElementById('ar-toggle-blog');
+        const r = await App.get(API + 'review_settings');
+        if (!r.success) {
+            cafe.disabled = true; blog.disabled = true;
+            return;
+        }
+        cafe.checked = !!r.cafe_enabled;
+        blog.checked = !!r.blog_enabled;
+        cafe.disabled = false;
+        blog.disabled = false;
+
+        cafe.onchange = () => saveToggle('review_cafe_enabled', cafe);
+        blog.onchange = () => saveToggle('review_blog_enabled', blog);
+    }
+
+    async function saveToggle(key, input) {
+        const value = input.checked ? 'on' : 'off';
+        input.disabled = true;
+        const r = await App.post(API + 'review_settings_save', { key, value });
+        input.disabled = false;
+        if (r.success) {
+            Toast.success(`${key === 'review_cafe_enabled' ? '카페' : '블로그'} 접수: ${value === 'on' ? 'ON' : 'OFF'}`);
+        } else {
+            // rollback UI state on failure
+            input.checked = !input.checked;
+            Toast.error(r.error || '저장 실패');
+        }
     }
 
     async function load() {

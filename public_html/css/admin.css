@@ -582,3 +582,15 @@
 .ar-cancel-warn { color: #B91C1C; margin-top: 6px !important; font-weight: 600; }
 .ar-cancel-label { display: block; font-size: 13px; margin-top: 8px; margin-bottom: 4px; }
 .ar-cancel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* 후기 탭 - 접수 설정(토글) */
+.admin-reviews-settings {
+    background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 12px;
+}
+.ar-settings-title { font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+.ar-settings-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.ar-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #444; }
+.ar-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #2563EB; }
+.ar-toggle input[type="checkbox"]:disabled { cursor: wait; opacity: 0.5; }
+.ar-settings-hint { font-size: 12px; color: #888; }
