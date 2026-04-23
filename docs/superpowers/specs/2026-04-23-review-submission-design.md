@@ -43,15 +43,17 @@
 
 ### 3.2 대상 회원 scope
 
-단일 규칙(eligible = 아래 3조건 AND):
+단일 규칙(eligible = 아래 2조건 AND):
 
 1. `bootcamp_members.is_active = 1` AND `member_status NOT IN ('refunded','leaving','out_of_group_management')`.
 2. `getActiveCycle()`가 반환하는 cycle이 존재.
-3. `bootcamp_members.cohort_id == active_cycle.cohort_id`.
 
-11기 단독 참여 회원(= 12기 미참여)은 조건 3에서 탈락해 바로가기 카드 자체를 숨김. 제출해도 코인이 12기 cycle에 쌓여 실질적으로 소실되기 때문.
+**코호트 매칭 제거 (2026-04-23 수정)**: 원래 설계는 `bootcamp_members.cohort_id == coin_cycles.cohort_id`로 11기 단독 참여 회원을 제외하려 했으나, 실제 스키마의 `coin_cycles`에는 `cohort_id` 컬럼이 없다. cohort를 cycle에 연결하려면 마이그레이션과 데이터 backfill이 필요한데, MVP 범위를 넘는다. 대신 다음 안전장치로 대체:
 
-**전제**: `bootcamp_members.cohort_id`는 "해당 회원이 현재 참여 중인 단일 cohort"를 가리킨다. 회원이 기수 전환 시 별도 row가 생기지 않고 `cohort_id`가 덮어써지는 모델을 가정. 이 전제가 운영 데이터와 어긋나면(예: 회원이 cohort별로 row가 별도 존재) 본 섹션을 개정해야 함 — 구현 단계에서 DB 스키마와 실제 데이터로 1차 확인(섹션 10.9 참조).
+- 잘못된 기수의 회원(예: 11기 단독 참여자)이 실수로 제출하면 12기 cycle `member_cycle_coins`에 코인이 쌓이지만, 12기 정산 시점의 `reward_group_distribute` 로직이 `member_status NOT IN ('refunded','leaving','out_of_group_management')` 필터로 탈락시켜 `reward_forfeited`로 소실시킴(선행 스펙).
+- 결과적으로 "헛수고" 가능성은 있으나 **잘못 지급되지는 않음**. 실무상 11기→12기 연속 참여 회원이 대다수라 영향 최소.
+
+추후 cycle-cohort 매핑이 필요해지면 `coin_cycles` 마이그 후 조건 3 복원.
 
 ### 3.3 취소 정책
 
@@ -169,11 +171,11 @@ CREATE TABLE review_submissions (
 }
 ```
 
-- `eligible` 판정: active cycle 존재 AND 회원이 활성(`is_active=1` AND `member_status NOT IN ('refunded','leaving','out_of_group_management')`) AND 회원의 `cohort_id` == active cycle의 `cohort_id`.
+- `eligible` 판정: active cycle 존재 AND 회원이 활성(`is_active=1` AND `member_status NOT IN ('refunded','leaving','out_of_group_management')`). (cohort 매칭은 섹션 3.2에서 스킵 처리.)
 - `ineligible_reason` 코드 → 프론트 노출 문구:
   - `"no_active_cycle"` → "현재 진행 중인 기수가 없습니다."
-  - `"cohort_mismatch"` → "이번 기수 후기 접수 대상이 아닙니다."
   - `"member_inactive"` → "현재 후기 제출이 불가능한 상태입니다."
+  - (`"cohort_mismatch"`는 MVP에서 사용 안 함 — 섹션 3.2 참조.)
 - `submitted`: **현재 active cycle 기준** 해당 타입의 active row (`cycle_id = active_cycle.id AND cancelled_at IS NULL`). 없으면 `null`. 과거 cycle의 제출은 이 응답에 포함되지 않음.
 - `submitted.coin_amount`: 실제 적립된 금액(0~5). 5 미만일 수 있음(섹션 3.4).
 - `guide`: `system_contents`에서 직접 읽은 원본 마크다운. 프론트가 `renderMarkdown()`으로 렌더.
@@ -422,4 +424,4 @@ CREATE TABLE review_submissions (
 6. **토글 off 후 이미 제출된 건**: 코인 유지. 토글은 앞으로의 제출만 차단.
 7. **동시 제출(더블 클릭)**: `SELECT ... FOR UPDATE` 트랜잭션으로 방어. 프론트도 제출 버튼 누른 뒤 disabled 처리.
 8. **거짓 신고성 취소**: 취소 사유가 `cancel_reason`에 남아 감사 가능. 잘못된 취소 시 DB 직접 롤백은 운영자가 수동으로(복원 API 없음). 이 운영 리스크는 권한 있는 역할 최소화로 관리.
-9. **`bootcamp_members.cohort_id` 모델 가정 검증**: 섹션 3.2 정책은 "`member.cohort_id`가 현재 참여 cohort 단일 값"이라는 모델을 전제. 구현 시작 시 DB 스키마와 실제 데이터로 이 전제가 유효한지 먼저 확인하고, 어긋나면 본 스펙의 섹션 3.2/5.1을 개정하고 진행. 회귀 테스트에 11기 단독/12기 단독/전환 회원 각 1명 이상 포함.
+9. **Cohort-cycle 매핑 부재 (2026-04-23 해소됨)**: 당초 `coin_cycles.cohort_id` 존재를 가정한 eligibility 설계가 실제 스키마와 불일치 — 컬럼이 없음을 실제 DEV DB 확인으로 발견. 섹션 3.2에서 cohort 매칭 로직을 제거하고 `reward_group_distribute`의 기존 하차자 필터로 안전장치를 위임. 추후 cycle-cohort 매핑이 필요해지면 `coin_cycles` 마이그 후 매칭 로직 복원.

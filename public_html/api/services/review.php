@@ -23,7 +23,7 @@ function getSystemContent($db, $key, $default = '') {
  */
 function evaluateReviewEligibility($db, $memberId) {
     // 회원 상태
-    $mStmt = $db->prepare("SELECT id, is_active, member_status, cohort_id FROM bootcamp_members WHERE id = ?");
+    $mStmt = $db->prepare("SELECT id, is_active, member_status FROM bootcamp_members WHERE id = ?");
     $mStmt->execute([$memberId]);
     $member = $mStmt->fetch();
     if (!$member) return ['eligible' => false, 'reason' => 'member_inactive', 'active_cycle' => null, 'member' => null];
@@ -38,11 +38,8 @@ function evaluateReviewEligibility($db, $memberId) {
         return ['eligible' => false, 'reason' => 'no_active_cycle', 'active_cycle' => null, 'member' => $member];
     }
 
-    // cohort 매칭
-    if ((int)$cycle['cohort_id'] !== (int)$member['cohort_id']) {
-        return ['eligible' => false, 'reason' => 'cohort_mismatch', 'active_cycle' => $cycle, 'member' => $member];
-    }
-
+    // cohort 매칭은 coin_cycles에 cohort_id가 없어 MVP에서는 스킵.
+    // 잘못된 기수 제출은 12기 정산 시 reward_forfeited 로직이 걸러냄.
     return ['eligible' => true, 'reason' => null, 'active_cycle' => $cycle, 'member' => $member];
 }
 
