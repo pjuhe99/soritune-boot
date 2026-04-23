@@ -64,6 +64,34 @@ class GoogleSheets {
         return $this->accessToken;
     }
 
+    /**
+     * 시트의 지정 range 값을 2차원 배열로 반환 (READONLY scope).
+     * @param string $sheetId  스프레드시트 ID
+     * @param string $a1Range  'Sheet1!A1:G500' 형식
+     */
+    public function getValues(string $sheetId, string $a1Range): array {
+        $token = $this->getAccessToken();
+        $url = sprintf(
+            'https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s',
+            rawurlencode($sheetId),
+            rawurlencode($a1Range)
+        );
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ["Authorization: Bearer {$token}"],
+            CURLOPT_TIMEOUT        => 30,
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($code !== 200) {
+            throw new RuntimeException("Sheets API error {$code}: {$resp}");
+        }
+        $data = json_decode($resp, true);
+        return $data['values'] ?? [];
+    }
+
     public function getSheetData(string $spreadsheetId, string $sheetTitle): array {
         $url = "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheetId}/values/"
             . urlencode($sheetTitle) . "?valueRenderOption=FORMATTED_VALUE";
