@@ -27,7 +27,7 @@ $tables = [
             notes             TEXT         NULL,
             updated_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             updated_by        VARCHAR(64)  NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ",
     'notify_batch' => "
         CREATE TABLE IF NOT EXISTS notify_batch (
@@ -46,7 +46,7 @@ $tables = [
             status          ENUM('running','completed','partial','failed','no_targets') NOT NULL,
             error_message   TEXT         NULL,
             INDEX idx_scenario_started (scenario_key, started_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ",
     'notify_message' => "
         CREATE TABLE IF NOT EXISTS notify_message (
@@ -69,7 +69,7 @@ $tables = [
             INDEX idx_cooldown (scenario_key, phone, status, processed_at),
             INDEX idx_batch (batch_id),
             INDEX idx_solapi (solapi_message_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ",
     'notify_preview' => "
         CREATE TABLE IF NOT EXISTS notify_preview (
@@ -83,7 +83,7 @@ $tables = [
             expires_at    DATETIME     NOT NULL,
             used_at       DATETIME     NULL,
             INDEX idx_expires (expires_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ",
 ];
 
