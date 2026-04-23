@@ -37,6 +37,7 @@
     <script src="/js/admin-issues.js<?= v('/js/admin-issues.js') ?>"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="/js/bulk-register.js<?= v('/js/bulk-register.js') ?>"></script>
+    <script src="/js/admin-reviews.js<?= v('/js/admin-reviews.js') ?>"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>
