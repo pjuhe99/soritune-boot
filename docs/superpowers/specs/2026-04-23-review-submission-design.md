@@ -370,7 +370,8 @@ CREATE TABLE review_submissions (
 
 ### 7.3 권한
 
-탭 자체는 operation/coach/head/subhead1/subhead2 역할에만 노출. `admin.js` 탭 필터링 로직에 반영.
+- **API 권한** (`reviews_list`, `review_cancel`): operation/coach/head/subhead1/subhead2 모두 허용.
+- **UI 탭 노출**: 1차 릴리즈는 `/operation` 전용 (operation role). coach/head UI 진입점에는 탭을 두지 않는다. 실제 후기 감시/취소는 운영팀이 주로 수행하므로 MVP 범위를 좁혔다. 추후 코치/head 측 니즈가 확인되면 `admin.js`의 해당 role 탭 블록에 `<button data-tab="#tab-reviews" ...>`와 `<div id="tab-reviews">` 추가 + 해당 role 진입점 `index.php`에 `admin-reviews.js` 로드로 확장 가능.
 
 ## 8. 마이그 경로
 
