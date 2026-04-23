@@ -207,6 +207,8 @@ const MemberApp = (() => {
         historyArea.innerHTML = '';
         dashboardContent.style.display = '';
         window.scrollTo({ top: 0, behavior: 'instant' });
+        // 내역 화면에서 돌아올 때 코인 stat 카드 최신화 (관리자가 코인 조정/회수한 경우 반영)
+        refreshMember();
     }
 
     function openReviewSubmit() {

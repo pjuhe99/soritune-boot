@@ -69,7 +69,7 @@ const MemberReview = (() => {
                 <div class="review-section review-section-${type}">
                     <div class="review-section-head">
                         <div class="review-section-title">${App.esc(title)}</div>
-                        <div class="review-section-reward">+${data.submitted.coin_amount} 코인 적립</div>
+                        <div class="review-section-reward">${data.submitted.coin_amount}코인 적립 완료</div>
                     </div>
                     <details class="review-guide">
                         <summary>작성 가이드</summary>
