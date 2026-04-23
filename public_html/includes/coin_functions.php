@@ -701,6 +701,8 @@ function coinReasonLabel($reasonType, $coinChange) {
         'manual_adjustment'   => '운영자 조정',
         'reward_distribution' => '적립금 지급',
         'reward_forfeited'    => '하차로 인한 소실',
+        'review_cafe'         => '카페 후기',
+        'review_blog'         => '블로그 후기',
     ];
     $label = $map[$reasonType] ?? $reasonType;
     if ((int)$coinChange < 0 && $reasonType !== 'reward_distribution' && $reasonType !== 'reward_forfeited') {
