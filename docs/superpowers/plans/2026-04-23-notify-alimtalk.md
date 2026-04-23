@@ -2,6 +2,31 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## 세션 인계 (2026-04-23 종료 시점)
+
+**진행 상태:** 12 task 중 Task 1~3 fully reviewed, Task 4 implementer 완료/리뷰 대기, Task 5~12 미진행.
+
+| Task | 상태 | commit |
+|---|---|---|
+| 1. DB 마이그레이션 | ✅ 완료 (spec+quality 통과) | `2d4694e` + `37ba78e` (COLLATE 보강) |
+| 2. keys/solapi.json | ✅ 완료 (commit 없음, gitignored) | — |
+| 3. notify_functions.php + tests | ✅ 완료 (spec+quality 통과) | `8e23759` + `666eb54` (fail-loud + 4 tests) |
+| 4. source_google_sheet.php | ⏸ implementer DONE, **spec/quality 리뷰 미실행** | `19a3f1c` |
+| 5~12 | 미진행 | — |
+
+**dev 브랜치는 origin/dev보다 6 commits ahead. push 안 함** (사용자 승인 후).
+
+**재개 첫 액션:** Task 4 spec compliance 리뷰 → quality 리뷰 → 통과 시 Task 5 (solapi_client.php) 진입.
+
+**주의:**
+- 솔라피 API 키가 plan 작성 중 채팅에 노출됨 → 종료 후 사용자가 솔라피 콘솔에서 폐기·재발급 권장. DEV `keys/solapi.json`은 `chmod 600` + gitignore 처리됨.
+- DEV `keys/solapi.json`의 `defaultPfId`는 `REPLACE_WITH_REAL_PFID` placeholder.
+- worktree 미사용 (boot-dev = 라이브 DEV 서버 심볼릭 링크).
+- 메모리: `/root/.claude/projects/-root/memory/project_boot_notify_alimtalk.md` 참조.
+
+---
+
+
 **Goal:** 운영팀이 코드 정의된 시나리오 기반으로 솔라피 알림톡을 수동 또는 스케줄 발송하고, 운영 화면에서 결과를 확인하고 시나리오 on/off 토글할 수 있는 시스템을 boot.soritune.com에 구축한다.
 
 **Architecture:** 시나리오는 `includes/notify/scenarios/*.php` 파일 1개=1시나리오. 운영 토글/발송 로그는 DB 4개 테이블 (`notify_scenario_state`, `notify_batch`, `notify_message`, `notify_preview`). 분당 1회 디스패처 cron이 시나리오 cron 식과 매칭해 실행. 데이터 어댑터 패턴(구글시트). DRY_RUN 모드, 시나리오별 DB 락, preview_id 검증, unknown 상태로 도배·중복·오발송 방지.
