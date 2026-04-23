@@ -372,10 +372,12 @@ case 'attendance_stats':     handleAttendanceStats(); break;
 
 // ── Review Submissions ───────────────────────────────────────
 
-case 'my_review_status':  handleMyReviewStatus(); break;
-case 'submit_review':     handleSubmitReview($method); break;
-case 'reviews_list':      handleReviewsList(); break;
-case 'review_cancel':     handleReviewCancel($method); break;
+case 'my_review_status':     handleMyReviewStatus(); break;
+case 'submit_review':        handleSubmitReview($method); break;
+case 'reviews_list':         handleReviewsList(); break;
+case 'review_cancel':        handleReviewCancel($method); break;
+case 'review_settings':      handleReviewSettingsGet(); break;
+case 'review_settings_save': handleReviewSettingsUpdate($method); break;
 
 // ──────────────────────────────────────────────────────────────
 

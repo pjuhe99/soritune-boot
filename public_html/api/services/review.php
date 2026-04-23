@@ -335,3 +335,51 @@ function handleReviewCancel($method) {
         throw $e;
     }
 }
+
+// ── 운영: review_settings ────────────────────────────────────
+
+/**
+ * 토글/가이드 값 조회.
+ */
+function handleReviewSettingsGet() {
+    requireAdmin(['operation','coach','head','subhead1','subhead2']);
+    $db = getDB();
+    jsonSuccess([
+        'cafe_enabled' => getSystemContent($db, 'review_cafe_enabled', 'off') === 'on',
+        'blog_enabled' => getSystemContent($db, 'review_blog_enabled', 'off') === 'on',
+        'cafe_guide'   => getSystemContent($db, 'review_cafe_guide', ''),
+        'blog_guide'   => getSystemContent($db, 'review_blog_guide', ''),
+    ]);
+}
+
+/**
+ * 단일 키 UPDATE. 허용 키: review_{cafe|blog}_{enabled|guide}.
+ */
+function handleReviewSettingsUpdate($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation','coach','head','subhead1','subhead2']);
+
+    $input = getJsonInput();
+    $key = trim($input['key'] ?? '');
+    $value = $input['value'] ?? null;
+
+    $allowed = ['review_cafe_enabled', 'review_blog_enabled', 'review_cafe_guide', 'review_blog_guide'];
+    if (!in_array($key, $allowed, true)) jsonError('허용되지 않은 key입니다.');
+    if (!is_string($value)) jsonError('value는 문자열이어야 합니다.');
+
+    if (str_ends_with($key, '_enabled')) {
+        if (!in_array($value, ['on','off'], true)) jsonError('enabled 값은 on/off여야 합니다.');
+    } else {
+        // guide: 마크다운 텍스트, 길이 제한만
+        if (mb_strlen($value) > 5000) jsonError('가이드는 5000자 이내여야 합니다.');
+    }
+
+    $db = getDB();
+    // UPSERT — 키가 없으면 insert, 있으면 update
+    $db->prepare("
+        INSERT INTO system_contents (content_key, content_markdown) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE content_markdown = VALUES(content_markdown)
+    ")->execute([$key, $value]);
+
+    jsonSuccess(['key' => $key, 'value' => $value], '저장되었습니다.');
+}
