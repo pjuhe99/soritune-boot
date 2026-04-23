@@ -40,8 +40,10 @@ function notifyRenderVariables(array $variables, array $row): array {
         } elseif (str_starts_with($spec, 'const:')) {
             $out[$key] = substr($spec, 6);
         } else {
-            // 알 수 없는 prefix는 빈 문자열로 안전 처리
-            $out[$key] = '';
+            // 알 수 없는 prefix는 fail-loud (config typo가 빈 메시지 발송 사고로 이어지는 것 방지)
+            throw new InvalidArgumentException(
+                "notifyRenderVariables: 알 수 없는 variable prefix '{$spec}' — 'col:' 또는 'const:' 사용"
+            );
         }
     }
     return $out;

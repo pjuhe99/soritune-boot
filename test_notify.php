@@ -38,6 +38,19 @@ t('vars: const substitution', ($rendered['#{deadline}'] ?? null) === '4월 30일
 $rendered2 = notifyRenderVariables(['#{x}' => 'col:없는컬럼'], $row);
 t('vars: missing col → empty', ($rendered2['#{x}'] ?? null) === '');
 
+// 컬럼명에 ':' 포함 — 'col:' prefix 4글자만 떼고 나머지는 모두 컬럼명
+$rendered3 = notifyRenderVariables(['#{x}' => 'col:a:b'], ['a:b' => 'ok']);
+t('vars: col with colon in name', ($rendered3['#{x}'] ?? null) === 'ok');
+
+// 알 수 없는 prefix는 throw
+$threw = false;
+try {
+    notifyRenderVariables(['#{x}' => 'cool:typo'], $row);
+} catch (InvalidArgumentException $e) {
+    $threw = true;
+}
+t('vars: unknown prefix throws', $threw);
+
 // ── notifyCronMatches ──────────────────────────────
 $ts = strtotime('2026-04-23 21:00:00'); // 목요일 (DOW=4)
 t('cron: every minute',         notifyCronMatches('* * * * *', $ts));
@@ -49,6 +62,12 @@ t('cron: step */5 hour 20',     notifyCronMatches('0 */5 * * *', strtotime('2026
 t('cron: dow=Thu 4',            notifyCronMatches('0 21 * * 4', $ts));
 t('cron: dow=Mon 1 not match',  !notifyCronMatches('0 21 * * 1', $ts));
 t('cron: dow Mon-Fri',          notifyCronMatches('0 21 * * 1-5', $ts));
+
+// '*/0' 스텝은 무한루프/0-나누기 방지를 위해 매칭 안 됨
+t('cron: */0 step never matches', !notifyCronMatches('*/0 * * * *', $ts));
+
+// 5필드가 아닌 cron 식은 false 반환 (parse 안 함)
+t('cron: malformed 4 fields',     !notifyCronMatches('* * * *', $ts));
 
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
