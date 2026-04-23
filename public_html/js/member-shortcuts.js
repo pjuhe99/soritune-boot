@@ -3,6 +3,7 @@
    프로필 카드 아래, 탭 영역 위에 위치
    ══════════════════════════════════════════════════════════════ */
 const MemberShortcuts = (() => {
+    const API = '/api/bootcamp.php?action=';
 
     // ── 바로가기 버튼 데이터 ──
     // url이 null이면 회원 DB에서 가져오는 동적 링크
@@ -14,20 +15,14 @@ const MemberShortcuts = (() => {
         { key: 'kakao',     label: '조별 카톡방 들어가기',    url: null,                                                            color: 'rose' },
     ];
 
-    /**
-     * 바로가기 영역 렌더링
-     * @param {HTMLElement} containerEl - 버튼을 넣을 부모 요소
-     * @param {object} member - 로그인 멤버 정보 (kakao_link 포함)
-     */
-    function render(containerEl, member) {
+    async function render(containerEl, member) {
+        // 1) 기본 shortcut HTML
         const kakaoLink = member.kakao_link || null;
-
-        const buttons = SHORTCUTS.map(s => {
+        const baseButtons = SHORTCUTS.map(s => {
             const href = s.url || kakaoLink;
             const disabled = !href;
             const disabledClass = disabled ? ' shortcut-btn--disabled' : '';
             const disabledAttr = disabled ? ' disabled aria-disabled="true"' : '';
-
             const colorClass = ` shortcut-btn--${s.color}`;
 
             if (disabled) {
@@ -36,7 +31,6 @@ const MemberShortcuts = (() => {
                     <span class="shortcut-label">${App.esc(s.label)}</span>
                 </button>${hint}`;
             }
-
             return `<a class="shortcut-btn${colorClass}" href="${App.esc(href)}" target="_blank" rel="noopener noreferrer">
                 <span class="shortcut-label">${App.esc(s.label)}</span>
                 <span class="shortcut-arrow">&#8250;</span>
@@ -46,9 +40,27 @@ const MemberShortcuts = (() => {
         containerEl.innerHTML = `
             <div class="shortcuts-card">
                 <div class="shortcuts-title">바로가기</div>
-                <div class="shortcuts-list">${buttons}</div>
+                <div class="shortcuts-list" id="shortcuts-list-inner">${baseButtons}</div>
             </div>
         `;
+
+        // 2) 후기 카드 조건부 prepend (서버 상태에 따라)
+        try {
+            const r = await App.get(API + 'my_review_status');
+            if (!r.success) return;
+            const anyEnabled = (r.cafe?.enabled || r.blog?.enabled);
+            if (!r.eligible || !anyEnabled) return;
+
+            const reviewBtn = `<button class="shortcut-btn shortcut-btn--amber" id="shortcut-review-submit" type="button">
+                <span class="shortcut-label">후기 작성하기 (+5 코인/편)</span>
+                <span class="shortcut-arrow">&#8250;</span>
+            </button>`;
+            const inner = document.getElementById('shortcuts-list-inner');
+            if (inner) inner.insertAdjacentHTML('afterbegin', reviewBtn);
+
+            const btn = document.getElementById('shortcut-review-submit');
+            if (btn) btn.addEventListener('click', () => MemberApp.openReviewSubmit());
+        } catch (_e) { /* 네트워크/권한 에러는 조용히 무시 — 후기 카드만 안 보임 */ }
     }
 
     return { render };
