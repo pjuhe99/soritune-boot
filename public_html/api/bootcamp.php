@@ -28,6 +28,7 @@ require_once __DIR__ . '/services/dashboard.php';
 require_once __DIR__ . '/services/group_assignment.php';
 require_once __DIR__ . '/services/entrance.php';
 require_once __DIR__ . '/services/attendance.php';
+require_once __DIR__ . '/services/review.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -368,6 +369,13 @@ case 'assignment_summary':   handleAssignmentSummary(); break;
 
 // ── Attendance ──
 case 'attendance_stats':     handleAttendanceStats(); break;
+
+// ── Review Submissions ───────────────────────────────────────
+
+case 'my_review_status':  handleMyReviewStatus(); break;
+case 'submit_review':     handleSubmitReview($method); break;
+case 'reviews_list':      handleReviewsList(); break;
+case 'review_cancel':     handleReviewCancel($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
