@@ -63,15 +63,15 @@ try {
         echo "  - 이미 존재\n";
     } else {
         $sql = "CREATE TABLE review_submissions (
-            id            INT PRIMARY KEY AUTO_INCREMENT,
-            member_id     INT NOT NULL,
-            cycle_id      INT NOT NULL,
+            id            INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+            member_id     INT UNSIGNED NOT NULL,
+            cycle_id      INT UNSIGNED NOT NULL,
             type          ENUM('cafe','blog') NOT NULL,
             url           VARCHAR(500) NOT NULL,
             coin_amount   INT NOT NULL DEFAULT 5,
             submitted_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             cancelled_at  DATETIME NULL,
-            cancelled_by  INT NULL,
+            cancelled_by  INT UNSIGNED NULL,
             cancel_reason VARCHAR(255) NULL,
             INDEX idx_submitted_at (submitted_at DESC),
             INDEX idx_cycle_type (cycle_id, type),
@@ -113,7 +113,9 @@ try {
                ->fetchAll(PDO::FETCH_COLUMN);
     echo "  - system_contents 키: " . count($keys) . "개 (" . implode(', ', $keys) . ")\n";
 
-    if (!$dryRun) $db->commit();
+    // MySQL은 CREATE TABLE 같은 DDL에서 암묵적으로 commit하므로,
+    // 여기 도달한 시점에 transaction이 이미 닫혔을 수 있음 → 가드 필수
+    if (!$dryRun && $db->inTransaction()) $db->commit();
     echo "\n완료" . ($dryRun ? " (dry-run)" : "") . ".\n";
 } catch (Throwable $e) {
     if (!$dryRun && $db->inTransaction()) $db->rollBack();

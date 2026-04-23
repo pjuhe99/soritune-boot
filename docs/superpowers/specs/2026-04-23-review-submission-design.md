@@ -80,15 +80,15 @@
 
 ```sql
 CREATE TABLE review_submissions (
-    id            INT PRIMARY KEY AUTO_INCREMENT,
-    member_id     INT NOT NULL,
-    cycle_id      INT NOT NULL,
+    id            INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    member_id     INT UNSIGNED NOT NULL,
+    cycle_id      INT UNSIGNED NOT NULL,
     type          ENUM('cafe','blog') NOT NULL,
     url           VARCHAR(500) NOT NULL,
     coin_amount   INT NOT NULL DEFAULT 5,
     submitted_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     cancelled_at  DATETIME NULL,
-    cancelled_by  INT NULL,
+    cancelled_by  INT UNSIGNED NULL,
     cancel_reason VARCHAR(255) NULL,
     INDEX idx_submitted_at (submitted_at DESC),
     INDEX idx_cycle_type (cycle_id, type),
@@ -97,6 +97,8 @@ CREATE TABLE review_submissions (
     CONSTRAINT fk_review_cycle  FOREIGN KEY (cycle_id)  REFERENCES coin_cycles(id)
 );
 ```
+
+`INT UNSIGNED`는 `bootcamp_members.id`, `coin_cycles.id`가 `INT UNSIGNED`이기 때문. MySQL FK는 참조 컬럼과 타입/부호가 일치해야 함.
 
 - **유니크 제약**(동일 회원 + 동일 cycle + 동일 타입 + active 1건): MySQL 조건부 유니크 미지원. **애플리케이션 레벨에서 트랜잭션 내 선조회**(`SELECT ... WHERE member_id=? AND cycle_id=? AND type=? AND cancelled_at IS NULL FOR UPDATE`) 후 INSERT로 해결. 이중 클릭/동시 제출 방어.
 - `coin_amount`는 **실제 적립된 코인(cap 적용 후 `applyCoinChange.applied` 값)** 을 저장. 취소 차감액의 진실 소스(source of truth). 정책 기본값은 5지만 cap에 걸린 경우 0~5 사이 값이 들어갈 수 있음. `applied === 0`은 제출 자체를 rollback하므로 DB에 남지 않음 (섹션 3.4).
