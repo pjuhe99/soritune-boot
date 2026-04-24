@@ -110,5 +110,67 @@ t('status: partial unk',   notifyDecideBatchStatus(5, 3, 0, 2) === 'partial');
 t('status: failed all',    notifyDecideBatchStatus(5, 0, 5, 0) === 'failed');
 t('status: skipped only',  notifyDecideBatchStatus(5, 0, 0, 0) === 'completed');
 
+// ── notifyMapSolapiResponse (순수 함수, 5 branch) ──
+$q2 = [
+    ['msg_id' => 1, 'phone' => '01011111111', 'payload' => []],
+    ['msg_id' => 2, 'phone' => '01022222222', 'payload' => []],
+];
+
+// 5xx → 모두 unknown
+$r = notifyMapSolapiResponse(['ok' => false, 'http_code' => 503, 'body' => 'bad gateway', 'parsed' => null], $q2);
+t('mapResp: 5xx unknown',       $r[1]['status'] === 'unknown' && $r[2]['status'] === 'unknown');
+t('mapResp: 5xx sent_at null',  $r[1]['sent_at'] === null);
+t('mapResp: 5xx channel none',  $r[1]['channel_used'] === 'none');
+
+// http_code=0 (timeout/네트워크) → unknown
+$r = notifyMapSolapiResponse(['ok' => false, 'http_code' => 0, 'body' => 'timeout', 'parsed' => null], $q2);
+t('mapResp: timeout unknown',   $r[1]['status'] === 'unknown');
+
+// 4xx → 모두 failed
+$r = notifyMapSolapiResponse(['ok' => false, 'http_code' => 400, 'body' => 'bad request', 'parsed' => null], $q2);
+t('mapResp: 4xx failed',        $r[1]['status'] === 'failed' && $r[2]['status'] === 'failed');
+
+// 2xx + 전건 성공
+$r = notifyMapSolapiResponse([
+    'ok' => true, 'http_code' => 200, 'body' => '',
+    'parsed' => ['messageList' => [
+        ['to' => '01011111111', 'statusCode' => '2000', 'messageId' => 'MID1'],
+        ['to' => '01022222222', 'statusCode' => '2000', 'messageId' => 'MID2'],
+    ]],
+], $q2);
+t('mapResp: 2xx sent',          $r[1]['status'] === 'sent' && $r[2]['status'] === 'sent');
+t('mapResp: 2xx channel ata',   $r[1]['channel_used'] === 'alimtalk');
+t('mapResp: 2xx messageId',     $r[1]['solapi_message_id'] === 'MID1');
+
+// 2xx + 혼합 (1건 실패 statusCode)
+$r = notifyMapSolapiResponse([
+    'ok' => true, 'http_code' => 200, 'body' => '',
+    'parsed' => ['messageList' => [
+        ['to' => '01011111111', 'statusCode' => '4044', 'messageId' => 'MIDX'],
+        ['to' => '01022222222', 'statusCode' => '2000', 'messageId' => 'MID2'],
+    ]],
+], $q2);
+t('mapResp: 2xx per-msg fail',  $r[1]['status'] === 'failed' && $r[2]['status'] === 'sent');
+
+// 2xx + 응답에 매칭 없음 → unknown
+$r = notifyMapSolapiResponse([
+    'ok' => true, 'http_code' => 200, 'body' => '',
+    'parsed' => ['messageList' => [
+        ['to' => '01099999999', 'statusCode' => '2000', 'messageId' => 'OTHER'],
+    ]],
+], $q2);
+t('mapResp: unmatched unknown', $r[1]['status'] === 'unknown' && $r[2]['status'] === 'unknown');
+t('mapResp: unmatched reason',  $r[1]['fail_reason'] === 'no_response_match');
+
+// 2xx + statusCode 누락 → unknown (malformed 보호, '' 이 sent로 분류되지 않아야 함)
+$r = notifyMapSolapiResponse([
+    'ok' => true, 'http_code' => 200, 'body' => '',
+    'parsed' => ['messageList' => [
+        ['to' => '01011111111', 'messageId' => 'MIDNS'],
+    ]],
+], [$q2[0]]);
+t('mapResp: empty statusCode unknown', $r[1]['status'] === 'unknown');
+t('mapResp: empty statusCode reason',  $r[1]['fail_reason'] === 'no_status_code');
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);

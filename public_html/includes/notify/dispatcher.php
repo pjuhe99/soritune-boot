@@ -47,7 +47,10 @@ function notifyDispatch(int $now = null): void {
             }
         }
 
-        $db->exec("DELETE FROM notify_preview WHERE expires_at < NOW() - INTERVAL 1 DAY");
+        // 만료된 preview 청소는 시간당 1회만 (spec §"notify_preview" 가이드)
+        if ((int)date('i', $now) === 0) {
+            $db->exec("DELETE FROM notify_preview WHERE expires_at < NOW() - INTERVAL 1 DAY");
+        }
     } finally {
         flock($fp, LOCK_UN);
         fclose($fp);
@@ -341,7 +344,20 @@ function notifyMapSolapiResponse(array $resp, array $queued): array {
         }
         $statusCode = (string)($m['statusCode'] ?? $m['status'] ?? '');
         $messageId  = (string)($m['messageId'] ?? '');
-        $isSuccess  = (str_starts_with($statusCode, '2') || $statusCode === '0' || $statusCode === '');
+
+        // statusCode가 비어 있으면 malformed/truncated 응답 — 도배 방지 우선 원칙에 따라 unknown
+        if ($statusCode === '') {
+            $result[$q['msg_id']] = [
+                'status'            => 'unknown',
+                'channel_used'      => 'none',
+                'sent_at'           => null,
+                'solapi_message_id' => $messageId ?: null,
+                'fail_reason'       => 'no_status_code',
+            ];
+            continue;
+        }
+
+        $isSuccess = (str_starts_with($statusCode, '2') || $statusCode === '0');
         if ($isSuccess) {
             $result[$q['msg_id']] = [
                 'status'            => 'sent',
