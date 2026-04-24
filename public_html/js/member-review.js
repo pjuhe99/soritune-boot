@@ -2,6 +2,7 @@
    MemberReview — /후기작성 상세 화면
    바로가기의 "후기 작성하기" 카드를 탭하면 진입, "← 뒤로"로 복귀.
    스펙: docs/superpowers/specs/2026-04-23-review-submission-design.md
+         docs/superpowers/specs/2026-04-24-review-guide-unify-design.md
    ══════════════════════════════════════════════════════════════ */
 const MemberReview = (() => {
     const API = '/api/bootcamp.php?action=';

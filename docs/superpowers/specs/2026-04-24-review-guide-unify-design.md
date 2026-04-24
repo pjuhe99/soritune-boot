@@ -19,7 +19,7 @@ base_spec: 2026-04-23-review-submission-design.md
 
 ### 변경 대상
 - `system_contents`: 새 키 `review_guide` 1개, 기존 `review_cafe_guide` / `review_blog_guide` 삭제.
-- API 3개 응답/요청 필드 정리 (`my_review_status`, `admin_reviews_panel`, `review_settings_save`).
+- API 3개 응답/요청 필드 정리 (`my_review_status`, `review_settings`, `review_settings_save`).
 - 회원 화면 `member-review.js`: 탭 제거, 상단 공통 가이드 + 하단 카페/블로그 섹션 세로 나열.
 - 마이그 스크립트 신규 (`migrate_review_guide_unify.php`).
 

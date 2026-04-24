@@ -3,6 +3,7 @@
  * Review Service
  * 후기 제출/조회/취소 엔드포인트
  * 스펙: docs/superpowers/specs/2026-04-23-review-submission-design.md
+ *       docs/superpowers/specs/2026-04-24-review-guide-unify-design.md
  */
 
 // ── 헬퍼 ─────────────────────────────────────────────────────
