@@ -99,25 +99,25 @@ function handleNotifyPreview($method) {
     $db = getDB();
     $candidates = [];
     $skips      = [];
+    $cd = $db->prepare("
+        SELECT MAX(processed_at) FROM notify_message
+         WHERE scenario_key = ? AND phone = ?
+           AND status IN ('sent','unknown')
+           AND processed_at >= NOW() - INTERVAL ? HOUR
+    ");
+    $mx = $db->prepare("
+        SELECT COUNT(*) FROM notify_message
+         WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
+    ");
     foreach ($rows as $row) {
         $phoneNorm = notifyNormalizePhone($row['phone'] ?? '');
         if ($phoneNorm === null) {
             $skips[] = $row + ['_skip' => 'phone_invalid'];
             continue;
         }
-        $cd = $db->prepare("
-            SELECT MAX(processed_at) FROM notify_message
-             WHERE scenario_key = ? AND phone = ?
-               AND status IN ('sent','unknown')
-               AND processed_at >= NOW() - INTERVAL ? HOUR
-        ");
         $cd->execute([$key, $phoneNorm, (int)$def['cooldown_hours']]);
         if ($cd->fetchColumn()) { $skips[] = $row + ['_skip' => 'cooldown']; continue; }
 
-        $mx = $db->prepare("
-            SELECT COUNT(*) FROM notify_message
-             WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
-        ");
         $mx->execute([$key, $phoneNorm]);
         if ((int)$mx->fetchColumn() >= (int)$def['max_attempts']) {
             $skips[] = $row + ['_skip' => 'max_attempts']; continue;
@@ -209,14 +209,20 @@ function handleNotifySendNow($method) {
     $rowKeys = json_decode((string)$preview['row_keys'], true);
     if (!is_array($rowKeys)) $rowKeys = [];
 
-    $batchId = notifyRunScenario(
-        $db,
-        $scenarios[$preview['scenario_key']],
-        'manual',
-        (string)$admin['admin_id'],
-        (bool)$preview['dry_run'],
-        $rowKeys
-    );
+    // preview.used_at이 이미 커밋됐으므로 이 시점에서 throw 나면 사용자는 새 preview를 만들어야 함.
+    // blank 500 대신 JSON 에러로 일관된 응답 보장.
+    try {
+        $batchId = notifyRunScenario(
+            $db,
+            $scenarios[$preview['scenario_key']],
+            'manual',
+            (string)$admin['admin_id'],
+            (bool)$preview['dry_run'],
+            $rowKeys
+        );
+    } catch (Throwable $e) {
+        jsonError('발송 중 오류: ' . $e->getMessage(), 500);
+    }
 
     if ($batchId === null) jsonError('이미 실행 중인 시나리오입니다. 잠시 후 다시 시도하세요.');
     jsonSuccess(['batch_id' => $batchId]);
