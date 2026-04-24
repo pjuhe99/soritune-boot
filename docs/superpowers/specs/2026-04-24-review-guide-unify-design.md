@@ -111,21 +111,21 @@ base_spec: 2026-04-23-review-submission-design.md
 - `guide`: `getSystemContent($db, 'review_guide', '')` 한 번 호출.
 - `cafe.guide`, `blog.guide` 제거.
 
-### 4.2 `GET admin_reviews_panel`
+### 4.2 `GET review_settings` (운영 토글/가이드 조회)
 
 응답:
 
 ```json
 {
   "success": true,
-  "cafe_enabled": "on",
-  "blog_enabled": "on",
-  "guide": "...마크다운...",
-  "submissions": [ ... ]
+  "cafe_enabled": true,
+  "blog_enabled": true,
+  "guide": "...마크다운..."
 }
 ```
 
 - `cafe_guide`, `blog_guide` 제거, `guide` 단일 필드 추가.
+- `enabled`는 기존과 동일하게 boolean 반환(`on` 문자열을 `true`로 변환).
 
 ### 4.3 `POST review_settings_save`
 
@@ -193,7 +193,7 @@ $allowed = ['review_cafe_enabled', 'review_blog_enabled', 'review_guide'];
 - 가이드 편집은 여전히 DB 직접 UPDATE.
 - 운영자가 웹 UI로 가이드를 바꿔야 할 필요가 생기면 별도 과제로 `review_guide` textarea 에디터 추가.
 
-`admin_reviews_panel` 응답에서 `guide` 필드가 새로 추가되긴 하지만, 프론트가 사용하지 않아도 무해. API 일관성 차원에서 넣어둠(추후 에디터 추가 시 재사용).
+`review_settings` 응답에서 `guide` 필드가 새로 추가되긴 하지만, 프론트가 사용하지 않아도 무해. API 일관성 차원에서 넣어둠(추후 에디터 추가 시 재사용).
 
 ## 7. 마이그 / 배포
 
