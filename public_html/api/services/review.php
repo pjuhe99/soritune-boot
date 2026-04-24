@@ -88,14 +88,13 @@ function handleMyReviewStatus() {
     jsonSuccess([
         'eligible' => $elig['eligible'],
         'ineligible_reason' => $elig['reason'],
+        'guide' => getSystemContent($db, 'review_guide', ''),
         'cafe' => [
             'enabled'   => getSystemContent($db, 'review_cafe_enabled', 'off') === 'on',
-            'guide'     => getSystemContent($db, 'review_cafe_guide', ''),
             'submitted' => $cafeSubmitted,
         ],
         'blog' => [
             'enabled'   => getSystemContent($db, 'review_blog_enabled', 'off') === 'on',
-            'guide'     => getSystemContent($db, 'review_blog_guide', ''),
             'submitted' => $blogSubmitted,
         ],
     ]);
