@@ -346,13 +346,12 @@ function handleReviewSettingsGet() {
     jsonSuccess([
         'cafe_enabled' => getSystemContent($db, 'review_cafe_enabled', 'off') === 'on',
         'blog_enabled' => getSystemContent($db, 'review_blog_enabled', 'off') === 'on',
-        'cafe_guide'   => getSystemContent($db, 'review_cafe_guide', ''),
-        'blog_guide'   => getSystemContent($db, 'review_blog_guide', ''),
+        'guide'        => getSystemContent($db, 'review_guide', ''),
     ]);
 }
 
 /**
- * 단일 키 UPDATE. 허용 키: review_{cafe|blog}_{enabled|guide}.
+ * 단일 키 UPDATE. 허용 키: review_cafe_enabled / review_blog_enabled / review_guide.
  */
 function handleReviewSettingsUpdate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -362,7 +361,7 @@ function handleReviewSettingsUpdate($method) {
     $key = trim($input['key'] ?? '');
     $value = $input['value'] ?? null;
 
-    $allowed = ['review_cafe_enabled', 'review_blog_enabled', 'review_cafe_guide', 'review_blog_guide'];
+    $allowed = ['review_cafe_enabled', 'review_blog_enabled', 'review_guide'];
     if (!in_array($key, $allowed, true)) jsonError('허용되지 않은 key입니다.');
     if (!is_string($value)) jsonError('value는 문자열이어야 합니다.');
 
