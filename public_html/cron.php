@@ -28,11 +28,16 @@ switch ($command) {
         // 향후 확장용
         cronLog('run_all: no tasks configured yet');
         break;
+    case 'notify_dispatch':
+        require_once __DIR__ . '/includes/notify/dispatcher.php';
+        notifyDispatch();
+        break;
     default:
         echo "Usage: php cron.php <command>\n";
         echo "  init_daily_checks  매일 06:00 필수 미션 미완료 레코드 생성\n";
         echo "  backfill_checks    과거 날짜 미션 레코드 소급 생성 (1회성)\n";
         echo "  run_all            일괄 크론\n";
+        echo "  notify_dispatch    매분 실행. 활성 시나리오의 cron 식이 매칭되면 발송\n";
         exit(1);
 }
 
