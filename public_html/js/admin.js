@@ -192,6 +192,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-bulk-register" data-hash="bulk-register">일괄 등록</button>
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                             <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
+                            <button class="tab" data-tab="#tab-notify" data-hash="notify">알림톡</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
@@ -213,6 +214,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-bulk-register"></div>
                         <div class="tab-content" id="bc-tab-study"></div>
                         <div class="tab-content" id="tab-reviews"></div>
+                        <div class="tab-content" id="tab-notify"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -446,6 +448,20 @@ const AdminApp = (() => {
                         }
                     });
                     revObserver.observe(revTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Notify 탭 lazy load
+            if (typeof AdminNotify !== 'undefined') {
+                const notifyTab = document.getElementById('tab-notify');
+                if (notifyTab) {
+                    const notifyObserver = new MutationObserver(() => {
+                        if (notifyTab.classList.contains('active') && !notifyTab.dataset.loaded) {
+                            notifyTab.dataset.loaded = '1';
+                            AdminNotify.init(notifyTab);
+                        }
+                    });
+                    notifyObserver.observe(notifyTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 

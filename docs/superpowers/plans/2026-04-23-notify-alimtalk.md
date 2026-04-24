@@ -1836,7 +1836,7 @@ grep -n "case 'coin_balance'" /root/boot-dev/public_html/api/admin.php /root/boo
 COOKIE_FILE=/tmp/notify_test_cookies.txt
 # (관리자 로그인 — 사용자 환경에 맞춰 진행)
 
-curl -sS -b $COOKIE_FILE "https://dev-boot.soritune.com/api/admin.php?action=notify_list_scenarios" | jq .
+curl -sS -b $COOKIE_FILE "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_list_scenarios" | jq .
 ```
 Expected: `success=true`, `scenarios` 배열에 `form_reminder_ot` 포함.
 
@@ -1873,7 +1873,7 @@ grep -n "탭\|tab\|navTab\|activeTab\|menu-item" /root/boot-dev/public_html/js/a
 
 ```javascript
 /* Notify Admin UI — operation/head 탭 */
-const NotifyApp = (() => {
+const AdminNotify = (() => {
   let root = null;
   let scenarios = [];
 
@@ -1884,7 +1884,7 @@ const NotifyApp = (() => {
 
   async function refresh() {
     root.innerHTML = '<div class="loading">알림톡 시나리오 불러오는 중…</div>';
-    const r = await App.get('/api/admin.php?action=notify_list_scenarios');
+    const r = await App.get('/api/bootcamp.php?action=notify_list_scenarios');
     if (!r.success) { root.innerHTML = `<div class="error">${App.esc(r.error || '오류')}</div>`; return; }
     scenarios = r.scenarios || [];
     render();
@@ -1923,7 +1923,7 @@ const NotifyApp = (() => {
   function bindRow(rowEl) {
     const key = rowEl.dataset.key;
     rowEl.querySelector('input[data-act="toggle"]').onchange = async (e) => {
-      const r = await App.post('/api/admin.php?action=notify_toggle', { key, is_active: e.target.checked });
+      const r = await App.post('/api/bootcamp.php?action=notify_toggle', { key, is_active: e.target.checked });
       if (!r.success) { Toast.error(r.error); refresh(); }
       else Toast.ok('변경되었습니다');
     };
@@ -1934,7 +1934,7 @@ const NotifyApp = (() => {
 
   async function openPreview(key, dryRun) {
     App.showLoading();
-    const r = await App.post('/api/admin.php?action=notify_preview', { key, dry_run: dryRun });
+    const r = await App.post('/api/bootcamp.php?action=notify_preview', { key, dry_run: dryRun });
     App.hideLoading();
     if (!r.success) { Toast.error(r.error); return; }
     showPreviewModal(r);
@@ -1968,7 +1968,7 @@ const NotifyApp = (() => {
     ovl.querySelector('button[data-act="cancel"]').onclick = () => ovl.remove();
     ovl.querySelector('button[data-act="confirm"]').onclick = async () => {
       App.showLoading();
-      const r = await App.post('/api/admin.php?action=notify_send_now', { preview_id: p.preview_id });
+      const r = await App.post('/api/bootcamp.php?action=notify_send_now', { preview_id: p.preview_id });
       App.hideLoading();
       if (!r.success) { Toast.error(r.error); return; }
       Toast.ok(`발송 완료 (batch ${r.batch_id})`);
@@ -1980,7 +1980,7 @@ const NotifyApp = (() => {
   async function loadBatches(rowEl, key) {
     const target = rowEl.querySelector('[data-role="batches"]');
     target.innerHTML = '<em>불러오는 중…</em>';
-    const r = await App.get(`/api/admin.php?action=notify_list_batches&key=${encodeURIComponent(key)}&limit=15`);
+    const r = await App.get(`/api/bootcamp.php?action=notify_list_batches&key=${encodeURIComponent(key)}&limit=15`);
     if (!r.success) { target.innerHTML = `<span class="error">${App.esc(r.error)}</span>`; return; }
     if (!r.batches || r.batches.length === 0) { target.innerHTML = '<em>이력 없음</em>'; return; }
     target.innerHTML = `
@@ -2012,7 +2012,7 @@ const NotifyApp = (() => {
 
   async function showBatchDetail(target, batchId) {
     target.innerHTML = '<em>불러오는 중…</em>';
-    const r = await App.get(`/api/admin.php?action=notify_batch_detail&batch_id=${batchId}`);
+    const r = await App.get(`/api/bootcamp.php?action=notify_batch_detail&batch_id=${batchId}`);
     if (!r.success) { target.innerHTML = `<span class="error">${App.esc(r.error)}</span>`; return; }
     const failedCount = (r.messages || []).filter(m => m.status === 'failed').length;
     target.innerHTML = `
@@ -2038,7 +2038,7 @@ const NotifyApp = (() => {
       retryBtn.onclick = async () => {
         if (!confirm(`failed 상태 ${failedCount}명에게 재발송합니다.`)) return;
         App.showLoading();
-        const rr = await App.post('/api/admin.php?action=notify_retry_failed', { batch_id: batchId });
+        const rr = await App.post('/api/bootcamp.php?action=notify_retry_failed', { batch_id: batchId });
         App.hideLoading();
         if (!rr.success) { Toast.error(rr.error); return; }
         Toast.ok(`재시도 배치 #${rr.batch_id} 생성됨`);
@@ -2093,11 +2093,11 @@ const NotifyApp = (() => {
 
 - [ ] **Step 5: admin.js에 "알림톡" 탭 통합**
 
-Step 1에서 파악한 패턴을 따라, operation 역할(또는 head 그룹)일 때 "알림톡" 탭 항목을 추가하고, 클릭 시 `NotifyApp.init(<해당 컨테이너>)` 호출. 정확한 코드는 admin.js의 기존 탭 추가 패턴을 그대로 따름. 예 (패턴이 menu-item array라면):
+Step 1에서 파악한 패턴을 따라, operation 역할(또는 head 그룹)일 때 "알림톡" 탭 항목을 추가하고, 클릭 시 `AdminNotify.init(<해당 컨테이너>)` 호출. 정확한 코드는 admin.js의 기존 탭 추가 패턴을 그대로 따름. 예 (패턴이 menu-item array라면):
 ```javascript
 // 기존 탭 정의 배열 어딘가에:
 { id: 'notify', label: '알림톡', roles: ['operation','head','subhead1','subhead2'],
-  render: (container) => NotifyApp.init(container) }
+  render: (container) => AdminNotify.init(container) }
 ```
 패턴이 다르면 동등한 진입 지점에 배치.
 
@@ -2140,16 +2140,16 @@ COOKIE=/tmp/notify_test_cookies.txt
 # 1) 미리보기
 curl -sS -b $COOKIE -X POST -H 'Content-Type: application/json' \
   -d '{"key":"form_reminder_ot","dry_run":true}' \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_preview" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_preview" | jq .
 
 # preview_id 받아서:
 curl -sS -b $COOKIE -X POST -H 'Content-Type: application/json' \
   -d "{\"preview_id\":\"<위에서 받은 ID>\"}" \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_send_now" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_send_now" | jq .
 
 # 배치 상세
 curl -sS -b $COOKIE \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_batch_detail&batch_id=<위 응답 batch_id>" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_batch_detail&batch_id=<위 응답 batch_id>" | jq .
 ```
 
 Expected:
