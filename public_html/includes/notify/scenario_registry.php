@@ -33,19 +33,20 @@ function notifyLoadScenarios(): array {
 
 /** 시나리오 정의 필수 필드 검증. 누락/오류 시 throw. */
 function notifyValidateScenario(array $def): void {
+    $keyLabel = $def['key'] ?? '(unknown)';
     foreach (['key', 'name', 'source', 'template', 'schedule', 'cooldown_hours', 'max_attempts'] as $f) {
         if (!array_key_exists($f, $def)) {
-            throw new RuntimeException("시나리오 '{$def['key']}': '{$f}' 필드 누락");
+            throw new RuntimeException("시나리오 '{$keyLabel}': '{$f}' 필드 누락");
         }
     }
     foreach (['type'] as $f) {
         if (empty($def['source'][$f])) {
-            throw new RuntimeException("시나리오 '{$def['key']}': source.{$f} 필수");
+            throw new RuntimeException("시나리오 '{$keyLabel}': source.{$f} 필수");
         }
     }
     foreach (['templateId', 'variables'] as $f) {
         if (!array_key_exists($f, $def['template'])) {
-            throw new RuntimeException("시나리오 '{$def['key']}': template.{$f} 필수");
+            throw new RuntimeException("시나리오 '{$keyLabel}': template.{$f} 필수");
         }
     }
 }
