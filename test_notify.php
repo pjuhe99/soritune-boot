@@ -69,5 +69,33 @@ t('cron: */0 step never matches', !notifyCronMatches('*/0 * * * *', $ts));
 // 5필드가 아닌 cron 식은 false 반환 (parse 안 함)
 t('cron: malformed 4 fields',     !notifyCronMatches('* * * *', $ts));
 
+// ── solapi HMAC ──────────────────────────────
+require_once __DIR__ . '/public_html/includes/notify/solapi_client.php';
+
+// 솔라피 공식 헤더 형식: HMAC-SHA256 apiKey=..., date=..., salt=..., signature=...
+$header = solapiBuildAuthHeader('TESTKEY', 'TESTSECRET', '2026-04-23T12:00:00Z', 'abcdefgh');
+t('solapi: header has scheme',  str_starts_with($header, 'HMAC-SHA256 '));
+t('solapi: header has apiKey',  str_contains($header, 'apiKey=TESTKEY'));
+t('solapi: header has date',    str_contains($header, 'date=2026-04-23T12:00:00Z'));
+t('solapi: header has salt',    str_contains($header, 'salt=abcdefgh'));
+
+// 결정적 시그니처 검증 (HMAC-SHA256(date+salt, secret))
+$expected = hash_hmac('sha256', '2026-04-23T12:00:00Z' . 'abcdefgh', 'TESTSECRET');
+t('solapi: signature correct', str_contains($header, "signature={$expected}"));
+
+// 페이로드 빌드 (알림톡)
+$payload = solapiBuildAlimtalkPayload(
+    to: '01012345678',
+    from: '025001111',
+    pfId: 'KA01PF',
+    templateId: 'KA01TP',
+    variables: ['#{name}' => '홍길동', '#{deadline}' => '4월 30일']
+);
+t('payload: type ATA',          $payload['type'] === 'ATA');
+t('payload: to normalized',     $payload['to'] === '01012345678');
+t('payload: kakao pfId',        $payload['kakaoOptions']['pfId'] === 'KA01PF');
+t('payload: kakao templateId',  $payload['kakaoOptions']['templateId'] === 'KA01TP');
+t('payload: vars present',      ((array)$payload['kakaoOptions']['variables'])['#{name}'] === '홍길동');
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
