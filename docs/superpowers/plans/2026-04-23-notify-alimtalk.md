@@ -61,7 +61,7 @@
 | 경로 | 변경 |
 |---|---|
 | `public_html/cron.php` | `case 'notify_dispatch'` 추가, preview 청소 |
-| `public_html/api/admin.php` | `require_once` 추가, 7개 case dispatch |
+| `public_html/api/bootcamp.php` | `require_once` 추가, 7개 case dispatch (※ Task 10 이탈 정정: admin.php가 아니라 bootcamp.php — coin_balance/review_settings 등 admin-operation handler가 bootcamp.php에 등록돼 있음) |
 | `public_html/operation/index.php` | `notify.js`/`notify.css` 스크립트 태그 |
 | `public_html/js/admin.js` | "알림톡" 탭 추가 (operation/head 표시) |
 | 시스템 crontab | 디스패처 1줄 (PROD 적용 시) |
@@ -1490,7 +1490,7 @@ cd /root/boot-dev && \
 
 **Files:**
 - Create: `/root/boot-dev/public_html/api/services/notify.php`
-- Modify: `/root/boot-dev/public_html/api/admin.php`
+- Modify: `/root/boot-dev/public_html/api/bootcamp.php` (※ admin.php가 아니라 bootcamp.php — coin_balance/review_settings 같은 admin-operation handler가 bootcamp.php에 등록돼 있음)
 
 권한 그룹: `operation`, `head`, `subhead1`, `subhead2`.
 
@@ -1805,7 +1805,7 @@ function handleNotifyRetryFailed($method) {
 }
 ```
 
-- [ ] **Step 2: api/admin.php에 require_once + 7 case 추가**
+- [ ] **Step 2: api/bootcamp.php에 require_once + 7 case 추가** (※ admin.php가 아니라 bootcamp.php — coin_balance/review_settings 같은 admin-operation handler가 bootcamp.php에 등록돼 있음)
 
 `require_once` 묶음 끝에 추가:
 ```php
@@ -1844,7 +1844,7 @@ Expected: `success=true`, `scenarios` 배열에 `form_reminder_ot` 포함.
 
 ```
 cd /root/boot-dev && \
-  git add public_html/api/services/notify.php public_html/api/admin.php && \
+  git add public_html/api/services/notify.php public_html/api/bootcamp.php docs/superpowers/plans/2026-04-23-notify-alimtalk.md && \
   git commit -m "feat(notify): API 7개 액션 (목록/토글/미리보기/발송/이력/상세/재시도)"
 ```
 

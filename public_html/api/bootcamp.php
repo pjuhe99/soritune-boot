@@ -29,6 +29,7 @@ require_once __DIR__ . '/services/group_assignment.php';
 require_once __DIR__ . '/services/entrance.php';
 require_once __DIR__ . '/services/attendance.php';
 require_once __DIR__ . '/services/review.php';
+require_once __DIR__ . '/services/notify.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -378,6 +379,16 @@ case 'reviews_list':         handleReviewsList(); break;
 case 'review_cancel':        handleReviewCancel($method); break;
 case 'review_settings':      handleReviewSettingsGet(); break;
 case 'review_settings_save': handleReviewSettingsUpdate($method); break;
+
+// ── Notify (알림톡) ──────────────────────────────────────────
+
+case 'notify_list_scenarios': handleNotifyListScenarios(); break;
+case 'notify_toggle':         handleNotifyToggle($method); break;
+case 'notify_preview':        handleNotifyPreview($method); break;
+case 'notify_send_now':       handleNotifySendNow($method); break;
+case 'notify_list_batches':   handleNotifyListBatches(); break;
+case 'notify_batch_detail':   handleNotifyBatchDetail(); break;
+case 'notify_retry_failed':   handleNotifyRetryFailed($method); break;
 
 // ──────────────────────────────────────────────────────────────
 
