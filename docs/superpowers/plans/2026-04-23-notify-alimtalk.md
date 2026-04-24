@@ -902,7 +902,7 @@ require_once __DIR__ . '/solapi_client.php';
  * - scenarios 등록 + state UPSERT
  * - is_active=1 + cron 매칭 시나리오에 대해 runScenario 호출
  */
-function notifyDispatch(int $now = null): void {
+function notifyDispatch(?int $now = null): void {
     $now = $now ?? time();
     $lockFile = '/tmp/notify_dispatch.lock';
     $fp = fopen($lockFile, 'c');
