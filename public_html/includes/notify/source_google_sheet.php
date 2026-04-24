@@ -37,8 +37,6 @@ function notifySourceGoogleSheet(array $cfg): array {
     }
 
     $checkIdx = $headerIdx[$cfg['check_col']];
-    $phoneIdx = $headerIdx[$cfg['phone_col']];
-    $nameIdx  = $headerIdx[$cfg['name_col']];
 
     $results = [];
     $rowCount = count($values);
