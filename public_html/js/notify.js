@@ -48,7 +48,13 @@ const AdminNotify = (() => {
                 <div class="notify-row-batches" data-role="batches"></div>
             </div>
         `).join('');
-        root.innerHTML = `<h2>알림톡</h2>${rows}`;
+        root.innerHTML = `
+            <div class="notify-header">
+                <h2>알림톡</h2>
+                <button data-act="refresh" class="btn btn-secondary btn-sm">새로고침</button>
+            </div>
+            ${rows}`;
+        root.querySelector('button[data-act="refresh"]').onclick = () => refresh();
         root.querySelectorAll('.notify-row').forEach(bindRow);
     }
 
@@ -168,7 +174,7 @@ const AdminNotify = (() => {
         const retryBtn = target.querySelector('button[data-act="retry"]');
         if (retryBtn) {
             retryBtn.onclick = async () => {
-                if (!confirm(`failed 상태 ${failedCount}명에게 재발송합니다.`)) return;
+                if (!(await App.confirm(`failed 상태 ${failedCount}명에게 재발송할까요? (즉시 발송됩니다)`))) return;
                 App.showLoading();
                 const rr = await App.post(API + 'notify_retry_failed', { batch_id: batchId });
                 App.hideLoading();

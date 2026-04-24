@@ -3,6 +3,7 @@
    참고: .modal-overlay / .modal-box 는 components.css 에 이미 정의되어
    있어 여기서는 .notify-modal-* 로 네임스페이스를 분리한다.
    ══════════════════════════════════════════════════════════════ */
+.notify-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .notify-row { border:1px solid #ddd; border-radius:6px; padding:12px; margin-bottom:12px; }
 .notify-row-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .notify-row-meta { color:#666; font-size:.9em; margin-top:6px; display:flex; gap:16px; flex-wrap:wrap; }
