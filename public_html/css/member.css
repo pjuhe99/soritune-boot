@@ -661,7 +661,8 @@
     margin-top: 10px; padding: 12px; background: #F9FAFB; border-radius: 8px;
     font-size: 14px; line-height: 1.6; color: #333;
 }
-.review-guide-body h1, .review-guide-body h2, .review-guide-body h3 { margin: 8px 0 6px; font-size: 15px; }
+.review-guide-body h1, .review-guide-body h2, .review-guide-body h3 { margin: 14px 0 6px; font-size: 16px; color: #222; }
+.review-guide-body h1:first-child, .review-guide-body h2:first-child, .review-guide-body h3:first-child { margin-top: 0; }
 .review-guide-body p { margin: 6px 0; }
 .review-guide-body ul, .review-guide-body ol { padding-left: 20px; margin: 6px 0; }
 .review-guide-body code {
