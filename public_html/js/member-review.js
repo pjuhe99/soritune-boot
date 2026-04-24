@@ -41,7 +41,20 @@ const MemberReview = (() => {
             return;
         }
 
-        body.innerHTML = renderSection('cafe', '카페 후기', r.cafe) + renderSection('blog', '블로그 후기', r.blog);
+        // 공통 가이드 블록 (상단, 펼침 기본)
+        const guideHtml = (typeof MemberHome !== 'undefined' && typeof MemberHome.renderMarkdown === 'function')
+            ? MemberHome.renderMarkdown(r.guide || '')
+            : `<pre>${App.esc(r.guide || '')}</pre>`;
+        const guideBlock = `
+            <details class="review-guide-top" open>
+                <summary>작성 가이드</summary>
+                <div class="review-guide-body">${guideHtml}</div>
+            </details>
+        `;
+
+        body.innerHTML = guideBlock
+            + renderSection('cafe', '카페 후기', r.cafe)
+            + renderSection('blog', '블로그 후기', r.blog);
         attachHandlers();
     }
 
@@ -58,11 +71,6 @@ const MemberReview = (() => {
             `;
         }
 
-        // 가이드 마크다운 렌더 — MemberHome.renderMarkdown 재사용
-        const guideHtml = (typeof MemberHome !== 'undefined' && typeof MemberHome.renderMarkdown === 'function')
-            ? MemberHome.renderMarkdown(data.guide || '')
-            : `<pre>${App.esc(data.guide || '')}</pre>`;
-
         if (data.submitted) {
             const d = formatDate(data.submitted.submitted_at);
             return `
@@ -71,10 +79,6 @@ const MemberReview = (() => {
                         <div class="review-section-title">${App.esc(title)}</div>
                         <div class="review-section-reward">${data.submitted.coin_amount}코인 적립 완료</div>
                     </div>
-                    <details class="review-guide">
-                        <summary>작성 가이드</summary>
-                        <div class="review-guide-body">${guideHtml}</div>
-                    </details>
                     <div class="review-submitted">
                         <div class="review-submitted-badge">✓ 제출 완료 · ${App.esc(d)}</div>
                         <a class="review-submitted-url" href="${App.esc(data.submitted.url)}" target="_blank" rel="noopener noreferrer">${App.esc(data.submitted.url)}</a>
@@ -89,10 +93,6 @@ const MemberReview = (() => {
                     <div class="review-section-title">${App.esc(title)}</div>
                     <div class="review-section-reward">+5 코인</div>
                 </div>
-                <details class="review-guide" open>
-                    <summary>작성 가이드</summary>
-                    <div class="review-guide-body">${guideHtml}</div>
-                </details>
                 <div class="review-form">
                     <label class="review-form-label" for="review-url-${type}">${App.esc(title)} 링크</label>
                     <input type="url" class="review-form-input" id="review-url-${type}"
