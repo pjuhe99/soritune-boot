@@ -74,8 +74,8 @@ function handleMemberChecksSummary() {
     $cohortStmt->execute([$memberId]);
     $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
     $cohortStart = $cohortInfo['start_date'] ?? '1970-01-01';
-    $cohortEnd = $cohortInfo['end_date'] ?? $today;
-    $endDate = min($today, $cohortEnd);
+    // 감점 컷오프를 위해 cohort.end_date를 당길 수 있으므로, 회원 본인 화면은 오늘까지 항상 표시
+    $endDate = $today;
 
     // 전체 데이터 조회 (cohort 기간 내만)
     $stmt = $db->prepare("
@@ -180,8 +180,8 @@ function handleMemberChecks() {
     $cohortStmt->execute([$memberId]);
     $cohortInfo = $cohortStmt->fetch(PDO::FETCH_ASSOC);
     $cohortStart = $cohortInfo['start_date'] ?? '1970-01-01';
-    $cohortEnd = $cohortInfo['end_date'] ?? $today;
-    $endDate = min($today, $cohortEnd);
+    // 감점 컷오프를 위해 cohort.end_date를 당길 수 있으므로, 회원 본인 화면은 오늘까지 항상 표시
+    $endDate = $today;
 
     // 미션 타입 목록
     $missionTypes = $db->query(

@@ -1,0 +1,30 @@
+/* ══════════════════════════════════════════════════════════════
+   AdminNotify — 알림톡 운영 탭 스타일
+   참고: .modal-overlay / .modal-box 는 components.css 에 이미 정의되어
+   있어 여기서는 .notify-modal-* 로 네임스페이스를 분리한다.
+   ══════════════════════════════════════════════════════════════ */
+.notify-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.notify-row { border:1px solid #ddd; border-radius:6px; padding:12px; margin-bottom:12px; }
+.notify-row-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.notify-row-meta { color:#666; font-size:.9em; margin-top:6px; display:flex; gap:16px; flex-wrap:wrap; }
+.notify-row-batches { margin-top:10px; }
+.notify-preview-table, .notify-batch-table, .notify-msg-table { width:100%; border-collapse:collapse; margin-top:8px; font-size:.92em; }
+.notify-preview-table th, .notify-preview-table td,
+.notify-batch-table th, .notify-batch-table td,
+.notify-msg-table th, .notify-msg-table td { border-bottom:1px solid #eee; padding:6px 8px; text-align:left; }
+.notify-preview-table tr.skip { color:#999; }
+.notify-msg-table tr.status-unknown { background:#fff8e6; }
+.notify-msg-table tr.status-failed  { background:#ffeaea; }
+.notify-msg-table tr.status-skipped { color:#999; }
+.notify-msg-table tr.status-dry_run { color:#666; }
+.status { padding:2px 8px; border-radius:10px; font-size:.85em; }
+.status-completed { background:#e6f7ea; color:#1f7a37; }
+.status-partial   { background:#fff4d6; color:#a16d00; }
+.status-failed    { background:#ffe1e1; color:#a00000; }
+.status-no_targets, .status-running { background:#eef; color:#446; }
+.env-DEV { color:#a16d00; }
+.env-PROD { color:#a00000; font-weight:bold; }
+.notify-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.notify-modal-box { background:#fff; padding:20px; border-radius:8px; max-width:760px; max-height:80vh; overflow:auto; }
+.notify-modal-actions { margin-top:12px; display:flex; gap:8px; justify-content:flex-end; }
+.rendered pre { background:#f6f6f6; padding:10px; border-radius:4px; max-height:200px; overflow:auto; }

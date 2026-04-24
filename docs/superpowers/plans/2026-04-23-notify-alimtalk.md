@@ -61,7 +61,7 @@
 | 경로 | 변경 |
 |---|---|
 | `public_html/cron.php` | `case 'notify_dispatch'` 추가, preview 청소 |
-| `public_html/api/admin.php` | `require_once` 추가, 7개 case dispatch |
+| `public_html/api/bootcamp.php` | `require_once` 추가, 7개 case dispatch (※ Task 10 이탈 정정: admin.php가 아니라 bootcamp.php — coin_balance/review_settings 등 admin-operation handler가 bootcamp.php에 등록돼 있음) |
 | `public_html/operation/index.php` | `notify.js`/`notify.css` 스크립트 태그 |
 | `public_html/js/admin.js` | "알림톡" 탭 추가 (operation/head 표시) |
 | 시스템 crontab | 디스패처 1줄 (PROD 적용 시) |
@@ -620,7 +620,12 @@ t('payload: type ATA',          $payload['type'] === 'ATA');
 t('payload: to normalized',     $payload['to'] === '01012345678');
 t('payload: kakao pfId',        $payload['kakaoOptions']['pfId'] === 'KA01PF');
 t('payload: kakao templateId',  $payload['kakaoOptions']['templateId'] === 'KA01TP');
-t('payload: vars present',      $payload['kakaoOptions']['variables']['#{name}'] === '홍길동');
+// variables는 빌더에서 (object) 캐스팅되므로 배열 접근 시 (array) 역캐스팅 필요
+t('payload: vars present',      ((array)$payload['kakaoOptions']['variables'])['#{name}'] === '홍길동');
+
+// 빈 variables는 JSON 직렬화 시 '{}' 이어야 함 (솔라피 spec: []는 4xx)
+$emptyPayload = solapiBuildAlimtalkPayload('01000000000', '025001111', 'PF', 'TP', []);
+t('payload: empty vars as {}',  str_contains(json_encode($emptyPayload), '"variables":{}'));
 ```
 
 - [ ] **Step 2: 테스트 실행 (FAIL 확인)**
@@ -897,7 +902,7 @@ require_once __DIR__ . '/solapi_client.php';
  * - scenarios 등록 + state UPSERT
  * - is_active=1 + cron 매칭 시나리오에 대해 runScenario 호출
  */
-function notifyDispatch(int $now = null): void {
+function notifyDispatch(?int $now = null): void {
     $now = $now ?? time();
     $lockFile = '/tmp/notify_dispatch.lock';
     $fp = fopen($lockFile, 'c');
@@ -1485,7 +1490,7 @@ cd /root/boot-dev && \
 
 **Files:**
 - Create: `/root/boot-dev/public_html/api/services/notify.php`
-- Modify: `/root/boot-dev/public_html/api/admin.php`
+- Modify: `/root/boot-dev/public_html/api/bootcamp.php` (※ admin.php가 아니라 bootcamp.php — coin_balance/review_settings 같은 admin-operation handler가 bootcamp.php에 등록돼 있음)
 
 권한 그룹: `operation`, `head`, `subhead1`, `subhead2`.
 
@@ -1800,7 +1805,7 @@ function handleNotifyRetryFailed($method) {
 }
 ```
 
-- [ ] **Step 2: api/admin.php에 require_once + 7 case 추가**
+- [ ] **Step 2: api/bootcamp.php에 require_once + 7 case 추가** (※ admin.php가 아니라 bootcamp.php — coin_balance/review_settings 같은 admin-operation handler가 bootcamp.php에 등록돼 있음)
 
 `require_once` 묶음 끝에 추가:
 ```php
@@ -1831,7 +1836,7 @@ grep -n "case 'coin_balance'" /root/boot-dev/public_html/api/admin.php /root/boo
 COOKIE_FILE=/tmp/notify_test_cookies.txt
 # (관리자 로그인 — 사용자 환경에 맞춰 진행)
 
-curl -sS -b $COOKIE_FILE "https://dev-boot.soritune.com/api/admin.php?action=notify_list_scenarios" | jq .
+curl -sS -b $COOKIE_FILE "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_list_scenarios" | jq .
 ```
 Expected: `success=true`, `scenarios` 배열에 `form_reminder_ot` 포함.
 
@@ -1839,7 +1844,7 @@ Expected: `success=true`, `scenarios` 배열에 `form_reminder_ot` 포함.
 
 ```
 cd /root/boot-dev && \
-  git add public_html/api/services/notify.php public_html/api/admin.php && \
+  git add public_html/api/services/notify.php public_html/api/bootcamp.php docs/superpowers/plans/2026-04-23-notify-alimtalk.md && \
   git commit -m "feat(notify): API 7개 액션 (목록/토글/미리보기/발송/이력/상세/재시도)"
 ```
 
@@ -1868,7 +1873,7 @@ grep -n "탭\|tab\|navTab\|activeTab\|menu-item" /root/boot-dev/public_html/js/a
 
 ```javascript
 /* Notify Admin UI — operation/head 탭 */
-const NotifyApp = (() => {
+const AdminNotify = (() => {
   let root = null;
   let scenarios = [];
 
@@ -1879,7 +1884,7 @@ const NotifyApp = (() => {
 
   async function refresh() {
     root.innerHTML = '<div class="loading">알림톡 시나리오 불러오는 중…</div>';
-    const r = await App.get('/api/admin.php?action=notify_list_scenarios');
+    const r = await App.get('/api/bootcamp.php?action=notify_list_scenarios');
     if (!r.success) { root.innerHTML = `<div class="error">${App.esc(r.error || '오류')}</div>`; return; }
     scenarios = r.scenarios || [];
     render();
@@ -1918,7 +1923,7 @@ const NotifyApp = (() => {
   function bindRow(rowEl) {
     const key = rowEl.dataset.key;
     rowEl.querySelector('input[data-act="toggle"]').onchange = async (e) => {
-      const r = await App.post('/api/admin.php?action=notify_toggle', { key, is_active: e.target.checked });
+      const r = await App.post('/api/bootcamp.php?action=notify_toggle', { key, is_active: e.target.checked });
       if (!r.success) { Toast.error(r.error); refresh(); }
       else Toast.ok('변경되었습니다');
     };
@@ -1929,7 +1934,7 @@ const NotifyApp = (() => {
 
   async function openPreview(key, dryRun) {
     App.showLoading();
-    const r = await App.post('/api/admin.php?action=notify_preview', { key, dry_run: dryRun });
+    const r = await App.post('/api/bootcamp.php?action=notify_preview', { key, dry_run: dryRun });
     App.hideLoading();
     if (!r.success) { Toast.error(r.error); return; }
     showPreviewModal(r);
@@ -1963,7 +1968,7 @@ const NotifyApp = (() => {
     ovl.querySelector('button[data-act="cancel"]').onclick = () => ovl.remove();
     ovl.querySelector('button[data-act="confirm"]').onclick = async () => {
       App.showLoading();
-      const r = await App.post('/api/admin.php?action=notify_send_now', { preview_id: p.preview_id });
+      const r = await App.post('/api/bootcamp.php?action=notify_send_now', { preview_id: p.preview_id });
       App.hideLoading();
       if (!r.success) { Toast.error(r.error); return; }
       Toast.ok(`발송 완료 (batch ${r.batch_id})`);
@@ -1975,7 +1980,7 @@ const NotifyApp = (() => {
   async function loadBatches(rowEl, key) {
     const target = rowEl.querySelector('[data-role="batches"]');
     target.innerHTML = '<em>불러오는 중…</em>';
-    const r = await App.get(`/api/admin.php?action=notify_list_batches&key=${encodeURIComponent(key)}&limit=15`);
+    const r = await App.get(`/api/bootcamp.php?action=notify_list_batches&key=${encodeURIComponent(key)}&limit=15`);
     if (!r.success) { target.innerHTML = `<span class="error">${App.esc(r.error)}</span>`; return; }
     if (!r.batches || r.batches.length === 0) { target.innerHTML = '<em>이력 없음</em>'; return; }
     target.innerHTML = `
@@ -2007,7 +2012,7 @@ const NotifyApp = (() => {
 
   async function showBatchDetail(target, batchId) {
     target.innerHTML = '<em>불러오는 중…</em>';
-    const r = await App.get(`/api/admin.php?action=notify_batch_detail&batch_id=${batchId}`);
+    const r = await App.get(`/api/bootcamp.php?action=notify_batch_detail&batch_id=${batchId}`);
     if (!r.success) { target.innerHTML = `<span class="error">${App.esc(r.error)}</span>`; return; }
     const failedCount = (r.messages || []).filter(m => m.status === 'failed').length;
     target.innerHTML = `
@@ -2033,7 +2038,7 @@ const NotifyApp = (() => {
       retryBtn.onclick = async () => {
         if (!confirm(`failed 상태 ${failedCount}명에게 재발송합니다.`)) return;
         App.showLoading();
-        const rr = await App.post('/api/admin.php?action=notify_retry_failed', { batch_id: batchId });
+        const rr = await App.post('/api/bootcamp.php?action=notify_retry_failed', { batch_id: batchId });
         App.hideLoading();
         if (!rr.success) { Toast.error(rr.error); return; }
         Toast.ok(`재시도 배치 #${rr.batch_id} 생성됨`);
@@ -2088,11 +2093,11 @@ const NotifyApp = (() => {
 
 - [ ] **Step 5: admin.js에 "알림톡" 탭 통합**
 
-Step 1에서 파악한 패턴을 따라, operation 역할(또는 head 그룹)일 때 "알림톡" 탭 항목을 추가하고, 클릭 시 `NotifyApp.init(<해당 컨테이너>)` 호출. 정확한 코드는 admin.js의 기존 탭 추가 패턴을 그대로 따름. 예 (패턴이 menu-item array라면):
+Step 1에서 파악한 패턴을 따라, operation 역할(또는 head 그룹)일 때 "알림톡" 탭 항목을 추가하고, 클릭 시 `AdminNotify.init(<해당 컨테이너>)` 호출. 정확한 코드는 admin.js의 기존 탭 추가 패턴을 그대로 따름. 예 (패턴이 menu-item array라면):
 ```javascript
 // 기존 탭 정의 배열 어딘가에:
 { id: 'notify', label: '알림톡', roles: ['operation','head','subhead1','subhead2'],
-  render: (container) => NotifyApp.init(container) }
+  render: (container) => AdminNotify.init(container) }
 ```
 패턴이 다르면 동등한 진입 지점에 배치.
 
@@ -2135,16 +2140,16 @@ COOKIE=/tmp/notify_test_cookies.txt
 # 1) 미리보기
 curl -sS -b $COOKIE -X POST -H 'Content-Type: application/json' \
   -d '{"key":"form_reminder_ot","dry_run":true}' \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_preview" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_preview" | jq .
 
 # preview_id 받아서:
 curl -sS -b $COOKIE -X POST -H 'Content-Type: application/json' \
   -d "{\"preview_id\":\"<위에서 받은 ID>\"}" \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_send_now" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_send_now" | jq .
 
 # 배치 상세
 curl -sS -b $COOKIE \
-  "https://dev-boot.soritune.com/api/admin.php?action=notify_batch_detail&batch_id=<위 응답 batch_id>" | jq .
+  "https://dev-boot.soritune.com/api/bootcamp.php?action=notify_batch_detail&batch_id=<위 응답 batch_id>" | jq .
 ```
 
 Expected:
