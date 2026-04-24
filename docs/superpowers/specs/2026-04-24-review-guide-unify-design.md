@@ -40,10 +40,9 @@ base_spec: 2026-04-23-review-submission-design.md
 - `--dry-run` 지원, 트랜잭션, 실패 시 rollback.
 - 시작 시 기존 `review_cafe_guide` / `review_blog_guide` 의 `content_markdown`을 stdout에 덤프 (수동 롤백용 백업).
 - 단계:
-  1. `INSERT IGNORE INTO system_contents (content_key, content_markdown) VALUES ('review_guide', <가이드 본문>)`
-  2. `UPDATE system_contents SET content_markdown = <가이드 본문> WHERE content_key = 'review_guide'` — DEV에 이미 row가 있었어도 최종 문구로 덮어씀 (재실행 안전).
-  3. `DELETE FROM system_contents WHERE content_key IN ('review_cafe_guide', 'review_blog_guide')`
-  4. 검증: `review_guide` 1건 존재, 구 키 0건.
+  1. `INSERT INTO system_contents (content_key, content_markdown) VALUES ('review_guide', ?) ON DUPLICATE KEY UPDATE content_markdown = VALUES(content_markdown)` — 원자적 UPSERT, 재실행 안전.
+  2. `DELETE FROM system_contents WHERE content_key IN ('review_cafe_guide', 'review_blog_guide')`
+  3. 검증: `review_guide` 1건 존재, 구 키 0건.
 
 ### 3.2 가이드 본문 (최종본)
 

@@ -84,7 +84,7 @@ try {
     if (!$dryRun && $db->inTransaction()) $db->commit();
     echo "\n완료" . ($dryRun ? " (dry-run)" : "") . ".\n";
 } catch (Throwable $e) {
-    if ($db->inTransaction()) $db->rollBack();
+    if (!$dryRun && $db->inTransaction()) $db->rollBack();
     echo "\n실패: " . $e->getMessage() . "\n";
     exit(1);
 }
