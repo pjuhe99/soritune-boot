@@ -101,5 +101,14 @@ t('payload: vars present',      ((array)$payload['kakaoOptions']['variables'])['
 $emptyPayload = solapiBuildAlimtalkPayload('01000000000', '025001111', 'PF', 'TP', []);
 t('payload: empty vars as {}',  str_contains(json_encode($emptyPayload), '"variables":{}'));
 
+// ── dispatcher status decision (단위) ────────────
+require_once __DIR__ . '/public_html/includes/notify/dispatcher.php';
+t('status: no_targets',    notifyDecideBatchStatus(0, 0, 0, 0) === 'no_targets');
+t('status: completed all', notifyDecideBatchStatus(5, 5, 0, 0) === 'completed');
+t('status: partial mixed', notifyDecideBatchStatus(5, 3, 2, 0) === 'partial');
+t('status: partial unk',   notifyDecideBatchStatus(5, 3, 0, 2) === 'partial');
+t('status: failed all',    notifyDecideBatchStatus(5, 0, 5, 0) === 'failed');
+t('status: skipped only',  notifyDecideBatchStatus(5, 0, 0, 0) === 'completed');
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
