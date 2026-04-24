@@ -620,7 +620,12 @@ t('payload: type ATA',          $payload['type'] === 'ATA');
 t('payload: to normalized',     $payload['to'] === '01012345678');
 t('payload: kakao pfId',        $payload['kakaoOptions']['pfId'] === 'KA01PF');
 t('payload: kakao templateId',  $payload['kakaoOptions']['templateId'] === 'KA01TP');
-t('payload: vars present',      $payload['kakaoOptions']['variables']['#{name}'] === '홍길동');
+// variables는 빌더에서 (object) 캐스팅되므로 배열 접근 시 (array) 역캐스팅 필요
+t('payload: vars present',      ((array)$payload['kakaoOptions']['variables'])['#{name}'] === '홍길동');
+
+// 빈 variables는 JSON 직렬화 시 '{}' 이어야 함 (솔라피 spec: []는 4xx)
+$emptyPayload = solapiBuildAlimtalkPayload('01000000000', '025001111', 'PF', 'TP', []);
+t('payload: empty vars as {}',  str_contains(json_encode($emptyPayload), '"variables":{}'));
 ```
 
 - [ ] **Step 2: 테스트 실행 (FAIL 확인)**

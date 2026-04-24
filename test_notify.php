@@ -97,5 +97,9 @@ t('payload: kakao pfId',        $payload['kakaoOptions']['pfId'] === 'KA01PF');
 t('payload: kakao templateId',  $payload['kakaoOptions']['templateId'] === 'KA01TP');
 t('payload: vars present',      ((array)$payload['kakaoOptions']['variables'])['#{name}'] === '홍길동');
 
+// 빈 variables는 JSON 직렬화 시 '{}' 이어야 함 (솔라피 spec 요구, 빈 []는 4xx)
+$emptyPayload = solapiBuildAlimtalkPayload('01000000000', '025001111', 'PF', 'TP', []);
+t('payload: empty vars as {}',  str_contains(json_encode($emptyPayload), '"variables":{}'));
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
