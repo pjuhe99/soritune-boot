@@ -170,6 +170,7 @@ const MemberApp = (() => {
                     </div>
                 </div>
                 <div id="member-coin-history-area" style="display:none"></div>
+                <div id="member-review-submit-area" style="display:none"></div>
             </div>
         `;
 
@@ -206,7 +207,42 @@ const MemberApp = (() => {
         historyArea.innerHTML = '';
         dashboardContent.style.display = '';
         window.scrollTo({ top: 0, behavior: 'instant' });
+        // 내역 화면에서 돌아올 때 코인 stat 카드 최신화 (관리자가 코인 조정/회수한 경우 반영)
+        refreshMember();
     }
 
-    return { init, openCoinHistory, closeCoinHistory };
+    function openReviewSubmit() {
+        const dashboardContent = root.querySelector('.member-content');
+        const area = document.getElementById('member-review-submit-area');
+        if (!area) return;
+        dashboardContent.style.display = 'none';
+        area.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        MemberReview.render(area, closeReviewSubmit);
+    }
+
+    function closeReviewSubmit() {
+        const dashboardContent = root.querySelector('.member-content');
+        const area = document.getElementById('member-review-submit-area');
+        if (!area) return;
+        area.style.display = 'none';
+        area.innerHTML = '';
+        dashboardContent.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        // 후기 제출/취소 후 대시보드 복귀 시 프로필(코인 값) 최신화
+        refreshMember();
+    }
+
+    async function refreshMember() {
+        try {
+            const r = await App.post('/api/member.php?action=check_session');
+            if (r.success && r.member) {
+                member = r.member;
+                const homeArea = document.getElementById('member-home-area');
+                if (homeArea) MemberHome.render(homeArea, member);
+            }
+        } catch (_e) { /* 실패해도 UI 유지 */ }
+    }
+
+    return { init, openCoinHistory, closeCoinHistory, openReviewSubmit, closeReviewSubmit, refreshMember };
 })();

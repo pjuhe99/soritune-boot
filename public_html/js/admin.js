@@ -191,6 +191,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-issues" data-hash="issues">오류 문의</button>
                             <button class="tab" data-tab="#tab-bulk-register" data-hash="bulk-register">일괄 등록</button>
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
+                            <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
@@ -211,6 +212,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-issues"></div>
                         <div class="tab-content" id="tab-bulk-register"></div>
                         <div class="tab-content" id="bc-tab-study"></div>
+                        <div class="tab-content" id="tab-reviews"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -430,6 +432,20 @@ const AdminApp = (() => {
                         }
                     });
                     lecObserver.observe(lecTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Reviews 탭 lazy load
+            if (typeof AdminReviews !== 'undefined') {
+                const revTab = document.getElementById('tab-reviews');
+                if (revTab) {
+                    const revObserver = new MutationObserver(() => {
+                        if (revTab.classList.contains('active') && !revTab.dataset.loaded) {
+                            revTab.dataset.loaded = '1';
+                            AdminReviews.init(revTab);
+                        }
+                    });
+                    revObserver.observe(revTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 

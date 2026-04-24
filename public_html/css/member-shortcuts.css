@@ -37,6 +37,7 @@
     font-size: var(--text-sm);
     font-weight: var(--font-semibold);
     line-height: var(--leading-normal);
+    text-align: left;
     text-decoration: none;
     cursor: pointer;
     transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);

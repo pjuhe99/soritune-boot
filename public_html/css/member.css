@@ -618,3 +618,71 @@
 .stat-coin:active {
     background: var(--color-bg-soft, #f8f8fc);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   후기 작성 화면 (MemberReview)
+   ══════════════════════════════════════════════════════════════ */
+.review-submit-page { padding: 16px; max-width: 720px; margin: 0 auto; }
+.review-submit-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.review-submit-back {
+    background: none; border: none; color: #555; font-size: 15px; cursor: pointer; padding: 4px 8px;
+}
+.review-submit-title { font-size: 18px; font-weight: 700; color: #222; }
+.review-submit-loading,
+.review-submit-empty {
+    padding: 40px 16px; text-align: center; color: #888; background: #fff;
+    border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.review-section {
+    background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.review-section-head {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+}
+.review-section-title { font-size: 16px; font-weight: 700; color: #222; }
+.review-section-reward {
+    color: #D97706; font-weight: 700; font-size: 14px;
+    background: #FEF3C7; padding: 4px 10px; border-radius: 999px;
+}
+.review-section-disabled {
+    color: #888; text-align: center; padding: 24px 0; font-size: 14px;
+}
+
+.review-guide-top {
+    background: #fff; border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.review-guide-top summary {
+    cursor: pointer; color: #222; font-size: 15px; font-weight: 700; padding: 4px 0;
+}
+.review-guide-body {
+    margin-top: 10px; padding: 12px; background: #F9FAFB; border-radius: 8px;
+    font-size: 14px; line-height: 1.6; color: #333;
+}
+.review-guide-body h1, .review-guide-body h2, .review-guide-body h3 { margin: 14px 0 6px; font-size: 16px; color: #222; }
+.review-guide-body h1:first-child, .review-guide-body h2:first-child, .review-guide-body h3:first-child { margin-top: 0; }
+.review-guide-body p { margin: 6px 0; }
+.review-guide-body ul, .review-guide-body ol { padding-left: 20px; margin: 6px 0; }
+.review-guide-body code {
+    background: #E5E7EB; padding: 1px 5px; border-radius: 4px; font-size: 13px;
+}
+
+.review-form { margin-top: 12px; }
+.review-form-label { display: block; font-size: 14px; color: #444; margin-bottom: 6px; }
+.review-form-input {
+    width: 100%; padding: 10px 12px; border: 1px solid #D1D5DB;
+    border-radius: 8px; font-size: 14px; box-sizing: border-box; margin-bottom: 10px;
+}
+.review-form-input:focus { outline: none; border-color: #2563EB; }
+.review-form-submit { width: 100%; }
+
+.review-submitted {
+    margin-top: 8px; padding: 12px; background: #ECFDF5; border-radius: 8px;
+}
+.review-submitted-badge { color: #065F46; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.review-submitted-url {
+    display: block; color: #2563EB; font-size: 13px; word-break: break-all;
+    text-decoration: underline;
+}

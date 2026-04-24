@@ -284,5 +284,5 @@ const MemberHome = (() => {
         };
     }
 
-    return { render };
+    return { render, renderMarkdown };
 })();
