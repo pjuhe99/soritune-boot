@@ -180,8 +180,9 @@ $allowed = ['review_cafe_enabled', 'review_blog_enabled', 'review_guide'];
 
 ### 5.3 CSS
 
-- 신규 클래스 `.review-guide-top` — 섹션 밖 상단 가이드용. `max-width`, `margin-bottom` 등은 기존 `.review-section`과 어울리게.
-- 기존 `.review-guide` (섹션 내부 가이드용) 제거 또는 재사용. 삭제 방향 권장 (죽은 스타일 남기지 않음).
+- 신규 클래스 `.review-guide-top` — 섹션 밖 상단 가이드용. 흰 배경 + 그림자로 `.review-section` 과 어울리는 카드 형태.
+- 기존 `.review-guide` (섹션 내부 가이드용) 규칙은 완전 제거 (죽은 스타일 남기지 않음).
+- `.review-guide-body` 는 기존 스타일 유지. `renderMarkdown` 이 모든 라인을 `<p>`/`<ul>`/`<h*>` 등 블록 요소로 감싸 반환하므로 추가 `white-space` 처리는 불필요.
 - 섹션 간 구분선(`border-top` 또는 `margin-top: 12px`)이 필요하면 `.review-section + .review-section`에 적용.
 
 ## 6. 운영 UI — `/operation > 후기` 탭

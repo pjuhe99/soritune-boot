@@ -660,7 +660,6 @@
 .review-guide-body {
     margin-top: 10px; padding: 12px; background: #F9FAFB; border-radius: 8px;
     font-size: 14px; line-height: 1.6; color: #333;
-    white-space: pre-wrap;
 }
 .review-guide-body h1, .review-guide-body h2, .review-guide-body h3 { margin: 8px 0 6px; font-size: 15px; }
 .review-guide-body p { margin: 6px 0; }
