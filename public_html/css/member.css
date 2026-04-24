@@ -650,13 +650,17 @@
     color: #888; text-align: center; padding: 24px 0; font-size: 14px;
 }
 
-.review-guide { margin-bottom: 12px; }
-.review-guide summary {
-    cursor: pointer; color: #555; font-size: 14px; font-weight: 600; padding: 6px 0;
+.review-guide-top {
+    background: #fff; border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.review-guide-top summary {
+    cursor: pointer; color: #222; font-size: 15px; font-weight: 700; padding: 4px 0;
 }
 .review-guide-body {
-    margin-top: 8px; padding: 12px; background: #F9FAFB; border-radius: 8px;
+    margin-top: 10px; padding: 12px; background: #F9FAFB; border-radius: 8px;
     font-size: 14px; line-height: 1.6; color: #333;
+    white-space: pre-wrap;
 }
 .review-guide-body h1, .review-guide-body h2, .review-guide-body h3 { margin: 8px 0 6px; font-size: 15px; }
 .review-guide-body p { margin: 6px 0; }
