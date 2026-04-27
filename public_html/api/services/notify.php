@@ -88,7 +88,9 @@ function handleNotifyPreview($method) {
     $def = $scenarios[$key];
 
     $keys = solapiLoadKeys();
-    $dryRun = isset($input['dry_run']) ? (bool)$input['dry_run'] : (bool)($keys['dry_run_default'] ?? false);
+    $dryRun            = isset($input['dry_run']) ? (bool)$input['dry_run'] : (bool)($keys['dry_run_default'] ?? false);
+    $bypassCooldown    = (bool)($input['bypass_cooldown']     ?? false);
+    $bypassMaxAttempts = (bool)($input['bypass_max_attempts'] ?? false);
 
     try {
         $rows = notifyFetchRows($def);
@@ -109,18 +111,27 @@ function handleNotifyPreview($method) {
         SELECT COUNT(*) FROM notify_message
          WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
     ");
+
+    $cooldownHours = (int)($def['cooldown_hours'] ?? 0);
+    $maxAttempts   = (int)($def['max_attempts']   ?? 0);
+    $checkCd       = notifyShouldCheckCooldown($cooldownHours, $bypassCooldown);
+    $checkMx       = notifyShouldCheckMaxAttempts($maxAttempts, $bypassMaxAttempts);
+
     foreach ($rows as $row) {
         $phoneNorm = notifyNormalizePhone($row['phone'] ?? '');
         if ($phoneNorm === null) {
             $skips[] = $row + ['_skip' => 'phone_invalid'];
             continue;
         }
-        $cd->execute([$key, $phoneNorm, (int)$def['cooldown_hours']]);
-        if ($cd->fetchColumn()) { $skips[] = $row + ['_skip' => 'cooldown']; continue; }
-
-        $mx->execute([$key, $phoneNorm]);
-        if ((int)$mx->fetchColumn() >= (int)$def['max_attempts']) {
-            $skips[] = $row + ['_skip' => 'max_attempts']; continue;
+        if ($checkCd) {
+            $cd->execute([$key, $phoneNorm, $cooldownHours]);
+            if ($cd->fetchColumn()) { $skips[] = $row + ['_skip' => 'cooldown']; continue; }
+        }
+        if ($checkMx) {
+            $mx->execute([$key, $phoneNorm]);
+            if ((int)$mx->fetchColumn() >= $maxAttempts) {
+                $skips[] = $row + ['_skip' => 'max_attempts']; continue;
+            }
         }
         $candidates[] = $row + ['phone_norm' => $phoneNorm];
     }
@@ -138,20 +149,24 @@ function handleNotifyPreview($method) {
     $rowKeys = array_map(fn($c) => $c['row_key'], $candidates);
     $db->prepare("
         INSERT INTO notify_preview
-          (id, scenario_key, dry_run, row_keys, target_count, created_by, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW() + INTERVAL ? MINUTE)
+          (id, scenario_key, dry_run, bypass_cooldown, bypass_max_attempts,
+           row_keys, target_count, created_by, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW() + INTERVAL ? MINUTE)
     ")->execute([
         $previewId, $key, (int)$dryRun,
+        (int)$bypassCooldown, (int)$bypassMaxAttempts,
         json_encode($rowKeys, JSON_UNESCAPED_UNICODE),
         count($rowKeys), (string)$admin['admin_id'],
         NOTIFY_PREVIEW_TTL_MIN,
     ]);
 
     jsonSuccess([
-        'preview_id'     => $previewId,
-        'expires_in_min' => NOTIFY_PREVIEW_TTL_MIN,
-        'dry_run'        => (int)$dryRun,
-        'environment'    => notifyEnvironmentLabel(),
+        'preview_id'           => $previewId,
+        'expires_in_min'       => NOTIFY_PREVIEW_TTL_MIN,
+        'dry_run'              => (int)$dryRun,
+        'bypass_cooldown'      => (int)$bypassCooldown,
+        'bypass_max_attempts'  => (int)$bypassMaxAttempts,
+        'environment'          => notifyEnvironmentLabel(),
         'target_count'   => count($candidates),
         'skip_count'     => count($skips),
         'candidates'     => array_map(fn($c) => [
@@ -218,7 +233,9 @@ function handleNotifySendNow($method) {
             'manual',
             (string)$admin['admin_id'],
             (bool)$preview['dry_run'],
-            $rowKeys
+            $rowKeys,
+            (bool)($preview['bypass_cooldown']     ?? false),
+            (bool)($preview['bypass_max_attempts'] ?? false)
         );
     } catch (Throwable $e) {
         jsonError('발송 중 오류: ' . $e->getMessage(), 500);
@@ -238,7 +255,7 @@ function handleNotifyListBatches() {
     $stmt = $db->prepare("
         SELECT id, scenario_key, trigger_type, triggered_by, started_at, finished_at,
                target_count, sent_count, failed_count, unknown_count, skipped_count,
-               dry_run, status, error_message
+               dry_run, bypass_cooldown, bypass_max_attempts, status, error_message
           FROM notify_batch
          WHERE scenario_key = ?
          ORDER BY started_at DESC
