@@ -66,7 +66,9 @@ function notifyRunScenario(
     string $trigger,
     ?string $triggeredBy = null,
     ?bool $dryRun = null,
-    ?array $rowKeysFilter = null
+    ?array $rowKeysFilter = null,
+    bool $bypassCooldown = false,
+    bool $bypassMaxAttempts = false
 ): ?int {
     $key = (string)$def['key'];
     $keys = solapiLoadKeys();
@@ -91,10 +93,15 @@ function notifyRunScenario(
         // 2) 배치 INSERT
         $ins = $db->prepare("
             INSERT INTO notify_batch
-              (scenario_key, trigger_type, triggered_by, started_at, dry_run, status, target_count)
-            VALUES (?, ?, ?, NOW(), ?, 'running', 0)
+              (scenario_key, trigger_type, triggered_by, started_at,
+               dry_run, bypass_cooldown, bypass_max_attempts,
+               status, target_count)
+            VALUES (?, ?, ?, NOW(), ?, ?, ?, 'running', 0)
         ");
-        $ins->execute([$key, $trigger, $triggeredBy, (int)$dryRun]);
+        $ins->execute([
+            $key, $trigger, $triggeredBy,
+            (int)$dryRun, (int)$bypassCooldown, (int)$bypassMaxAttempts,
+        ]);
         $batchId = (int)$db->lastInsertId();
 
         // 3) source 어댑터 호출
@@ -158,38 +165,44 @@ function notifyRunScenario(
                 continue;
             }
 
-            // 쿨다운 (sent + unknown)
-            $cd = $db->prepare("
-                SELECT MAX(processed_at) FROM notify_message
-                 WHERE scenario_key = ? AND phone = ?
-                   AND status IN ('sent','unknown')
-                   AND processed_at >= NOW() - INTERVAL ? HOUR
-            ");
-            $cd->execute([$key, $phoneNorm, (int)$def['cooldown_hours']]);
-            if ($cd->fetchColumn()) {
-                $insMsg->execute([
-                    $batchId, $key, $row['row_key'], $phoneNorm,
-                    $row['name'] ?? null, $templateId, $renderedText,
-                    'skipped', 'cooldown', date('Y-m-d H:i:s'),
-                ]);
-                $skipped++;
-                continue;
+            // 쿨다운 (sent + unknown). bypass=true 이거나 cooldown_hours<=0 이면 가드 자체를 건너뜀.
+            $cooldownHours = (int)($def['cooldown_hours'] ?? 0);
+            if (!$bypassCooldown && $cooldownHours > 0) {
+                $cd = $db->prepare("
+                    SELECT MAX(processed_at) FROM notify_message
+                     WHERE scenario_key = ? AND phone = ?
+                       AND status IN ('sent','unknown')
+                       AND processed_at >= NOW() - INTERVAL ? HOUR
+                ");
+                $cd->execute([$key, $phoneNorm, $cooldownHours]);
+                if ($cd->fetchColumn()) {
+                    $insMsg->execute([
+                        $batchId, $key, $row['row_key'], $phoneNorm,
+                        $row['name'] ?? null, $templateId, $renderedText,
+                        'skipped', 'cooldown', date('Y-m-d H:i:s'),
+                    ]);
+                    $skipped++;
+                    continue;
+                }
             }
 
-            // 최대횟수 (sent + unknown 만 카운트)
-            $mx = $db->prepare("
-                SELECT COUNT(*) FROM notify_message
-                 WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
-            ");
-            $mx->execute([$key, $phoneNorm]);
-            if ((int)$mx->fetchColumn() >= (int)$def['max_attempts']) {
-                $insMsg->execute([
-                    $batchId, $key, $row['row_key'], $phoneNorm,
-                    $row['name'] ?? null, $templateId, $renderedText,
-                    'skipped', 'max_attempts', date('Y-m-d H:i:s'),
-                ]);
-                $skipped++;
-                continue;
+            // 최대횟수 (sent + unknown 만 카운트). bypass=true 이거나 max_attempts<=0 이면 가드 건너뜀.
+            $maxAttempts = (int)($def['max_attempts'] ?? 0);
+            if (!$bypassMaxAttempts && $maxAttempts > 0) {
+                $mx = $db->prepare("
+                    SELECT COUNT(*) FROM notify_message
+                     WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
+                ");
+                $mx->execute([$key, $phoneNorm]);
+                if ((int)$mx->fetchColumn() >= $maxAttempts) {
+                    $insMsg->execute([
+                        $batchId, $key, $row['row_key'], $phoneNorm,
+                        $row['name'] ?? null, $templateId, $renderedText,
+                        'skipped', 'max_attempts', date('Y-m-d H:i:s'),
+                    ]);
+                    $skipped++;
+                    continue;
+                }
             }
 
             // queued 기록
