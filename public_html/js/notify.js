@@ -149,7 +149,9 @@ const AdminNotify = (() => {
             bindModal();
         }
 
-        async function reloadPreview() {
+        // App.showLoading() 의 .loading-overlay 가 inset:0 + 기본 pointer-events
+        // 이라 reloadPreview 도중 다른 체크박스 클릭이 차단됨 → 동시 in-flight 없음.
+        async function reloadPreview(prevBypass) {
             App.showLoading();
             const r = await App.post(API + 'notify_preview', {
                 key: state.preview.key,
@@ -158,7 +160,14 @@ const AdminNotify = (() => {
                 bypass_max_attempts: state.bypassMaxAttempts,
             });
             App.hideLoading();
-            if (!r.success) { Toast.error(r.error); return; }
+            if (!r.success) {
+                // 체크박스 UI 와 state 가 어긋나지 않게 이전 값으로 복원 후 repaint
+                state.bypassCooldown = prevBypass.cooldown;
+                state.bypassMaxAttempts = prevBypass.max;
+                paint();
+                Toast.error(r.error);
+                return;
+            }
             state.preview = { key: state.preview.key, dryRun: state.preview.dry_run, ...r };
             paint();
         }
@@ -166,12 +175,14 @@ const AdminNotify = (() => {
         function bindModal() {
             ovl.querySelector('button[data-act="cancel"]').onclick = () => ovl.remove();
             ovl.querySelector('input[data-bypass="cooldown"]').onchange = (e) => {
+                const prev = { cooldown: state.bypassCooldown, max: state.bypassMaxAttempts };
                 state.bypassCooldown = e.target.checked;
-                reloadPreview();
+                reloadPreview(prev);
             };
             ovl.querySelector('input[data-bypass="max"]').onchange = (e) => {
+                const prev = { cooldown: state.bypassCooldown, max: state.bypassMaxAttempts };
                 state.bypassMaxAttempts = e.target.checked;
-                reloadPreview();
+                reloadPreview(prev);
             };
             ovl.querySelector('button[data-act="confirm"]').onclick = async () => {
                 App.showLoading();
