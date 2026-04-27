@@ -167,7 +167,7 @@ function notifyRunScenario(
 
             // 쿨다운 (sent + unknown). bypass=true 이거나 cooldown_hours<=0 이면 가드 자체를 건너뜀.
             $cooldownHours = (int)($def['cooldown_hours'] ?? 0);
-            if (!$bypassCooldown && $cooldownHours > 0) {
+            if (notifyShouldCheckCooldown($cooldownHours, $bypassCooldown)) {
                 $cd = $db->prepare("
                     SELECT MAX(processed_at) FROM notify_message
                      WHERE scenario_key = ? AND phone = ?
@@ -188,7 +188,7 @@ function notifyRunScenario(
 
             // 최대횟수 (sent + unknown 만 카운트). bypass=true 이거나 max_attempts<=0 이면 가드 건너뜀.
             $maxAttempts = (int)($def['max_attempts'] ?? 0);
-            if (!$bypassMaxAttempts && $maxAttempts > 0) {
+            if (notifyShouldCheckMaxAttempts($maxAttempts, $bypassMaxAttempts)) {
                 $mx = $db->prepare("
                     SELECT COUNT(*) FROM notify_message
                      WHERE scenario_key = ? AND phone = ? AND status IN ('sent','unknown')
@@ -424,4 +424,23 @@ function notifyUpdateState(PDO $db, string $key, ?int $batchId, string $status):
            SET last_run_at = NOW(), last_run_status = ?, last_batch_id = ?
          WHERE scenario_key = ?
     ")->execute([$status, $batchId, $key]);
+}
+
+/**
+ * 쿨다운 가드를 적용해야 하는지 판단.
+ * - bypass=true → 적용 안 함
+ * - cooldown_hours <= 0 → 적용 안 함 (무제한 발송 시나리오)
+ * - 그 외 → 적용
+ */
+function notifyShouldCheckCooldown(int $cooldownHours, bool $bypass): bool {
+    if ($bypass) return false;
+    return $cooldownHours > 0;
+}
+
+/**
+ * 최대횟수 가드를 적용해야 하는지 판단.
+ */
+function notifyShouldCheckMaxAttempts(int $maxAttempts, bool $bypass): bool {
+    if ($bypass) return false;
+    return $maxAttempts > 0;
 }
