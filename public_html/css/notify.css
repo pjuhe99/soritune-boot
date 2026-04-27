@@ -4,10 +4,18 @@
    있어 여기서는 .notify-modal-* 로 네임스페이스를 분리한다.
    ══════════════════════════════════════════════════════════════ */
 .notify-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-.notify-row { border:1px solid #ddd; border-radius:6px; padding:12px; margin-bottom:12px; }
+.notify-row {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--color-bg);
+    transition: box-shadow .15s ease;
+}
+.notify-row:hover { box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.notify-row-batches { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--color-border); }
 .notify-row-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .notify-row-meta { color:#666; font-size:.9em; margin-top:6px; display:flex; gap:16px; flex-wrap:wrap; }
-.notify-row-batches { margin-top:10px; }
 .notify-preview-table, .notify-batch-table, .notify-msg-table { width:100%; border-collapse:collapse; margin-top:8px; font-size:.92em; }
 .notify-preview-table th, .notify-preview-table td,
 .notify-batch-table th, .notify-batch-table td,
@@ -28,3 +36,46 @@
 .notify-modal-box { background:#fff; padding:20px; border-radius:8px; max-width:760px; max-height:80vh; overflow:auto; }
 .notify-modal-actions { margin-top:12px; display:flex; gap:8px; justify-content:flex-end; }
 .rendered pre { background:#f6f6f6; padding:10px; border-radius:4px; max-height:200px; overflow:auto; }
+
+/* ── 운영자 안내 (헤더 아래 1줄) ─────────────────────────── */
+.notify-help {
+    color: var(--color-text-sub);
+    font-size: var(--text-sm);
+    margin: 4px 0 12px;
+    line-height: 1.5;
+}
+
+/* ── 미리보기 모달의 1회용 우회 영역 ─────────────────────── */
+.notify-bypass {
+    margin: 12px 0;
+    padding: 10px 12px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+.notify-bypass-title {
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    margin-bottom: 6px;
+    color: var(--color-text);
+}
+.notify-bypass label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: var(--text-sm);
+    margin: 4px 0;
+    cursor: pointer;
+}
+.notify-bypass label small {
+    color: var(--color-text-sub);
+    font-weight: normal;
+}
+
+/* ── 이력 표 trigger 옆 ⚠ ────────────────────────────── */
+.bypass-warn {
+    margin-left: 6px;
+    color: var(--color-danger);
+    font-size: 0.9em;
+    cursor: help;
+}
