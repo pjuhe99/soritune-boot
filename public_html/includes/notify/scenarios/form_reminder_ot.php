@@ -16,20 +16,22 @@ return [
 
     'source' => [
         'type'       => 'google_sheet',
-        'sheet_id'   => 'REPLACE_ME_SHEET_ID',
-        'tab'        => 'REPLACE_ME_TAB',
+        'sheet_id'   => '1dPL3914LVhOfmKsJFUcZ43T5e3-4rGb6n3vys1zH7UM',
+        'tab'        => '알림톡 테스트',
         'range'      => 'A1:G500',
-        'check_col'  => 'OT_제출',
+        'check_col'  => 'OT 제출 여부',
         'phone_col'  => '연락처',
         'name_col'   => '이름',
     ],
 
     'template' => [
-        'templateId'   => 'REPLACE_ME_TEMPLATE_ID',
+        'templateId'   => 'KA01TP260422072245496GEsFZhpWlbA',
         'fallback_lms' => false,
         'variables' => [
-            '#{name}'     => 'col:이름',
-            '#{deadline}' => 'const:4월 30일',
+            '#{이름}'         => 'col:이름',
+            '#{입학원서링크}' => 'const:https://forms.gle/3Uc7QthRuVYGUV3S6',
+            '#{마감날짜}'     => 'const:5월 3일(일)까지',
+            '#{일정}'         => 'const:5월 11일 ~ 6월 12일 (5주간)',
         ],
     ],
 
