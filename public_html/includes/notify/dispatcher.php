@@ -301,10 +301,19 @@ function notifyComposeRenderedText(array $rendered): string {
 }
 
 /**
- * 솔라피 응답을 큐 메시지에 매핑.
+ * 솔라피 send-many/detail 응답을 큐 메시지에 매핑.
+ *
+ * 솔라피 v4 응답 구조:
+ *   { groupInfo: { _id, count: { total, registeredSuccess, registeredFailed, ... }, status, ... },
+ *     failedMessageList: [ { to, statusCode, statusMessage, ... }, ... ] }
+ * 성공 메시지는 응답에 별도 배열로 나오지 않음 — failedMessageList 멤버십으로 판정.
+ *
  * - HTTP timeout/5xx → 모든 메시지 unknown
  * - HTTP 4xx → 모든 메시지 failed (응답 본문 fail_reason)
- * - HTTP 2xx → parsed에서 messageId 매칭 시도. 매칭 실패한 건은 unknown.
+ * - HTTP 2xx + groupInfo 존재:
+ *     - failedMessageList에 phone 있으면 → failed
+ *     - 없으면 → sent (solapi_message_id에 groupInfo._id 저장)
+ * - HTTP 2xx + groupInfo/failedMessageList 둘 다 없음 (malformed) → unknown (도배 방지)
  */
 function notifyMapSolapiResponse(array $resp, array $queued): array {
     $result = [];
@@ -324,15 +333,12 @@ function notifyMapSolapiResponse(array $resp, array $queued): array {
         return $result;
     }
 
-    $byPhone = [];
-    foreach ((array)($resp['parsed']['messageList'] ?? $resp['parsed']['messages'] ?? []) as $m) {
-        $to = $m['to'] ?? null;
-        if ($to !== null) $byPhone[(string)$to] = $m;
-    }
+    $parsed = (array)($resp['parsed'] ?? []);
+    $hasGroup  = isset($parsed['groupInfo']);
+    $hasFailed = array_key_exists('failedMessageList', $parsed);
 
-    foreach ($queued as $q) {
-        $m = $byPhone[$q['phone']] ?? null;
-        if ($m === null) {
+    if (!$hasGroup && !$hasFailed) {
+        foreach ($queued as $q) {
             $result[$q['msg_id']] = [
                 'status'            => 'unknown',
                 'channel_used'      => 'none',
@@ -340,39 +346,35 @@ function notifyMapSolapiResponse(array $resp, array $queued): array {
                 'solapi_message_id' => null,
                 'fail_reason'       => 'no_response_match',
             ];
-            continue;
         }
-        $statusCode = (string)($m['statusCode'] ?? $m['status'] ?? '');
-        $messageId  = (string)($m['messageId'] ?? '');
+        return $result;
+    }
 
-        // statusCode가 비어 있으면 malformed/truncated 응답 — 도배 방지 우선 원칙에 따라 unknown
-        if ($statusCode === '') {
-            $result[$q['msg_id']] = [
-                'status'            => 'unknown',
-                'channel_used'      => 'none',
-                'sent_at'           => null,
-                'solapi_message_id' => $messageId ?: null,
-                'fail_reason'       => 'no_status_code',
-            ];
-            continue;
-        }
+    $groupId = (string)($parsed['groupInfo']['_id'] ?? '');
 
-        $isSuccess = (str_starts_with($statusCode, '2') || $statusCode === '0');
-        if ($isSuccess) {
-            $result[$q['msg_id']] = [
-                'status'            => 'sent',
-                'channel_used'      => 'alimtalk',
-                'sent_at'           => $now,
-                'solapi_message_id' => $messageId,
-                'fail_reason'       => null,
-            ];
-        } else {
+    $failedByPhone = [];
+    foreach ((array)($parsed['failedMessageList'] ?? []) as $m) {
+        $to = $m['to'] ?? null;
+        if ($to !== null) $failedByPhone[(string)$to] = $m;
+    }
+
+    foreach ($queued as $q) {
+        $failed = $failedByPhone[$q['phone']] ?? null;
+        if ($failed !== null) {
             $result[$q['msg_id']] = [
                 'status'            => 'failed',
                 'channel_used'      => 'none',
                 'sent_at'           => null,
-                'solapi_message_id' => $messageId ?: null,
-                'fail_reason'       => substr(json_encode($m, JSON_UNESCAPED_UNICODE), 0, 1000),
+                'solapi_message_id' => isset($failed['messageId']) ? (string)$failed['messageId'] : null,
+                'fail_reason'       => substr(json_encode($failed, JSON_UNESCAPED_UNICODE), 0, 1000),
+            ];
+        } else {
+            $result[$q['msg_id']] = [
+                'status'            => 'sent',
+                'channel_used'      => 'alimtalk',
+                'sent_at'           => $now,
+                'solapi_message_id' => $groupId !== '' ? $groupId : null,
+                'fail_reason'       => null,
             ];
         }
     }
