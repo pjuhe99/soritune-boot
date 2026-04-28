@@ -194,6 +194,77 @@ function retentionBreakdownParticipation(\PDO $db, int $anchorId, array $uNext):
 }
 
 /**
+ * Anchor 기수의 조별 breakdown. anchor에 그룹 데이터 없으면 null.
+ *
+ * @return null|array{rows: array<int, array{name:string, kind:string, total:int, transitioned:int, pct:float}>}
+ */
+function retentionBreakdownGroup(\PDO $db, int $anchorId, array $uNext): ?array {
+    // 조 데이터 존재 확인
+    $stmt = $db->prepare("SELECT COUNT(*) FROM bootcamp_groups WHERE cohort_id = ?");
+    $stmt->execute([$anchorId]);
+    if ((int)$stmt->fetchColumn() === 0) return null;
+
+    $nextSet = array_flip($uNext);
+
+    // anchor 기수의 모든 회원 (group_id, user_id, group_name, group_cohort_id LEFT JOIN)
+    $stmt = $db->prepare("
+        SELECT bm.user_id, bm.group_id, bg.name AS group_name, bg.cohort_id AS group_cohort_id
+          FROM bootcamp_members bm
+          LEFT JOIN bootcamp_groups bg ON bg.id = bm.group_id
+         WHERE bm.cohort_id = ?
+           AND bm.user_id IS NOT NULL AND bm.user_id <> ''
+    ");
+    $stmt->execute([$anchorId]);
+
+    // anchor 조 row 순서를 위해 별도 조회
+    $stmt2 = $db->prepare("SELECT id, name, stage_no FROM bootcamp_groups WHERE cohort_id = ? ORDER BY stage_no, id");
+    $stmt2->execute([$anchorId]);
+    $orderedGroups = $stmt2->fetchAll();
+
+    $rowsByKey = []; // groupId|"unassigned"|"anomaly" => row
+    foreach ($orderedGroups as $g) {
+        $rowsByKey[(int)$g['id']] = [
+            'name' => $g['name'], 'kind' => 'group',
+            'total' => 0, 'transitioned' => 0, 'pct' => 0.0,
+        ];
+    }
+    $rowsByKey['unassigned'] = ['name' => '미배정',         'kind' => 'unassigned', 'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
+    $rowsByKey['anomaly']    = ['name' => '조 정보 이상',   'kind' => 'anomaly',    'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
+
+    $seen = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $uid = $row['user_id'];
+        if (isset($seen[$uid])) continue;
+        $seen[$uid] = true;
+
+        if ($row['group_id'] === null) {
+            $key = 'unassigned';
+        } elseif ((int)($row['group_cohort_id'] ?? 0) !== $anchorId) {
+            $key = 'anomaly';
+        } else {
+            $key = (int)$row['group_id'];
+        }
+        if (!isset($rowsByKey[$key])) {
+            $rowsByKey[$key] = [
+                'name' => $row['group_name'] ?? '?', 'kind' => 'group',
+                'total' => 0, 'transitioned' => 0, 'pct' => 0.0,
+            ];
+        }
+        $rowsByKey[$key]['total']++;
+        if (isset($nextSet[$uid])) $rowsByKey[$key]['transitioned']++;
+    }
+
+    $rows = [];
+    foreach ($rowsByKey as $r) {
+        $r['pct'] = $r['total'] > 0 ? round($r['transitioned'] / $r['total'] * 100, 2) : 0.0;
+        // unassigned/anomaly 가 0이면 표시 제외
+        if (in_array($r['kind'], ['unassigned', 'anomaly'], true) && $r['total'] === 0) continue;
+        $rows[] = $r;
+    }
+    return ['rows' => $rows];
+}
+
+/**
  * 페어 목록 반환.
  * 정렬: anchor.start_date ASC (오래된 → 최신)
  * 노출 조건: anchor.total_with_user_id > 0 AND next.total_with_user_id > 0
