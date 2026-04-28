@@ -146,35 +146,39 @@ function retentionComputeCurve(\PDO $db, array $anchor, array $uAnchor): array {
 function retentionBreakdownParticipation(\PDO $db, int $anchorId, array $uNext): array {
     $nextSet = array_flip($uNext);
 
+    // GROUP BY user_id: 한 user_id가 anchor 기수 내 중복 row를 가질 수 있으므로 (legacy migration)
+    // MIN(participation_count) 으로 결정적 tie-break (가장 작은 값 채택).
+    // ELSE '이상치': 0/NULL 같은 비정상 값은 invariant 테스트에서 잡히도록 별도 버킷.
     $stmt = $db->prepare("
-        SELECT
+        SELECT user_id,
           CASE
-            WHEN participation_count = 1            THEN '1회 (신규)'
-            WHEN participation_count BETWEEN 2 AND 3 THEN '2~3회'
-            WHEN participation_count BETWEEN 4 AND 6 THEN '4~6회'
-            ELSE '7회 이상'
-          END AS bucket,
-          user_id
+            WHEN MIN(participation_count) = 1             THEN '1회 (신규)'
+            WHEN MIN(participation_count) BETWEEN 2 AND 3 THEN '2~3회'
+            WHEN MIN(participation_count) BETWEEN 4 AND 6 THEN '4~6회'
+            WHEN MIN(participation_count) >= 7            THEN '7회 이상'
+            ELSE '이상치'
+          END AS bucket
         FROM bootcamp_members
         WHERE cohort_id = ?
           AND user_id IS NOT NULL AND user_id <> ''
+        GROUP BY user_id
     ");
     $stmt->execute([$anchorId]);
 
     $agg = [
-        '1회 (신규)' => ['total'=>0, 'transitioned'=>0],
-        '2~3회'      => ['total'=>0, 'transitioned'=>0],
-        '4~6회'      => ['total'=>0, 'transitioned'=>0],
-        '7회 이상'   => ['total'=>0, 'transitioned'=>0],
+        '1회 (신규)' => ['total' => 0, 'transitioned' => 0],
+        '2~3회'      => ['total' => 0, 'transitioned' => 0],
+        '4~6회'      => ['total' => 0, 'transitioned' => 0],
+        '7회 이상'   => ['total' => 0, 'transitioned' => 0],
     ];
-    $seen = [];
     foreach ($stmt->fetchAll() as $row) {
-        $uid = $row['user_id'];
         $bucket = $row['bucket'];
-        if (isset($seen[$uid])) continue;  // DISTINCT user_id 보장
-        $seen[$uid] = true;
+        if (!isset($agg[$bucket])) {
+            // '이상치' 는 발견 시 동적으로 추가 (정상 운영에선 발생 X).
+            $agg[$bucket] = ['total' => 0, 'transitioned' => 0];
+        }
         $agg[$bucket]['total']++;
-        if (isset($nextSet[$uid])) $agg[$bucket]['transitioned']++;
+        if (isset($nextSet[$row['user_id']])) $agg[$bucket]['transitioned']++;
     }
 
     $rows = [];
