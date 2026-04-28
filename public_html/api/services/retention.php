@@ -79,6 +79,65 @@ function retentionClassifyNext(array $uNext, array $uAnchor, array $uPast): arra
 }
 
 /**
+ * Anchor 기수 이후 모든 기수에 대한 step-independent 잔존 곡선.
+ * step 0 은 anchor 자체 (count=|U_N|, pct=100).
+ *
+ * @return array<int, array{step:int, cohort_id:int, cohort_name:string, count:int, pct:float}>
+ */
+function retentionComputeCurve(\PDO $db, array $anchor, array $uAnchor): array {
+    $anchorSetSize = count($uAnchor);
+    $points = [[
+        'step'        => 0,
+        'cohort_id'   => (int)$anchor['id'],
+        'cohort_name' => $anchor['cohort'],
+        'count'       => $anchorSetSize,
+        'pct'         => $anchorSetSize > 0 ? 100.0 : 0.0,
+    ]];
+    if ($anchorSetSize === 0) return $points;
+
+    // anchor 이후 cohorts 모두
+    $stmt = $db->prepare("
+        SELECT id, cohort
+          FROM cohorts
+         WHERE start_date > (SELECT start_date FROM cohorts WHERE id = ?)
+         ORDER BY start_date ASC, id ASC
+    ");
+    $stmt->execute([(int)$anchor['id']]);
+    $futures = $stmt->fetchAll();
+
+    if (!$futures) return $points;
+
+    // |U_N ∩ U_C| per future cohort C
+    $placeholders = implode(',', array_fill(0, count($uAnchor), '?'));
+    $futureIds    = array_column($futures, 'id');
+    $futurePlace  = implode(',', array_fill(0, count($futureIds), '?'));
+    $sql = "
+        SELECT cohort_id, COUNT(DISTINCT user_id) AS cnt
+          FROM bootcamp_members
+         WHERE cohort_id IN ($futurePlace)
+           AND user_id IN ($placeholders)
+         GROUP BY cohort_id
+    ";
+    $stmt = $db->prepare($sql);
+    $stmt->execute(array_merge($futureIds, $uAnchor));
+    $countsById = [];
+    foreach ($stmt->fetchAll() as $r) $countsById[(int)$r['cohort_id']] = (int)$r['cnt'];
+
+    $step = 1;
+    foreach ($futures as $f) {
+        $cnt = $countsById[(int)$f['id']] ?? 0;
+        $points[] = [
+            'step'        => $step++,
+            'cohort_id'   => (int)$f['id'],
+            'cohort_name' => $f['cohort'],
+            'count'       => $cnt,
+            'pct'         => round($cnt / $anchorSetSize * 100, 2),
+        ];
+    }
+    return $points;
+}
+
+/**
  * 페어 목록 반환.
  * 정렬: anchor.start_date ASC (오래된 → 최신)
  * 노출 조건: anchor.total_with_user_id > 0 AND next.total_with_user_id > 0
