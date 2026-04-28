@@ -138,6 +138,58 @@ function retentionComputeCurve(\PDO $db, array $anchor, array $uAnchor): array {
 }
 
 /**
+ * Anchor 기수의 누적 참여 횟수 4구간 breakdown.
+ * 항상 활성. 분모: anchor user_id 보유 회원 전체.
+ *
+ * @return array{rows: array<int, array{bucket:string, total:int, transitioned:int, pct:float}>}
+ */
+function retentionBreakdownParticipation(\PDO $db, int $anchorId, array $uNext): array {
+    $nextSet = array_flip($uNext);
+
+    $stmt = $db->prepare("
+        SELECT
+          CASE
+            WHEN participation_count = 1            THEN '1회 (신규)'
+            WHEN participation_count BETWEEN 2 AND 3 THEN '2~3회'
+            WHEN participation_count BETWEEN 4 AND 6 THEN '4~6회'
+            ELSE '7회 이상'
+          END AS bucket,
+          user_id
+        FROM bootcamp_members
+        WHERE cohort_id = ?
+          AND user_id IS NOT NULL AND user_id <> ''
+    ");
+    $stmt->execute([$anchorId]);
+
+    $agg = [
+        '1회 (신규)' => ['total'=>0, 'transitioned'=>0],
+        '2~3회'      => ['total'=>0, 'transitioned'=>0],
+        '4~6회'      => ['total'=>0, 'transitioned'=>0],
+        '7회 이상'   => ['total'=>0, 'transitioned'=>0],
+    ];
+    $seen = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $uid = $row['user_id'];
+        $bucket = $row['bucket'];
+        if (isset($seen[$uid])) continue;  // DISTINCT user_id 보장
+        $seen[$uid] = true;
+        $agg[$bucket]['total']++;
+        if (isset($nextSet[$uid])) $agg[$bucket]['transitioned']++;
+    }
+
+    $rows = [];
+    foreach ($agg as $bucket => $v) {
+        $rows[] = [
+            'bucket'       => $bucket,
+            'total'        => $v['total'],
+            'transitioned' => $v['transitioned'],
+            'pct'          => $v['total'] > 0 ? round($v['transitioned'] / $v['total'] * 100, 2) : 0.0,
+        ];
+    }
+    return ['rows' => $rows];
+}
+
+/**
  * 페어 목록 반환.
  * 정렬: anchor.start_date ASC (오래된 → 최신)
  * 노출 조건: anchor.total_with_user_id > 0 AND next.total_with_user_id > 0
