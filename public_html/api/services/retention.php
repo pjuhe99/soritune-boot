@@ -365,3 +365,78 @@ function handleRetentionPairs(): void {
     }
     jsonSuccess(['pairs' => $pairs]);
 }
+
+/**
+ * 한 페어의 모든 데이터를 한 응답에 묶어 반환.
+ */
+function handleRetentionSummary(): void {
+    requireAdmin(RETENTION_ROLES);
+    $anchorId = (int)($_GET['anchor_cohort_id'] ?? 0);
+    if ($anchorId <= 0) jsonError('anchor_cohort_id 필요');
+
+    $db = getDB();
+    [$anchor, $next] = retentionAnchorAndNext($db, $anchorId);
+    if (!$anchor) jsonError('anchor cohort를 찾을 수 없습니다.', 404);
+    if (!$next)   jsonError('이 anchor 다음 기수가 존재하지 않습니다.');
+
+    $uAnchor = retentionUserIdsInCohort($db, (int)$anchor['id']);
+    $uNext   = retentionUserIdsInCohort($db, (int)$next['id']);
+    $uPast   = retentionPastUserIdSet($db, (int)$anchor['id']);
+
+    $anchorTotalWithUid = count($uAnchor);
+    $nextTotalWithUid   = count($uNext);
+
+    $cards = retentionClassifyNext($uNext, $uAnchor, $uPast);
+
+    $stayPct = $anchorTotalWithUid > 0 ? round($cards['stay'] / $anchorTotalWithUid * 100, 2) : 0.0;
+
+    // user_id NULL/빈값 row 수 (anchor + next 합산, 안내 문구용)
+    $stmt = $db->prepare("
+        SELECT COUNT(*) FROM bootcamp_members
+         WHERE cohort_id IN (?, ?)
+           AND (user_id IS NULL OR user_id = '')
+    ");
+    $stmt->execute([(int)$anchor['id'], (int)$next['id']]);
+    $excludedNullUserId = (int)$stmt->fetchColumn();
+
+    $curve         = retentionComputeCurve($db, $anchor, $uAnchor);
+    $breakdownPart = retentionBreakdownParticipation($db, (int)$anchor['id'], $uNext);
+    $breakdownGrp  = retentionBreakdownGroup($db, (int)$anchor['id'], $uNext);
+    $breakdownScr  = retentionBreakdownScore($db, (int)$anchor['id'], $anchorTotalWithUid, $uNext);
+
+    // anchor / next의 전체 row 수 (참조용)
+    $stmt = $db->prepare("SELECT cohort_id, COUNT(*) c FROM bootcamp_members WHERE cohort_id IN (?, ?) GROUP BY cohort_id");
+    $stmt->execute([(int)$anchor['id'], (int)$next['id']]);
+    $totalsById = [];
+    foreach ($stmt->fetchAll() as $r) $totalsById[(int)$r['cohort_id']] = (int)$r['c'];
+
+    jsonSuccess([
+        'anchor' => [
+            'id' => (int)$anchor['id'],
+            'name' => $anchor['cohort'],
+            'total' => $totalsById[(int)$anchor['id']] ?? 0,
+            'total_with_user_id' => $anchorTotalWithUid,
+        ],
+        'next' => [
+            'id' => (int)$next['id'],
+            'name' => $next['cohort'],
+            'total' => $totalsById[(int)$next['id']] ?? 0,
+            'total_with_user_id' => $nextTotalWithUid,
+        ],
+        'cards' => [
+            'stay' => $cards['stay'],
+            'returning' => $cards['returning'],
+            'brand_new' => $cards['brand_new'],
+            'retention_pct' => $stayPct,
+            'next_total_with_user_id' => $nextTotalWithUid,
+            'excluded_null_user_id' => $excludedNullUserId,
+        ],
+        'curve' => $curve,
+        'breakdown' => [
+            'group'         => $breakdownGrp,
+            'score'         => $breakdownScr,
+            'participation' => $breakdownPart,
+        ],
+        'generated_at' => date(\DateTime::ATOM),
+    ]);
+}

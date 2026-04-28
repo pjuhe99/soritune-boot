@@ -1605,6 +1605,10 @@ case 'retention_pairs':
     handleRetentionPairs();
     break;
 
+case 'retention_summary':
+    handleRetentionSummary();
+    break;
+
 // ── Default ─────────────────────────────────────────────────
 
 default:
