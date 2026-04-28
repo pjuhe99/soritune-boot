@@ -267,6 +267,69 @@ function retentionBreakdownGroup(\PDO $db, int $anchorId, array $uNext): ?array 
 }
 
 /**
+ * Anchor 기수의 점수 범위 4구간 breakdown.
+ * 점수 보유자가 anchor 인원의 50% 미만이면 null (sparse 차단).
+ * 분모: 점수 row 보유자.
+ *
+ * @return null|array{coverage_pct:float, scored_total:int, rows: array<int, array{band:string, total:int, transitioned:int, pct:float}>}
+ */
+function retentionBreakdownScore(\PDO $db, int $anchorId, int $anchorTotalWithUserId, array $uNext): ?array {
+    // Deduped 멤버에 대해 점수 row 보유자만 집계.
+    $stmt = $db->prepare("
+        SELECT bm.user_id, ms.current_score
+          FROM bootcamp_members bm
+          JOIN (SELECT user_id, MIN(id) AS keep_id
+                  FROM bootcamp_members
+                 WHERE cohort_id = ?
+                   AND user_id IS NOT NULL AND user_id <> ''
+                 GROUP BY user_id) k ON k.keep_id = bm.id
+          JOIN member_scores ms ON ms.member_id = bm.id
+    ");
+    $stmt->execute([$anchorId]);
+    $rowsRaw = $stmt->fetchAll();
+
+    $scoredTotal = count($rowsRaw);
+    if ($scoredTotal === 0) return null;
+
+    $coverage = $anchorTotalWithUserId > 0 ? $scoredTotal / $anchorTotalWithUserId : 0;
+    if ($coverage < 0.5) return null;
+
+    $nextSet = array_flip($uNext);
+
+    $agg = [
+        '0점'      => ['total' => 0, 'transitioned' => 0],
+        '-1~-10'   => ['total' => 0, 'transitioned' => 0],
+        '-11~-24'  => ['total' => 0, 'transitioned' => 0],
+        '-25 이하' => ['total' => 0, 'transitioned' => 0],
+    ];
+    foreach ($rowsRaw as $row) {
+        $score = (int)$row['current_score'];
+        if ($score >= 0)             $band = '0점';
+        elseif ($score >= -10)        $band = '-1~-10';
+        elseif ($score >= -24)        $band = '-11~-24';
+        else                          $band = '-25 이하';
+
+        $agg[$band]['total']++;
+        if (isset($nextSet[$row['user_id']])) $agg[$band]['transitioned']++;
+    }
+
+    $rows = [];
+    foreach ($agg as $band => $v) {
+        $rows[] = [
+            'band'         => $band,
+            'total'        => $v['total'],
+            'transitioned' => $v['transitioned'],
+            'pct'          => $v['total'] > 0 ? round($v['transitioned'] / $v['total'] * 100, 2) : 0.0,
+        ];
+    }
+    return [
+        'coverage_pct' => round($coverage * 100, 2),
+        'scored_total' => $scoredTotal,
+        'rows'         => $rows,
+    ];
+}
+
+/**
  * 페어 목록 반환.
  * 정렬: anchor.start_date ASC (오래된 → 최신)
  * 노출 조건: anchor.total_with_user_id > 0 AND next.total_with_user_id > 0
