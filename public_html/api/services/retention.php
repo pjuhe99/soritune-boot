@@ -60,6 +60,25 @@ function retentionAnchorAndNext(\PDO $db, int $anchorCohortId): array {
 }
 
 /**
+ * Next 기수의 user_id 각각을 잔존/회귀/신규로 분류.
+ *
+ * @param string[]            $uNext   next 기수 user_id 리스트
+ * @param string[]            $uAnchor anchor 기수 user_id 리스트
+ * @param array<string, true> $uPast   anchor 이전 모든 기수 user_id set
+ * @return array{stay:int, returning:int, brand_new:int}
+ */
+function retentionClassifyNext(array $uNext, array $uAnchor, array $uPast): array {
+    $anchorSet = array_flip($uAnchor);
+    $stay = 0; $returning = 0; $brandNew = 0;
+    foreach ($uNext as $uid) {
+        if (isset($anchorSet[$uid]))      $stay++;
+        elseif (isset($uPast[$uid]))      $returning++;
+        else                              $brandNew++;
+    }
+    return ['stay' => $stay, 'returning' => $returning, 'brand_new' => $brandNew];
+}
+
+/**
  * 페어 목록 반환.
  * 정렬: anchor.start_date ASC (오래된 → 최신)
  * 노출 조건: anchor.total_with_user_id > 0 AND next.total_with_user_id > 0
