@@ -8,10 +8,11 @@ require_once dirname(__DIR__, 3) . '/cron/GoogleSheets.php';
 
 /**
  * @param array $cfg 시나리오의 source 블록:
- *   ['type'=>'google_sheet', 'sheet_id', 'tab', 'range', 'check_col', 'phone_col', 'name_col']
+ *   ['type'=>'google_sheet', 'sheet_id', 'tab', 'range', 'check_col', 'phone_col', 'name_col', 'check_value'?]
+ *   check_value 미지정 시 기본 'N' (대소문자 무시).
  * @return array 발송 후보 행 리스트:
  *   [['row_key'=>..., 'phone'=>..., 'name'=>..., 'columns'=>[헤더=>값,...]], ...]
- *   check_col 값이 'N'(대소문자 무시)인 행만 반환.
+ *   check_col 값이 check_value 와 일치하는 행만 반환.
  */
 function notifySourceGoogleSheet(array $cfg): array {
     $required = ['sheet_id', 'tab', 'range', 'check_col', 'phone_col', 'name_col'];
@@ -20,6 +21,9 @@ function notifySourceGoogleSheet(array $cfg): array {
             throw new RuntimeException("source.{$r} 누락");
         }
     }
+    $checkValue = isset($cfg['check_value']) && $cfg['check_value'] !== ''
+        ? (string)$cfg['check_value']
+        : 'N';
 
     $sheet = new GoogleSheets();
     $rangeFull = $cfg['tab'] . '!' . $cfg['range'];
@@ -43,7 +47,7 @@ function notifySourceGoogleSheet(array $cfg): array {
     for ($i = 1; $i < $rowCount; $i++) {
         $row = $values[$i];
         $checkVal = isset($row[$checkIdx]) ? trim((string)$row[$checkIdx]) : '';
-        if (strcasecmp($checkVal, 'N') !== 0) continue;
+        if (strcasecmp($checkVal, $checkValue) !== 0) continue;
 
         $columns = [];
         foreach ($headers as $j => $h) {

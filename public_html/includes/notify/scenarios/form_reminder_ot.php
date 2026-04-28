@@ -12,30 +12,31 @@
 return [
     'key'         => 'form_reminder_ot',
     'name'        => 'OT 출석 폼 미제출자 리마인드',
-    'description' => '구글시트 OT_제출 컬럼이 N인 회원에게 폼 작성 안내',
+    'description' => '구글시트 12기구매자 탭 "문자발송 대상 여부"가 Y인 회원에게 입학원서 안내',
 
     'source' => [
-        'type'       => 'google_sheet',
-        'sheet_id'   => '1dPL3914LVhOfmKsJFUcZ43T5e3-4rGb6n3vys1zH7UM',
-        'tab'        => '알림톡 테스트',
-        'range'      => 'A1:G500',
-        'check_col'  => 'OT 제출 여부',
-        'phone_col'  => '연락처',
-        'name_col'   => '이름',
+        'type'        => 'google_sheet',
+        'sheet_id'    => '1dPL3914LVhOfmKsJFUcZ43T5e3-4rGb6n3vys1zH7UM',
+        'tab'         => '12기구매자',
+        'range'       => 'A1:AE2000',
+        'check_col'   => '문자발송 대상 여부',
+        'check_value' => 'Y',
+        'phone_col'   => '번호 정규화',
+        'name_col'    => '구매자명',
     ],
 
     'template' => [
         'templateId'   => 'KA01TP260422072245496GEsFZhpWlbA',
         'fallback_lms' => false,
         'variables' => [
-            '#{이름}'         => 'col:이름',
+            '#{이름}'         => 'col:구매자명',
             '#{입학원서링크}' => 'const:https://forms.gle/3Uc7QthRuVYGUV3S6',
             '#{마감날짜}'     => 'const:5월 3일(일)까지',
             '#{일정}'         => 'const:5월 11일 ~ 6월 12일 (5주간)',
         ],
     ],
 
-    'schedule'       => '0 21 * * *',
-    'cooldown_hours' => 24,
-    'max_attempts'   => 3,
+    'schedule'       => '0 14 * * *',
+    'cooldown_hours' => 12,
+    'max_attempts'   => 10,
 ];
