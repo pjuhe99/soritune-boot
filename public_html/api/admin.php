@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/coin_functions.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/services/member_stats.php';
 require_once __DIR__ . '/services/member_bulk.php';
+require_once __DIR__ . '/services/retention.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -1596,6 +1597,12 @@ case 'member_bulk_template':
             ['key' => 'stage_no', 'label' => '단계', 'required' => false, 'example' => '1'],
         ],
     ]);
+    break;
+
+// ── Retention (operation only) ──────────────────────────────
+
+case 'retention_pairs':
+    handleRetentionPairs();
     break;
 
 // ── Default ─────────────────────────────────────────────────
