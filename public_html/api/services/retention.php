@@ -206,17 +206,22 @@ function retentionBreakdownGroup(\PDO $db, int $anchorId, array $uNext): ?array 
 
     $nextSet = array_flip($uNext);
 
-    // anchor 기수의 모든 회원 (group_id, user_id, group_name, group_cohort_id LEFT JOIN)
+    // SQL-side dedup: 한 user_id가 anchor 기수 내 중복 row를 가질 경우 MIN(id) 가진 row만 채택 (Task 6와 동일 정책).
     $stmt = $db->prepare("
         SELECT bm.user_id, bm.group_id, bg.name AS group_name, bg.cohort_id AS group_cohort_id
           FROM bootcamp_members bm
+          JOIN (
+                SELECT user_id, MIN(id) AS keep_id
+                  FROM bootcamp_members
+                 WHERE cohort_id = ?
+                   AND user_id IS NOT NULL AND user_id <> ''
+                 GROUP BY user_id
+               ) k ON k.keep_id = bm.id
           LEFT JOIN bootcamp_groups bg ON bg.id = bm.group_id
-         WHERE bm.cohort_id = ?
-           AND bm.user_id IS NOT NULL AND bm.user_id <> ''
     ");
     $stmt->execute([$anchorId]);
 
-    // anchor 조 row 순서를 위해 별도 조회
+    // anchor 기수의 조 row 순서 (정상 조는 stage_no, id 정렬)
     $stmt2 = $db->prepare("SELECT id, name, stage_no FROM bootcamp_groups WHERE cohort_id = ? ORDER BY stage_no, id");
     $stmt2->execute([$anchorId]);
     $orderedGroups = $stmt2->fetchAll();
@@ -228,14 +233,11 @@ function retentionBreakdownGroup(\PDO $db, int $anchorId, array $uNext): ?array 
             'total' => 0, 'transitioned' => 0, 'pct' => 0.0,
         ];
     }
-    $rowsByKey['unassigned'] = ['name' => '미배정',         'kind' => 'unassigned', 'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
-    $rowsByKey['anomaly']    = ['name' => '조 정보 이상',   'kind' => 'anomaly',    'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
+    $rowsByKey['unassigned'] = ['name' => '미배정',       'kind' => 'unassigned', 'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
+    $rowsByKey['anomaly']    = ['name' => '조 정보 이상', 'kind' => 'anomaly',    'total' => 0, 'transitioned' => 0, 'pct' => 0.0];
 
-    $seen = [];
     foreach ($stmt->fetchAll() as $row) {
         $uid = $row['user_id'];
-        if (isset($seen[$uid])) continue;
-        $seen[$uid] = true;
 
         if ($row['group_id'] === null) {
             $key = 'unassigned';
@@ -244,11 +246,11 @@ function retentionBreakdownGroup(\PDO $db, int $anchorId, array $uNext): ?array 
         } else {
             $key = (int)$row['group_id'];
         }
+
+        // anchor 기수의 정상 group_id 라면 pre-seeded $rowsByKey 에 항상 존재.
+        // 만약 누락되어 있으면 데이터 불변 위반 (FK 깨짐 등) — 침묵하지 말고 anomaly 로 보낸다.
         if (!isset($rowsByKey[$key])) {
-            $rowsByKey[$key] = [
-                'name' => $row['group_name'] ?? '?', 'kind' => 'group',
-                'total' => 0, 'transitioned' => 0, 'pct' => 0.0,
-            ];
+            $key = 'anomaly';
         }
         $rowsByKey[$key]['total']++;
         if (isset($nextSet[$uid])) $rowsByKey[$key]['transitioned']++;
