@@ -17,6 +17,7 @@ $rows = $db->query("SELECT id, cohort, start_date FROM cohorts ORDER BY start_da
 
 $total = 0; $pass = 0; $fail = 0;
 $failures = [];
+$warnings = [];
 
 for ($i = 0; $i < count($rows) - 1; $i++) {
     $anchor = $rows[$i];
@@ -39,7 +40,7 @@ for ($i = 0; $i < count($rows) - 1; $i++) {
         $errors[] = "cards sum != |U_next| ($stay+$ret+$brand vs " . count($uNext) . ")";
     }
 
-    // Invariant: brand_new == count(next user_ids with participation_count=1)
+    // Soft invariant: brand_new vs participation_count=1 (data drift signal, not code bug).
     $stmt = $db->prepare("
         SELECT COUNT(DISTINCT bm.user_id)
           FROM bootcamp_members bm
@@ -50,7 +51,7 @@ for ($i = 0; $i < count($rows) - 1; $i++) {
     $stmt->execute([$nextId]);
     $pcOne = (int)$stmt->fetchColumn();
     if ($pcOne !== $brand) {
-        $errors[] = "brand_new($brand) != participation_count=1 in next($pcOne) — data drift, soft warn";
+        $warnings[] = "pair {$anchor['cohort']}→{$next['cohort']}: brand_new($brand) != participation_count=1 in next($pcOne)";
     }
 
     // Invariant: curve[0].pct = 100, curve[1].count = stay
@@ -101,10 +102,15 @@ echo "====================\n";
 echo "Pairs checked: $total\n";
 echo "Passed:        $pass\n";
 echo "Failed:        $fail\n";
+echo "Warnings:      " . count($warnings) . "\n";
 if ($failures) {
-    echo "\nFailures:\n";
+    echo "\nHard invariant failures (code bugs):\n";
     foreach ($failures as $f) echo "  - $f\n";
-    exit(1);
 }
-echo "\nAll invariants OK.\n";
+if ($warnings) {
+    echo "\nSoft warnings (data drift, not code bugs):\n";
+    foreach ($warnings as $w) echo "  - $w\n";
+}
+if ($failures) exit(1);
+if (!$failures) echo "\nAll hard invariants OK.\n";
 exit(0);
