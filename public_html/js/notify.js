@@ -36,9 +36,9 @@ const AdminNotify = (() => {
                         <input type="checkbox" ${s.is_active ? 'checked' : ''} data-act="toggle">
                         <span>스케줄</span>
                     </label>
-                    <button data-act="send-real">지금 발송</button>
-                    <button data-act="send-dry">DRY 발송</button>
-                    <button data-act="batches">이력</button>
+                    <button class="btn btn-danger btn-sm"    data-act="send-real">지금 발송</button>
+                    <button class="btn btn-secondary btn-sm" data-act="send-dry">DRY 발송</button>
+                    <button class="btn btn-ghost btn-sm"     data-act="batches">이력</button>
                 </div>
                 <div class="notify-row-meta">
                     <span>다음 실행: ${App.esc(s.next_run_at || '-')}</span>
@@ -52,6 +52,10 @@ const AdminNotify = (() => {
             <div class="notify-header">
                 <h2>알림톡</h2>
                 <button data-act="refresh" class="btn btn-secondary btn-sm">새로고침</button>
+            </div>
+            <div class="notify-help">
+                수동 발송 시 미리보기 모달에서 쿨다운/최대횟수를 일시적으로 우회할 수 있습니다.
+                자동 스케줄에는 적용되지 않습니다.
             </div>
             ${rows}`;
         root.querySelector('button[data-act="refresh"]').onclick = () => refresh();
@@ -72,47 +76,127 @@ const AdminNotify = (() => {
 
     async function openPreview(key, dryRun) {
         App.showLoading();
-        const r = await App.post(API + 'notify_preview', { key, dry_run: dryRun });
+        const r = await App.post(API + 'notify_preview', {
+            key, dry_run: dryRun,
+            bypass_cooldown: false,
+            bypass_max_attempts: false,
+        });
         App.hideLoading();
         if (!r.success) { Toast.error(r.error); return; }
-        showPreviewModal(r);
+        showPreviewModal({ key, dryRun, ...r });
     }
 
     function showPreviewModal(p) {
         const ovl = document.createElement('div');
         ovl.className = 'notify-modal-overlay';
-        ovl.innerHTML = `
-            <div class="notify-modal-box">
-                <h3>발송 전 확인 — <span class="env env-${p.environment}">${p.environment}</span> ${p.dry_run ? '(DRY_RUN)' : '(실발송)'}</h3>
-                <p>발송 대상: <strong>${p.target_count}명</strong>, 스킵: ${p.skip_count}명</p>
-                <table class="notify-preview-table">
-                    <thead><tr><th>이름</th><th>전화</th><th>상태</th></tr></thead>
-                    <tbody>
-                        ${p.candidates.map(c => `<tr><td>${App.esc(c.name)}</td><td>${App.esc(c.phone)}</td><td>발송예정</td></tr>`).join('')}
-                        ${p.skips.map(s => `<tr class="skip"><td>${App.esc(s.name)}</td><td>${App.esc(s.phone)}</td><td>스킵 (${App.esc(s.reason)})</td></tr>`).join('')}
-                    </tbody>
-                </table>
-                <div class="rendered">
-                    <h4>본문 변수 미리보기 (첫 1건) — 템플릿 ${App.esc(p.template_id)}</h4>
-                    <pre>${App.esc(JSON.stringify(p.rendered_first || {}, null, 2))}</pre>
-                </div>
-                <div class="notify-modal-actions">
-                    <button data-act="cancel">취소</button>
-                    <button data-act="confirm" ${p.target_count === 0 ? 'disabled' : ''}>${p.target_count}명에게 ${p.dry_run ? 'DRY 발송' : '지금 발송'}</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(ovl);
-        ovl.querySelector('button[data-act="cancel"]').onclick = () => ovl.remove();
-        ovl.querySelector('button[data-act="confirm"]').onclick = async () => {
-            App.showLoading();
-            const r = await App.post(API + 'notify_send_now', { preview_id: p.preview_id });
-            App.hideLoading();
-            if (!r.success) { Toast.error(r.error); return; }
-            Toast.ok(`발송 완료 (batch ${r.batch_id})`);
-            ovl.remove();
-            refresh();
+
+        let state = {
+            preview: p,
+            bypassCooldown: !!p.bypass_cooldown,
+            bypassMaxAttempts: !!p.bypass_max_attempts,
         };
+
+        function confirmLabel() {
+            const verb = state.preview.dry_run ? 'DRY 발송' : '지금 발송';
+            const base = `${state.preview.target_count}명에게 ${verb}`;
+            const both = state.bypassCooldown && state.bypassMaxAttempts;
+            const any  = state.bypassCooldown || state.bypassMaxAttempts;
+            if (!any) return base;
+            const label = both ? '정책 우회'
+                        : state.bypassCooldown ? '쿨다운 우회'
+                        : '최대 우회';
+            return `⚠ ${label} — ${base}`;
+        }
+
+        function paint() {
+            const p = state.preview;
+            ovl.innerHTML = `
+                <div class="notify-modal-box">
+                    <h3>발송 전 확인 — <span class="env env-${p.environment}">${p.environment}</span> ${p.dry_run ? '(DRY_RUN)' : '(실발송)'}</h3>
+                    <p>발송 대상: <strong>${p.target_count}명</strong>, 스킵: ${p.skip_count}명</p>
+
+                    <div class="notify-bypass">
+                        <div class="notify-bypass-title">정책 우회 (이번 1회만)</div>
+                        <label>
+                            <input type="checkbox" data-bypass="cooldown" ${state.bypassCooldown ? 'checked' : ''}>
+                            <span>쿨다운 무시 <small>— 마지막 발송 후 쿨다운 시간 안의 사람도 후보에 포함</small></span>
+                        </label>
+                        <label>
+                            <input type="checkbox" data-bypass="max" ${state.bypassMaxAttempts ? 'checked' : ''}>
+                            <span>최대횟수 무시 <small>— 누적 발송 횟수가 한도에 도달한 사람도 후보에 포함</small></span>
+                        </label>
+                    </div>
+
+                    <table class="notify-preview-table">
+                        <thead><tr><th>이름</th><th>전화</th><th>상태</th></tr></thead>
+                        <tbody>
+                            ${p.candidates.map(c => `<tr><td>${App.esc(c.name)}</td><td>${App.esc(c.phone)}</td><td>발송예정</td></tr>`).join('')}
+                            ${p.skips.map(s => `<tr class="skip"><td>${App.esc(s.name)}</td><td>${App.esc(s.phone)}</td><td>스킵 (${App.esc(s.reason)})</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                    <div class="rendered">
+                        <h4>본문 변수 미리보기 (첫 1건) — 템플릿 ${App.esc(p.template_id)}</h4>
+                        <pre>${App.esc(JSON.stringify(p.rendered_first || {}, null, 2))}</pre>
+                    </div>
+                    <div class="notify-modal-actions">
+                        <button class="btn btn-secondary" data-act="cancel">취소</button>
+                        <button class="btn ${p.dry_run ? 'btn-secondary' : 'btn-danger'}" data-act="confirm" ${p.target_count === 0 ? 'disabled' : ''}>
+                            ${confirmLabel()}
+                        </button>
+                    </div>
+                </div>
+            `;
+            bindModal();
+        }
+
+        // App.showLoading() 의 .loading-overlay 가 inset:0 + 기본 pointer-events
+        // 이라 reloadPreview 도중 다른 체크박스 클릭이 차단됨 → 동시 in-flight 없음.
+        async function reloadPreview(prevBypass) {
+            App.showLoading();
+            const r = await App.post(API + 'notify_preview', {
+                key: state.preview.key,
+                dry_run: state.preview.dry_run,
+                bypass_cooldown: state.bypassCooldown,
+                bypass_max_attempts: state.bypassMaxAttempts,
+            });
+            App.hideLoading();
+            if (!r.success) {
+                // 체크박스 UI 와 state 가 어긋나지 않게 이전 값으로 복원 후 repaint
+                state.bypassCooldown = prevBypass.cooldown;
+                state.bypassMaxAttempts = prevBypass.max;
+                paint();
+                Toast.error(r.error);
+                return;
+            }
+            state.preview = { key: state.preview.key, dryRun: state.preview.dry_run, ...r };
+            paint();
+        }
+
+        function bindModal() {
+            ovl.querySelector('button[data-act="cancel"]').onclick = () => ovl.remove();
+            ovl.querySelector('input[data-bypass="cooldown"]').onchange = (e) => {
+                const prev = { cooldown: state.bypassCooldown, max: state.bypassMaxAttempts };
+                state.bypassCooldown = e.target.checked;
+                reloadPreview(prev);
+            };
+            ovl.querySelector('input[data-bypass="max"]').onchange = (e) => {
+                const prev = { cooldown: state.bypassCooldown, max: state.bypassMaxAttempts };
+                state.bypassMaxAttempts = e.target.checked;
+                reloadPreview(prev);
+            };
+            ovl.querySelector('button[data-act="confirm"]').onclick = async () => {
+                App.showLoading();
+                const r = await App.post(API + 'notify_send_now', { preview_id: state.preview.preview_id });
+                App.hideLoading();
+                if (!r.success) { Toast.error(r.error); return; }
+                Toast.ok(`발송 완료 (batch ${r.batch_id})`);
+                ovl.remove();
+                refresh();
+            };
+        }
+
+        document.body.appendChild(ovl);
+        paint();
     }
 
     async function loadBatches(rowEl, key) {
@@ -125,20 +209,28 @@ const AdminNotify = (() => {
             <table class="notify-batch-table">
                 <thead><tr><th>#</th><th>트리거</th><th>시작</th><th>대상</th><th>발송</th><th>실패</th><th>미확정</th><th>스킵</th><th>상태</th><th></th></tr></thead>
                 <tbody>
-                    ${r.batches.map(b => `
-                        <tr>
-                            <td>${b.id}</td>
-                            <td>${App.esc(b.trigger_type)}${b.dry_run == 1 ? ' (DRY)' : ''}</td>
-                            <td>${App.esc(b.started_at)}</td>
-                            <td>${b.target_count}</td>
-                            <td>${b.sent_count}</td>
-                            <td>${b.failed_count}</td>
-                            <td>${b.unknown_count}</td>
-                            <td>${b.skipped_count}</td>
-                            <td><span class="status status-${App.esc(b.status)}">${App.esc(b.status)}</span></td>
-                            <td><button data-batch="${b.id}">상세</button></td>
-                        </tr>
-                    `).join('')}
+                    ${r.batches.map(b => {
+                        const both = b.bypass_cooldown == 1 && b.bypass_max_attempts == 1;
+                        const any  = b.bypass_cooldown == 1 || b.bypass_max_attempts == 1;
+                        const warnTitle = both ? '정책 우회 (쿨다운+최대)'
+                                        : b.bypass_cooldown == 1 ? '쿨다운 우회'
+                                        : b.bypass_max_attempts == 1 ? '최대 우회' : '';
+                        const warn = any ? `<span class="bypass-warn" title="${App.esc(warnTitle)}">⚠</span>` : '';
+                        return `
+                            <tr>
+                                <td>${b.id}</td>
+                                <td>${App.esc(b.trigger_type)}${b.dry_run == 1 ? ' (DRY)' : ''}${warn}</td>
+                                <td>${App.esc(b.started_at)}</td>
+                                <td>${b.target_count}</td>
+                                <td>${b.sent_count}</td>
+                                <td>${b.failed_count}</td>
+                                <td>${b.unknown_count}</td>
+                                <td>${b.skipped_count}</td>
+                                <td><span class="status status-${App.esc(b.status)}">${App.esc(b.status)}</span></td>
+                                <td><button class="btn btn-ghost btn-sm" data-batch="${b.id}">상세</button></td>
+                            </tr>
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
             <div class="batch-detail" data-role="detail"></div>
@@ -169,7 +261,7 @@ const AdminNotify = (() => {
                     `).join('')}
                 </tbody>
             </table>
-            ${failedCount > 0 ? `<button data-act="retry">실패자 ${failedCount}명 재시도</button>` : ''}
+            ${failedCount > 0 ? `<button class="btn btn-secondary btn-sm" data-act="retry">실패자 ${failedCount}명 재시도</button>` : ''}
         `;
         const retryBtn = target.querySelector('button[data-act="retry"]');
         if (retryBtn) {

@@ -7,6 +7,7 @@ if (php_sapi_name() !== 'cli') exit('CLI only');
 
 require_once __DIR__ . '/public_html/config.php';
 require_once __DIR__ . '/public_html/includes/notify/notify_functions.php';
+require_once __DIR__ . '/public_html/includes/notify/dispatcher.php';
 
 $pass = 0; $fail = 0;
 
@@ -186,6 +187,20 @@ $r = notifyMapSolapiResponse([
 ], $q2);
 t('mapResp: malformed unknown',  $r[1]['status'] === 'unknown' && $r[2]['status'] === 'unknown');
 t('mapResp: malformed reason',   $r[1]['fail_reason'] === 'no_response_match');
+
+// ── 쿨다운 가드 분기 ──────────────────────────
+t('cooldown: 평소(24h, bypass=false) → 검사함',  notifyShouldCheckCooldown(24, false) === true);
+t('cooldown: 0h, bypass=false → 무제한, 검사 안 함', notifyShouldCheckCooldown(0,  false) === false);
+t('cooldown: 음수, bypass=false → 검사 안 함',    notifyShouldCheckCooldown(-1, false) === false);
+t('cooldown: 24h, bypass=true → 우회',           notifyShouldCheckCooldown(24, true)  === false);
+t('cooldown: 0h, bypass=true → 어쨌든 우회',      notifyShouldCheckCooldown(0,  true)  === false);
+
+// ── 최대횟수 가드 분기 ─────────────────────────
+t('max_attempts: 평소(3, bypass=false) → 검사함',     notifyShouldCheckMaxAttempts(3,  false) === true);
+t('max_attempts: 0, bypass=false → 무제한, 검사 안 함',  notifyShouldCheckMaxAttempts(0,  false) === false);
+t('max_attempts: 음수, bypass=false → 검사 안 함',     notifyShouldCheckMaxAttempts(-1, false) === false);
+t('max_attempts: 3, bypass=true → 우회',              notifyShouldCheckMaxAttempts(3,  true)  === false);
+t('max_attempts: 0, bypass=true → 어쨌든 우회',         notifyShouldCheckMaxAttempts(0,  true)  === false);
 
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
