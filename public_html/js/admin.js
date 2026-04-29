@@ -193,6 +193,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                             <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
                             <button class="tab" data-tab="#tab-notify" data-hash="notify">알림톡</button>
+                            <button class="tab" data-tab="#tab-retention" data-hash="retention">리텐션 관리</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
@@ -215,6 +216,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-study"></div>
                         <div class="tab-content" id="tab-reviews"></div>
                         <div class="tab-content" id="tab-notify"></div>
+                        <div class="tab-content" id="tab-retention"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -462,6 +464,20 @@ const AdminApp = (() => {
                         }
                     });
                     notifyObserver.observe(notifyTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Retention 탭 lazy load
+            if (typeof RetentionApp !== 'undefined') {
+                const retTab = document.getElementById('tab-retention');
+                if (retTab) {
+                    const retObserver = new MutationObserver(() => {
+                        if (retTab.classList.contains('active') && !retTab.dataset.loaded) {
+                            retTab.dataset.loaded = '1';
+                            RetentionApp.init(retTab);
+                        }
+                    });
+                    retObserver.observe(retTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 
