@@ -1,0 +1,76 @@
+/* Retention 탭 — boot operation
+ * Spec: docs/superpowers/specs/2026-04-28-retention-management-design.md
+ */
+
+.ret-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0 4px;
+}
+.ret-header h2 { margin: 0; font-size: 18px; }
+
+.ret-pair-strip {
+    display: flex; gap: 8px; overflow-x: auto;
+    padding: 8px 0; margin-bottom: 12px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.ret-pair-btn {
+    flex-shrink: 0;
+    padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--border, #d1d5db);
+    background: #fff; cursor: pointer; font-size: 14px;
+    white-space: nowrap;
+}
+.ret-pair-btn:hover { background: #f3f4f6; }
+.ret-pair-btn.active {
+    background: #2563EB; color: #fff; border-color: #2563EB;
+}
+
+.ret-pair-title { font-size: 16px; padding: 8px 0; }
+.ret-pair-meta { font-size: 12px; }
+
+.ret-cards {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin: 12px 0;
+}
+.ret-card {
+    border: 1px solid var(--border, #e5e7eb); border-radius: 8px;
+    padding: 14px; background: #fff;
+}
+.ret-card-label { font-size: 12px; color: #6b7280; }
+.ret-card-num { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.ret-card-sum { background: #f9fafb; }
+
+.ret-section { margin: 18px 0; }
+.ret-section h3 { font-size: 15px; margin: 0 0 8px; }
+.ret-curve-wrap { height: 280px; }
+.ret-curve-note { font-size: 12px; }
+
+.ret-breakdowns {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+}
+.ret-bd-card {
+    border: 1px solid var(--border, #e5e7eb); border-radius: 8px;
+    padding: 14px; background: #fff;
+}
+.ret-bd-card-disabled { background: #f9fafb; }
+.ret-bd-card h4 { margin: 0 0 6px; font-size: 14px; }
+.ret-bd-meta { font-size: 12px; margin-bottom: 6px; }
+.ret-bd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ret-bd-table th, .ret-bd-table td {
+    padding: 6px 4px; border-bottom: 1px solid #f3f4f6; text-align: left;
+}
+.ret-bd-num, .ret-bd-pct { text-align: right; white-space: nowrap; }
+.ret-bar {
+    display: block; width: 100%; height: 8px;
+    background: #f3f4f6; border-radius: 4px; overflow: hidden;
+}
+.ret-bar-fill {
+    height: 100%; background: #2563EB;
+}
+
+.ret-footnote { padding: 8px 0; font-size: 12px; }
+
+@media (max-width: 720px) {
+    .ret-cards { grid-template-columns: 1fr; }
+}
