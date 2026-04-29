@@ -469,8 +469,8 @@ case 'cohort_create':
     if (!$cohort || !$startDate || !$endDate) jsonError('기수명, 시작일, 종료일을 모두 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('INSERT INTO cohorts (cohort, start_date, end_date) VALUES (?, ?, ?)');
-    $stmt->execute([$cohort, $startDate, $endDate]);
+    $stmt = $db->prepare('INSERT INTO cohorts (cohort, code, start_date, end_date) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$cohort, $cohort, $startDate, $endDate]);
     jsonSuccess(['id' => (int)$db->lastInsertId()], '기수가 추가되었습니다.');
     break;
 
