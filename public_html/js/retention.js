@@ -22,14 +22,14 @@ const RetentionApp = (() => {
             root.innerHTML = `<div class="error">${App.esc(r.error || '오류')}</div>`;
             return;
         }
-        pairs = r.pairs || [];
+        pairs = (r.pairs || []).slice().reverse();
         if (pairs.length === 0) {
             root.innerHTML = '<div class="empty">분석 가능한 페어가 없습니다. 다음 기수에 등록자가 1명 이상 있어야 합니다.</div>';
             return;
         }
         renderShell();
-        // default: 가장 최근 anchor (페어 목록의 마지막)
-        selectPair(pairs[pairs.length - 1].anchor_cohort_id);
+        // default: 가장 최근 anchor (목록 첫 번째)
+        selectPair(pairs[0].anchor_cohort_id);
     }
 
     function renderShell() {
