@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="/css/admin-issues.css<?= v('/css/admin-issues.css') ?>">
     <link rel="stylesheet" href="/css/bulk-register.css<?= v('/css/bulk-register.css') ?>">
     <link rel="stylesheet" href="/css/notify.css<?= v('/css/notify.css') ?>">
+    <link rel="stylesheet" href="/css/retention.css<?= v('/css/retention.css') ?>">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -40,6 +41,8 @@
     <script src="/js/bulk-register.js<?= v('/js/bulk-register.js') ?>"></script>
     <script src="/js/admin-reviews.js<?= v('/js/admin-reviews.js') ?>"></script>
     <script src="/js/notify.js<?= v('/js/notify.js') ?>"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/js/retention.js<?= v('/js/retention.js') ?>"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>
