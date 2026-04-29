@@ -128,7 +128,48 @@ const RetentionApp = (() => {
         `;
     }
 
-    function renderCurve(d)      { /* Task 15 */ }
+    function renderCurve(d) {
+        const ctx = document.getElementById('ret-curve');
+        if (chart) { chart.destroy(); chart = null; }
+        const labels = d.curve.map(p => p.cohort_name);
+        const data   = d.curve.map(p => p.pct);
+        const counts = d.curve.map(p => p.count);
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Retention %',
+                    data,
+                    fill: false,
+                    tension: 0.15,
+                    borderColor: '#2563EB',
+                    backgroundColor: '#2563EB',
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
+                    x: { title: { display: true, text: 'Cohort' } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const i = ctx.dataIndex;
+                                return `${data[i]}%  (${counts[i]}명)`;
+                            }
+                        }
+                    },
+                },
+            },
+        });
+    }
     function renderBreakdowns(d) { /* Task 16 */ }
 
     function renderFootnote(d) {
