@@ -92,11 +92,55 @@ const RetentionApp = (() => {
         renderFootnote(d);
     }
 
-    function renderTitle(d)      { /* Task 14 */ }
-    function renderCards(d)      { /* Task 14 */ }
+    function renderTitle(d) {
+        const t = document.getElementById('ret-pair-title');
+        const ts = (d.generated_at || '').replace('T', ' ').slice(0, 19);
+        t.innerHTML = `
+            <div>▎<strong>${App.esc(d.anchor.name)} → ${App.esc(d.next.name)}</strong>
+                 리텐션 (anchor ${d.anchor.total_with_user_id}명 · 다음 ${d.next.total_with_user_id}명)</div>
+            <div class="muted ret-pair-meta">조회 시각: ${App.esc(ts)}</div>
+        `;
+    }
+
+    function renderCards(d) {
+        const c = d.cards;
+        const totalNext = c.next_total_with_user_id;
+        const pct = (n) => totalNext > 0 ? Math.round(n / totalNext * 100) : 0;
+        document.getElementById('ret-cards').innerHTML = `
+            <div class="ret-card">
+                <div class="ret-card-label">잔존 (직전 → 다음)</div>
+                <div class="ret-card-num">${pct(c.stay)}% · ${c.stay}명</div>
+                <div class="muted">리텐션 ${c.retention_pct}%</div>
+            </div>
+            <div class="ret-card">
+                <div class="ret-card-label">회귀 (과거 → 다음)</div>
+                <div class="ret-card-num">${pct(c.returning)}% · ${c.returning}명</div>
+            </div>
+            <div class="ret-card">
+                <div class="ret-card-label">신규 (첫 참여)</div>
+                <div class="ret-card-num">${pct(c.brand_new)}% · ${c.brand_new}명</div>
+            </div>
+            <div class="ret-card ret-card-sum">
+                <div class="ret-card-label">${App.esc(d.next.name)} 총 (user_id 보유)</div>
+                <div class="ret-card-num">${totalNext}명</div>
+                <div class="muted">전체 row ${d.next.total}건</div>
+            </div>
+        `;
+    }
+
     function renderCurve(d)      { /* Task 15 */ }
     function renderBreakdowns(d) { /* Task 16 */ }
-    function renderFootnote(d)   { /* Task 14 */ }
+
+    function renderFootnote(d) {
+        const f = document.getElementById('ret-footnote');
+        const lines = [];
+        if (d.cards.excluded_null_user_id > 0) {
+            lines.push(`user_id 미입력 회원 ${d.cards.excluded_null_user_id}명은 분석에서 제외됨 (anchor + next 합산).`);
+        }
+        f.innerHTML = lines.length
+            ? `<div class="muted">※ ${lines.map(App.esc).join(' · ')}</div>`
+            : '';
+    }
 
     return { init };
 })();
