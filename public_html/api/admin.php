@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/coin_functions.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/services/member_stats.php';
 require_once __DIR__ . '/services/member_bulk.php';
+require_once __DIR__ . '/services/retention.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -468,8 +469,8 @@ case 'cohort_create':
     if (!$cohort || !$startDate || !$endDate) jsonError('기수명, 시작일, 종료일을 모두 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('INSERT INTO cohorts (cohort, start_date, end_date) VALUES (?, ?, ?)');
-    $stmt->execute([$cohort, $startDate, $endDate]);
+    $stmt = $db->prepare('INSERT INTO cohorts (cohort, code, start_date, end_date) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$cohort, $cohort, $startDate, $endDate]);
     jsonSuccess(['id' => (int)$db->lastInsertId()], '기수가 추가되었습니다.');
     break;
 
@@ -1596,6 +1597,16 @@ case 'member_bulk_template':
             ['key' => 'stage_no', 'label' => '단계', 'required' => false, 'example' => '1'],
         ],
     ]);
+    break;
+
+// ── Retention (operation only) ──────────────────────────────
+
+case 'retention_pairs':
+    handleRetentionPairs();
+    break;
+
+case 'retention_summary':
+    handleRetentionSummary();
     break;
 
 // ── Default ─────────────────────────────────────────────────
