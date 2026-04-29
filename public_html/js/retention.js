@@ -170,7 +170,79 @@ const RetentionApp = (() => {
             },
         });
     }
-    function renderBreakdowns(d) { /* Task 16 */ }
+    function renderBreakdowns(d) {
+        const cards = [];
+
+        // 조별
+        if (d.breakdown.group) {
+            cards.push(buildBreakdownCard(
+                '조별',
+                d.breakdown.group.rows.map(r => ({
+                    label: r.name + (r.kind === 'unassigned' ? ' (미배정)' : r.kind === 'anomaly' ? ' (조 정보 이상)' : ''),
+                    total: r.total, transitioned: r.transitioned, pct: r.pct,
+                })),
+                ''
+            ));
+        } else {
+            cards.push(disabledCard('조별', '이 anchor 기수에는 조 데이터가 없습니다.'));
+        }
+
+        // 점수
+        if (d.breakdown.score) {
+            const meta = `점수 보유 ${d.breakdown.score.scored_total}명 (anchor의 ${d.breakdown.score.coverage_pct}%) 기준`;
+            cards.push(buildBreakdownCard(
+                '점수 범위',
+                d.breakdown.score.rows.map(r => ({
+                    label: r.band, total: r.total, transitioned: r.transitioned, pct: r.pct,
+                })),
+                meta
+            ));
+        } else {
+            cards.push(disabledCard('점수 범위', '점수 데이터가 충분하지 않거나 없습니다 (anchor의 50% 미만).'));
+        }
+
+        // 누적 참여 횟수
+        cards.push(buildBreakdownCard(
+            '누적 참여 횟수',
+            d.breakdown.participation.rows.map(r => ({
+                label: r.bucket, total: r.total, transitioned: r.transitioned, pct: r.pct,
+            })),
+            ''
+        ));
+
+        document.getElementById('ret-breakdowns').innerHTML = cards.join('');
+    }
+
+    function buildBreakdownCard(title, rows, meta) {
+        const trs = rows.map(r => `
+            <tr>
+                <td class="ret-bd-label">${App.esc(r.label)}</td>
+                <td class="ret-bd-num">${r.total}</td>
+                <td class="ret-bd-num">${r.transitioned}</td>
+                <td class="ret-bd-bar">
+                    <div class="ret-bar"><div class="ret-bar-fill" style="width:${r.pct}%"></div></div>
+                </td>
+                <td class="ret-bd-pct">${r.pct}%</td>
+            </tr>
+        `).join('');
+        return `
+            <div class="ret-bd-card">
+                <h4>${App.esc(title)}</h4>
+                ${meta ? `<div class="muted ret-bd-meta">${App.esc(meta)}</div>` : ''}
+                <table class="ret-bd-table">
+                    <thead><tr><th>구간</th><th>인원</th><th>진출</th><th>진출률</th><th></th></tr></thead>
+                    <tbody>${trs}</tbody>
+                </table>
+            </div>`;
+    }
+
+    function disabledCard(title, msg) {
+        return `
+            <div class="ret-bd-card ret-bd-card-disabled">
+                <h4>${App.esc(title)}</h4>
+                <div class="muted">${App.esc(msg)}</div>
+            </div>`;
+    }
 
     function renderFootnote(d) {
         const f = document.getElementById('ret-footnote');
