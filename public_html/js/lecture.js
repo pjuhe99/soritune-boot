@@ -9,7 +9,6 @@ const LectureApp = (() => {
     let admin = null;
     let role = null;
     let containerId = null;
-    let coachesCache = null;
     let cohortsCache = null;
     let highlightAdminId = null; // 본인 강의 하이라이트용 admin id
 
@@ -115,10 +114,8 @@ const LectureApp = (() => {
     }
 
     async function loadCoaches() {
-        if (coachesCache) return coachesCache;
         const r = await App.get(API + 'lecture_coaches');
-        coachesCache = r.success ? (r.coaches || []) : [];
-        return coachesCache;
+        return r.success ? (r.coaches || []) : [];
     }
 
     async function loadCohorts() {
@@ -525,7 +522,6 @@ const LectureApp = (() => {
             const extra = sessionCount ? ` (${sessionCount}개 세션)` : '';
             Toast.success((r.message || '강의 스케줄이 생성되었습니다.') + extra);
             App.closeModal();
-            coachesCache = null; // 다음 생성 시 최신 목록
             loadAllData();
         }
     }
