@@ -13,7 +13,6 @@ const LectureApp = (() => {
     let cohortsCache = null;
     let highlightAdminId = null; // 본인 강의 하이라이트용 admin id
 
-    const HOST_LABELS = { coach1: 'C1', coach2: 'C2' };
     const STAGE_LABELS = { 1: '1단계', 2: '2단계' };
     const WEEKDAY_NAMES = ['', '월', '화', '수', '목', '금', '토', '일'];
 
@@ -68,8 +67,7 @@ const LectureApp = (() => {
                     if (s._type === 'event') {
                         const c = EVENT_COLORS[s.color] || EVENT_COLORS.coral;
                         const timeLabel = (s.start_time || '').substring(0, 5);
-                        const hostBadge = `<span class="host-badge ${s.host_account}">${HOST_LABELS[s.host_account] || ''}</span>`;
-                        return `<div class="lec-event-chip" data-id="${s.id}" title="${App.esc(s.title)}" style="background:${c.bg};color:${c.fg};">${hostBadge}<span class="chip-line1">${timeLabel}</span><span class="chip-line2">${App.esc(s.title)}</span></div>`;
+                        return `<div class="lec-event-chip" data-id="${s.id}" title="${App.esc(s.title)}" style="background:${c.bg};color:${c.fg};"><span class="chip-line1">${timeLabel}</span><span class="chip-line2">${App.esc(s.title)}</span></div>`;
                     }
                     // 기존 특강 칩
                     const stageClass = `stage-${s.stage}`;
@@ -77,10 +75,9 @@ const LectureApp = (() => {
                     const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
                     const timeLabel = (s.start_time || '').substring(0, 5);
                     const stageLabel = STAGE_LABELS[s.stage] || '';
-                    const hostBadge = `<span class="host-badge ${s.host_account}">${HOST_LABELS[s.host_account] || ''}</span>`;
                     const firstLine = `${timeLabel} ${stageLabel}`;
                     const coachName = App.esc(s.coach_name || '');
-                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}">${hostBadge}<span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
+                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
                 }).join('');
             },
         }).mount();
@@ -144,7 +141,6 @@ const LectureApp = (() => {
         const s = r.session;
         const dateKo = App.formatDateKo(s.lecture_date);
         const timeLabel = (s.start_time || '').substring(0, 5) + ' ~ ' + (s.end_time || '').substring(0, 5);
-        const hostLabel = s.host_account === 'coach1' ? 'Coach 1' : 'Coach 2';
         const stageLabel = STAGE_LABELS[s.stage] || s.stage;
 
         let body = `
@@ -153,7 +149,6 @@ const LectureApp = (() => {
                 <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(s.coach_name)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>
-                <div class="lec-detail-row"><span class="lec-detail-label">호스트</span><span class="lec-detail-value"><span class="host-badge ${s.host_account}" style="font-size:11px;padding:1px 6px;">${App.esc(hostLabel)}</span></span></div>
             </div>
         `;
 
@@ -167,7 +162,6 @@ const LectureApp = (() => {
             if (s.zoom_password) {
                 body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(s.zoom_password)}</strong></div>`;
             }
-            body += `<div class="lec-host-guide">호스트 계정: <strong>${App.esc(hostLabel)}</strong> 계정으로 Zoom이 생성되었습니다.</div>`;
             body += `</div>`;
         } else if (s.zoom_status === 'failed') {
             body += `<div class="lec-notice warning">Zoom 생성에 실패했습니다.${s.zoom_error_message ? ' (' + App.esc(s.zoom_error_message) + ')' : ''}</div>`;
@@ -338,30 +332,6 @@ const LectureApp = (() => {
                     </div>
                 </fieldset>
 
-                <!-- ▸ Zoom 설정 -->
-                <fieldset class="lec-form-section">
-                    <legend class="lec-form-section-title">Zoom 설정</legend>
-
-                    <div class="form-group">
-                        <label class="form-label">호스트 계정 <span class="text-danger">*</span></label>
-                        <div class="lec-host-radio-group" id="lec-host-group">
-                            <label class="lec-host-radio">
-                                <input type="radio" name="lec-host" value="coach1" checked>
-                                <span class="lec-host-radio-card">
-                                    <span class="host-badge coach1" style="font-size:11px;padding:1px 6px;">Coach 1</span>
-                                </span>
-                            </label>
-                            <label class="lec-host-radio">
-                                <input type="radio" name="lec-host" value="coach2">
-                                <span class="lec-host-radio-card">
-                                    <span class="host-badge coach2" style="font-size:11px;padding:1px 6px;">Coach 2</span>
-                                </span>
-                            </label>
-                        </div>
-                        <p class="lec-form-hint">같은 시간·같은 호스트 계정에 기존 강의가 있으면 생성이 거부됩니다.</p>
-                    </div>
-                </fieldset>
-
                 <!-- ▸ 미리보기 요약 -->
                 <div class="lec-preview" id="lec-preview" style="display:none;"></div>
 
@@ -392,9 +362,6 @@ const LectureApp = (() => {
         ['lec-coach', 'lec-stage', 'lec-time'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.onchange = () => updatePreview(cohorts);
-        });
-        document.querySelectorAll('input[name="lec-host"]').forEach(r => {
-            r.onchange = () => updatePreview(cohorts);
         });
 
         // 폼 제출
@@ -435,7 +402,6 @@ const LectureApp = (() => {
         const coachName = coachEl?.options[coachEl.selectedIndex]?.text || '';
         const time = document.getElementById('lec-time')?.value || '';
         const stage = document.getElementById('lec-stage')?.value || '1';
-        const host = document.querySelector('input[name="lec-host"]:checked')?.value || 'coach1';
 
         const weekdays = [];
         document.querySelectorAll('#lec-weekdays .lec-weekday-btn.selected').forEach(btn => {
@@ -448,7 +414,6 @@ const LectureApp = (() => {
         }
 
         const wdLabels = weekdays.map(w => WEEKDAY_NAMES[w]).join(', ');
-        const hostLabel = host === 'coach1' ? 'Coach 1' : 'Coach 2';
 
         // 세션 수 계산
         const cohortSel = document.getElementById('lec-cohort');
@@ -467,7 +432,6 @@ const LectureApp = (() => {
                 <span>[${App.esc(time)}]</span>
                 <span>${App.esc(coachName)}</span>
                 <span>${App.esc(stage)}단계 강의</span>
-                <span class="host-badge ${host}" style="font-size:10px;padding:0 4px;">${App.esc(hostLabel)}</span>
             </div>
             <div class="lec-preview-sub">매주 ${App.esc(wdLabels)}${sessionCount}</div>
         `;
@@ -498,7 +462,6 @@ const LectureApp = (() => {
         const coachId = parseInt(document.getElementById('lec-coach')?.value || '0');
         const stage = parseInt(document.getElementById('lec-stage')?.value || '0');
         const time = document.getElementById('lec-time')?.value || '';
-        const host = document.querySelector('input[name="lec-host"]:checked')?.value || '';
 
         const weekdays = [];
         document.querySelectorAll('#lec-weekdays .lec-weekday-btn.selected').forEach(btn => {
@@ -510,7 +473,6 @@ const LectureApp = (() => {
         if (!stage)    return { ok: false, msg: '단계를 선택해주세요.' };
         if (!weekdays.length) return { ok: false, msg: '반복 요일을 1개 이상 선택해주세요.' };
         if (!time)     return { ok: false, msg: '시작 시간을 입력해주세요.' };
-        if (!host)     return { ok: false, msg: '호스트 계정을 선택해주세요.' };
 
         // cohort 기간 확인
         const cohortSel = document.getElementById('lec-cohort');
@@ -532,7 +494,7 @@ const LectureApp = (() => {
                 stage,
                 weekdays,
                 start_time: time,
-                host_account: host,
+                host_account: 'coach1',
             },
         };
     }
@@ -667,29 +629,6 @@ const LectureApp = (() => {
                 </fieldset>
 
                 <!-- ▸ Zoom 설정 -->
-                <fieldset class="lec-form-section">
-                    <legend class="lec-form-section-title">Zoom 설정</legend>
-
-                    <div class="form-group">
-                        <label class="form-label">호스트 계정 <span class="text-danger">*</span></label>
-                        <div class="lec-host-radio-group" id="evt-host-group">
-                            <label class="lec-host-radio">
-                                <input type="radio" name="evt-host" value="coach1" checked>
-                                <span class="lec-host-radio-card">
-                                    <span class="host-badge coach1" style="font-size:11px;padding:1px 6px;">Coach 1</span>
-                                </span>
-                            </label>
-                            <label class="lec-host-radio">
-                                <input type="radio" name="evt-host" value="coach2">
-                                <span class="lec-host-radio-card">
-                                    <span class="host-badge coach2" style="font-size:11px;padding:1px 6px;">Coach 2</span>
-                                </span>
-                            </label>
-                        </div>
-                        <p class="lec-form-hint">선택한 호스트 계정으로 Zoom 미팅이 새로 생성됩니다.</p>
-                    </div>
-                </fieldset>
-
                 <!-- ▸ 미리보기 -->
                 <div class="lec-preview" id="evt-preview" style="display:none;"></div>
 
@@ -710,9 +649,6 @@ const LectureApp = (() => {
         document.querySelectorAll('input[name="evt-color"]').forEach(r => {
             r.onchange = updateEventPreview;
         });
-        document.querySelectorAll('input[name="evt-host"]').forEach(r => {
-            r.onchange = updateEventPreview;
-        });
 
         document.getElementById('evt-create-form').onsubmit = (e) => {
             e.preventDefault();
@@ -731,7 +667,6 @@ const LectureApp = (() => {
         const coachName = coachEl?.options[coachEl.selectedIndex]?.text || '';
         const stage = document.getElementById('evt-stage')?.value || '1';
         const color = document.querySelector('input[name="evt-color"]:checked')?.value || 'coral';
-        const host = document.querySelector('input[name="evt-host"]:checked')?.value || 'coach1';
 
         if (!title || !date || !time || !coachEl?.value) {
             preview.style.display = 'none';
@@ -739,14 +674,12 @@ const LectureApp = (() => {
         }
 
         const c = EVENT_COLORS[color] || EVENT_COLORS.coral;
-        const hostLabel = host === 'coach1' ? 'Coach 1' : 'Coach 2';
 
         const stageText = stage === '0' ? '전체' : stage + '단계';
         preview.innerHTML = `
             <div class="lec-preview-title">생성 미리보기</div>
             <div class="lec-preview-body">
                 <span class="lec-event-chip-preview" style="background:${c.bg};color:${c.fg};padding:2px 8px;border-radius:3px;font-weight:600;">${App.esc(title)}</span>
-                <span class="host-badge ${host}" style="font-size:10px;padding:0 4px;">${App.esc(hostLabel)}</span>
             </div>
             <div class="lec-preview-sub">${App.esc(date)} ${App.esc(time)} / ${App.esc(coachName)} / ${App.esc(stageText)}</div>
         `;
@@ -761,7 +694,6 @@ const LectureApp = (() => {
         const date     = document.getElementById('evt-date')?.value || '';
         const time     = document.getElementById('evt-time')?.value || '';
         const color    = document.querySelector('input[name="evt-color"]:checked')?.value || '';
-        const host     = document.querySelector('input[name="evt-host"]:checked')?.value || '';
 
         if (!title)    return { ok: false, msg: '제목을 입력해주세요.' };
         if (!cohortId) return { ok: false, msg: '수업 기수를 선택해주세요.' };
@@ -770,7 +702,6 @@ const LectureApp = (() => {
         if (!date)     return { ok: false, msg: '날짜를 선택해주세요.' };
         if (!time)     return { ok: false, msg: '시작 시간을 입력해주세요.' };
         if (!color)    return { ok: false, msg: '색상을 선택해주세요.' };
-        if (!host)     return { ok: false, msg: '호스트 계정을 선택해주세요.' };
 
         return {
             ok: true,
@@ -782,7 +713,7 @@ const LectureApp = (() => {
                 event_date: date,
                 start_time: time,
                 color,
-                host_account: host,
+                host_account: 'coach1',
             },
         };
     }
@@ -823,7 +754,6 @@ const LectureApp = (() => {
         const ev = r.event;
         const dateKo = App.formatDateKo(ev.event_date);
         const timeLabel = (ev.start_time || '').substring(0, 5) + ' ~ ' + (ev.end_time || '').substring(0, 5);
-        const hostLabel = ev.host_account === 'coach1' ? 'Coach 1' : 'Coach 2';
         const stageLabel = ev.stage ? (STAGE_LABELS[ev.stage] || ev.stage) : null;
         const c = EVENT_COLORS[ev.color] || EVENT_COLORS.coral;
 
@@ -838,7 +768,6 @@ const LectureApp = (() => {
                 <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(ev.coach_name)}</span></div>
                 ${stageRow}
-                <div class="lec-detail-row"><span class="lec-detail-label">호스트</span><span class="lec-detail-value"><span class="host-badge ${ev.host_account}" style="font-size:11px;padding:1px 6px;">${App.esc(hostLabel)}</span></span></div>
             </div>
         `;
 
@@ -852,7 +781,6 @@ const LectureApp = (() => {
             if (ev.zoom_password) {
                 body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(ev.zoom_password)}</strong></div>`;
             }
-            body += `<div class="lec-host-guide">호스트 계정: <strong>${App.esc(hostLabel)}</strong> 계정으로 Zoom이 생성되었습니다.</div>`;
             body += `</div>`;
         } else if (ev.zoom_status === 'failed') {
             body += `<div class="lec-notice warning">Zoom 생성에 실패했습니다.${ev.zoom_error_message ? ' (' + App.esc(ev.zoom_error_message) + ')' : ''}</div>`;
