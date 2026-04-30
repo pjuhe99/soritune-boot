@@ -666,8 +666,8 @@ function checkLectureOverlap(PDO $db, array $dates, string $startTime, string $h
  */
 function getFixedZoomUrl(int $stage): string {
     $urls = [
-        1 => 'https://us02web.zoom.us/j/81330750588?pwd=duqguPLdaLRSJel2ZGoCwGYtcKaAFi.1',
-        2 => 'https://us02web.zoom.us/j/83575089340?pwd=mxHTGfd2ImbRxNv46KbCVPPKUlM7Ql.1',
+        1 => 'https://us02web.zoom.us/j/83473209444?pwd=VBcLqDQ5FlbkgT9ZHcu3pYhVFdh02h.1',
+        2 => 'https://us02web.zoom.us/j/88641942993?pwd=BgnnU015OhGfS0ZjNhssvkmVdKPbgK.1',
     ];
     return $urls[$stage] ?? $urls[1];
 }
