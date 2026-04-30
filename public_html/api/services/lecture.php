@@ -16,14 +16,24 @@ function handleLectureCoaches() {
     requireAdmin(['operation', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2']);
     $db = getDB();
 
-    $stmt = $db->query("
+    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+
+    $sql = "
         SELECT DISTINCT a.id, a.name
         FROM admins a
         JOIN admin_roles ar ON a.id = ar.admin_id
         WHERE a.is_active = 1
           AND ar.role IN ('coach', 'sub_coach', 'head', 'subhead1', 'subhead2')
-        ORDER BY a.name
-    ");
+    ";
+    $params = [];
+    if ($cohortId > 0) {
+        $sql .= " AND a.cohort = (SELECT cohort FROM cohorts WHERE id = ?)";
+        $params[] = $cohortId;
+    }
+    $sql .= " ORDER BY a.name";
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
     jsonSuccess(['coaches' => $stmt->fetchAll()]);
 }
 

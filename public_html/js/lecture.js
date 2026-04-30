@@ -113,9 +113,16 @@ const LectureApp = (() => {
         cal.setEvents([...sessions, ...events]).render();
     }
 
-    async function loadCoaches() {
-        const r = await App.get(API + 'lecture_coaches');
+    async function loadCoaches(cohortId) {
+        const params = cohortId ? { cohort_id: cohortId } : null;
+        const r = await App.get(API + 'lecture_coaches', params);
         return r.success ? (r.coaches || []) : [];
+    }
+
+    /** 코치 select 옵션 HTML 생성 (placeholder 포함) */
+    function renderCoachOptions(coaches) {
+        return '<option value="">선택해주세요</option>' +
+            coaches.map(c => `<option value="${c.id}">${App.esc(c.name)}</option>`).join('');
     }
 
     async function loadCohorts() {
@@ -240,13 +247,14 @@ const LectureApp = (() => {
      * onSuccess 시 달력을 자동 갱신한다.
      */
     async function openCreateModal() {
-        // ── 1) 데이터 로드 ──
+        // ── 1) 기수 먼저 로드 → 첫 기수 기준 코치 로드 ──
         App.showLoading();
-        const [coaches, cohorts] = await Promise.all([loadCoaches(), loadCohorts()]);
-        App.hideLoading();
+        const cohorts = await loadCohorts();
+        if (!cohorts.length) { App.hideLoading(); Toast.warning('등록된 기수가 없습니다.'); return; }
 
-        if (!coaches.length) { Toast.warning('등록된 코치가 없습니다.'); return; }
-        if (!cohorts.length) { Toast.warning('등록된 기수가 없습니다.'); return; }
+        const defaultCohortId = cohorts[0].id;
+        const coaches = await loadCoaches(defaultCohortId);
+        App.hideLoading();
 
         // ── 2) 폼 HTML 렌더 ──
         const body = buildCreateFormHtml(coaches, cohorts);
@@ -261,10 +269,6 @@ const LectureApp = (() => {
     // ────────────────────────────────────────────────────────
 
     function buildCreateFormHtml(coaches, cohorts) {
-        const coachOpts = coaches
-            .map(c => `<option value="${c.id}">${App.esc(c.name)}</option>`)
-            .join('');
-
         const cohortOpts = cohorts.map(c => {
             const label = c.cohort || c.name || `기수 #${c.id}`;
             const period = c.start_date && c.end_date
@@ -291,8 +295,7 @@ const LectureApp = (() => {
                     <div class="form-group">
                         <label class="form-label">담당 코치 <span class="text-danger">*</span></label>
                         <select class="form-input" id="lec-coach" required>
-                            <option value="">선택해주세요</option>
-                            ${coachOpts}
+                            ${renderCoachOptions(coaches)}
                         </select>
                     </div>
 
@@ -350,9 +353,16 @@ const LectureApp = (() => {
             btn.onclick = () => { btn.classList.toggle('selected'); updatePreview(cohorts); };
         });
 
-        // 기수 선택 시 힌트 갱신
+        // 기수 선택 시 힌트 갱신 + 코치 목록 재조회 + 미리보기 갱신
         const cohortSel = document.getElementById('lec-cohort');
-        cohortSel.onchange = () => updateCohortHint(cohorts);
+        cohortSel.onchange = async () => {
+            updateCohortHint(cohorts);
+            const newCohortId = parseInt(cohortSel.value || '0');
+            const newCoaches = await loadCoaches(newCohortId);
+            const coachSel = document.getElementById('lec-coach');
+            if (coachSel) coachSel.innerHTML = renderCoachOptions(newCoaches);
+            updatePreview(cohorts);
+        };
         updateCohortHint(cohorts); // 초기 표시
 
         // 시간/코치/단계 변경 시 미리보기 갱신
@@ -532,11 +542,12 @@ const LectureApp = (() => {
 
     async function openEventCreateModal() {
         App.showLoading();
-        const [coaches, cohorts] = await Promise.all([loadCoaches(), loadCohorts()]);
-        App.hideLoading();
+        const cohorts = await loadCohorts();
+        if (!cohorts.length) { App.hideLoading(); Toast.warning('등록된 기수가 없습니다.'); return; }
 
-        if (!coaches.length) { Toast.warning('등록된 코치가 없습니다.'); return; }
-        if (!cohorts.length) { Toast.warning('등록된 기수가 없습니다.'); return; }
+        const defaultCohortId = cohorts[0].id;
+        const coaches = await loadCoaches(defaultCohortId);
+        App.hideLoading();
 
         const body = buildEventCreateFormHtml(coaches, cohorts);
         App.openModal('이벤트 추가', body);
@@ -544,10 +555,6 @@ const LectureApp = (() => {
     }
 
     function buildEventCreateFormHtml(coaches, cohorts) {
-        const coachOpts = coaches
-            .map(c => `<option value="${c.id}">${App.esc(c.name)}</option>`)
-            .join('');
-
         const cohortOpts = cohorts.map(c => {
             const label = c.cohort || c.name || `기수 #${c.id}`;
             const period = c.start_date && c.end_date
@@ -585,8 +592,7 @@ const LectureApp = (() => {
                     <div class="form-group">
                         <label class="form-label">담당 코치 <span class="text-danger">*</span></label>
                         <select class="form-input" id="evt-coach" required>
-                            <option value="">선택해주세요</option>
-                            ${coachOpts}
+                            ${renderCoachOptions(coaches)}
                         </select>
                     </div>
 
@@ -624,7 +630,6 @@ const LectureApp = (() => {
                     </div>
                 </fieldset>
 
-                <!-- ▸ Zoom 설정 -->
                 <!-- ▸ 미리보기 -->
                 <div class="lec-preview" id="evt-preview" style="display:none;"></div>
 
@@ -645,6 +650,18 @@ const LectureApp = (() => {
         document.querySelectorAll('input[name="evt-color"]').forEach(r => {
             r.onchange = updateEventPreview;
         });
+
+        // 기수 변경 시 코치 목록 재조회 + 미리보기 갱신
+        const cohortSel = document.getElementById('evt-cohort');
+        if (cohortSel) {
+            cohortSel.addEventListener('change', async () => {
+                const newCohortId = parseInt(cohortSel.value || '0');
+                const newCoaches = await loadCoaches(newCohortId);
+                const coachSel = document.getElementById('evt-coach');
+                if (coachSel) coachSel.innerHTML = renderCoachOptions(newCoaches);
+                updateEventPreview();
+            });
+        }
 
         document.getElementById('evt-create-form').onsubmit = (e) => {
             e.preventDefault();
