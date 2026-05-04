@@ -58,8 +58,9 @@ function normalizePhoneForBulk(string $raw): array {
 
     $digits = preg_replace('/[^0-9]/', '', $trimmed);
 
-    // 10자리이고 0으로 시작하지 않으면 앞에 0 추가 (Excel 숫자 변환 보정)
-    if (strlen($digits) === 10 && $digits[0] !== '0') {
+    // Excel 숫자 변환 보정: 10자리이고 한국 휴대폰 prefix(10/11/16-19)로 시작하면 앞에 0 추가.
+    // 미국 등 국제번호는 첫자리가 임의이므로 보정하지 않고 원본 유지.
+    if (strlen($digits) === 10 && preg_match('/^(10|11|16|17|18|19)/', $digits)) {
         $digits = '0' . $digits;
     }
 
@@ -131,10 +132,9 @@ function validateBulkMembers(array $rows, int $cohortId): array {
 
         if ($phoneNormalized !== '') {
             $len = strlen($phoneNormalized);
-            if ($len < 10 || $len > 11) {
-                $rowErrors[] = "전화번호 형식이 올바르지 않습니다: {$phoneResult['original']} ({$len}자리 → 10~11자리 필요)";
-            } elseif ($phoneNormalized[0] !== '0') {
-                $rowErrors[] = "전화번호 형식이 올바르지 않습니다: 0으로 시작해야 합니다";
+            // 한국 휴대폰(10~11자리, 0 시작) + 국제번호(E.164: 최대 15자리, 첫자리 임의) 모두 허용.
+            if ($len < 7 || $len > 15) {
+                $rowErrors[] = "전화번호 형식이 올바르지 않습니다: {$phoneResult['original']} ({$len}자리 → 7~15자리 필요)";
             }
         } elseif ($phoneRaw !== '') {
             $rowErrors[] = "전화번호 형식이 올바르지 않습니다: 숫자를 확인해주세요";

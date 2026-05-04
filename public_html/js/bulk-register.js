@@ -526,8 +526,9 @@ const BulkRegisterApp = (() => {
                             // 전화번호 숫자 보정: Excel에서 01012345678이 숫자 1012345678로 읽힐 수 있음
                             if (key === 'phone' && typeof val === 'number') {
                                 val = String(val);
-                                // 10자리 숫자이고 0으로 시작하지 않으면 앞에 0 붙이기
-                                if (val.length === 10 && !val.startsWith('0')) {
+                                // 10자리이고 한국 휴대폰 prefix(10/11/16-19)로 시작하면 0 추가.
+                                // 미국 등 국제번호(예: 9013369072)는 한국 prefix가 아니라 보정 안 함.
+                                if (val.length === 10 && /^(10|11|16|17|18|19)/.test(val)) {
                                     val = '0' + val;
                                 }
                             }
