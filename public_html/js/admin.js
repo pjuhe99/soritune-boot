@@ -1811,17 +1811,20 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>기수명</th><th>시작일</th><th>종료일</th><th>현재</th><th></th></tr></thead>
+                    <thead><tr><th>기수명</th><th>시작일</th><th>종료일</th><th>활성</th><th>현재</th><th></th></tr></thead>
                     <tbody>
                         ${details.map(c => `
                             <tr>
                                 <td>${App.esc(c.cohort)}</td>
                                 <td style="white-space:nowrap">${c.start_date}</td>
                                 <td style="white-space:nowrap">${c.end_date}</td>
+                                <td>${Number(c.is_active) === 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge">비활성</span>'}</td>
                                 <td>${c.cohort === r.current_cohort ? '<span class="badge badge-success">현재</span>' : ''}</td>
                                 <td class="actions">
                                     <button class="btn-icon" onclick="AdminApp._editCohort(${c.id})">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteCohort(${c.id}, '${App.esc(c.cohort)}')">삭제</button>
+                                    ${Number(c.is_active) === 1
+                                        ? `<button class="btn-icon danger" onclick="AdminApp._deactivateCohort(${c.id}, '${App.esc(c.cohort)}')">비활성화</button>`
+                                        : `<button class="btn-icon" onclick="AdminApp._activateCohort(${c.id}, '${App.esc(c.cohort)}')">활성화</button>`}
                                 </td>
                             </tr>
                         `).join('')}
@@ -1829,7 +1832,7 @@ const AdminApp = (() => {
                 </table>
             </div>
         `;
-        if (!details.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty-state">등록된 기수가 없습니다.</td></tr>';
+        if (!details.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">등록된 기수가 없습니다.</td></tr>';
         document.getElementById('btn-add-cohort').onclick = () => showCohortForm();
     }
 
@@ -1882,10 +1885,25 @@ const AdminApp = (() => {
         if (c) showCohortForm(c);
     }
 
-    async function _deleteCohort(id, name) {
-        if (!await App.confirm(`'${name}' 기수를 삭제하시겠습니까?`)) return;
+    async function _deactivateCohort(id, name) {
+        if (!await App.confirm(`'${name}' 기수를 비활성화하시겠습니까?\n비활성화 시 해당 기수 회원은 로그인할 수 없습니다.`)) return;
         App.showLoading();
         const r = await App.post('/api/admin.php?action=cohort_delete', { id });
+        App.hideLoading();
+        if (r.success) { Toast.success(r.message); loadCohortsMgmt(); renderCohortBar(); }
+    }
+
+    async function _activateCohort(id, name) {
+        const r0 = await App.get('/api/admin.php?action=cohort_list');
+        const others = ((r0.cohort_details || []).filter(c => Number(c.is_active) === 1 && Number(c.id) !== Number(id)));
+        let msg = `'${name}' 기수를 활성화하시겠습니까?`;
+        if (others.length) {
+            msg += `\n\n⚠ 현재 활성 기수: ${others.map(c => c.cohort).join(', ')}`;
+            msg += `\n단일 기수만 활성 유지를 권장합니다. 그래도 활성화할까요?`;
+        }
+        if (!await App.confirm(msg)) return;
+        App.showLoading();
+        const r = await App.post('/api/admin.php?action=cohort_activate', { id });
         App.hideLoading();
         if (r.success) { Toast.success(r.message); loadCohortsMgmt(); renderCohortBar(); }
     }
@@ -2026,7 +2044,7 @@ const AdminApp = (() => {
         _editTask, _deleteTask,
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
-        _editCohort, _deleteCohort,
+        _editCohort, _deactivateCohort, _activateCohort,
         _cafePostPage,
     };
 })();

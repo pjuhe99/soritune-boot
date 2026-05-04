@@ -506,6 +506,18 @@ case 'cohort_delete':
     jsonSuccess([], '기수가 비활성화되었습니다.');
     break;
 
+case 'cohort_activate':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('기수 ID가 필요합니다.');
+
+    $db = getDB();
+    $db->prepare('UPDATE cohorts SET is_active = 1 WHERE id = ?')->execute([$id]);
+    jsonSuccess([], '기수가 활성화되었습니다.');
+    break;
+
 // ── Member CRUD (operation only) — uses bootcamp_members ────
 
 case 'member_list':
