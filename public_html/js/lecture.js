@@ -501,7 +501,6 @@ const LectureApp = (() => {
                 stage,
                 weekdays,
                 start_time: time,
-                host_account: 'coach1',
             },
         };
     }
@@ -726,7 +725,6 @@ const LectureApp = (() => {
                 event_date: date,
                 start_time: time,
                 color,
-                host_account: 'coach1',
             },
         };
     }

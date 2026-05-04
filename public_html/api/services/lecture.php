@@ -52,7 +52,6 @@ function handleLectureScheduleCreate($method) {
     $stage        = (int)($input['stage'] ?? 0);
     $weekdays     = $input['weekdays'] ?? [];    // array of ints: [1,3,5]
     $startTime    = trim($input['start_time'] ?? '');  // "HH:MM"
-    $hostAccount  = trim($input['host_account'] ?? '');
 
     // ── 입력값 검증 ──
     if (!$coachAdminId) jsonError('담당 코치를 선택해주세요.');
@@ -60,7 +59,10 @@ function handleLectureScheduleCreate($method) {
     if (!in_array($stage, [1, 2], true)) jsonError('단계를 선택해주세요 (1단계 또는 2단계).');
     if (!is_array($weekdays) || empty($weekdays)) jsonError('요일을 1개 이상 선택해주세요.');
     if (!preg_match('/^\d{2}:\d{2}$/', $startTime)) jsonError('시작 시간 형식: HH:MM');
-    if (!in_array($hostAccount, ['coach1', 'coach2'], true)) jsonError('호스트 계정을 선택해주세요.');
+
+    // 호스트 계정은 단계 기반 자동 매핑: 1단계=coach1, 2단계=coach2
+    // 줌 URL도 단계 기반으로 분리(getFixedZoomUrl)되어 같은 시간 동시 진행 가능.
+    $hostAccount = ($stage === 1) ? 'coach1' : 'coach2';
 
     // 요일 검증 (1=월 ~ 7=일)
     $validWeekdays = [];
@@ -360,7 +362,6 @@ function handleLectureEventCreate($method) {
     $startTime    = trim($input['start_time'] ?? '');
     $title        = trim($input['title'] ?? '');
     $color        = trim($input['color'] ?? 'coral');
-    $hostAccount  = trim($input['host_account'] ?? '');
 
     // ── 입력값 검증 ──
     if (!$coachAdminId) jsonError('담당 코치를 선택해주세요.');
@@ -371,7 +372,9 @@ function handleLectureEventCreate($method) {
     if (!$title || mb_strlen($title) > 200) jsonError('제목을 입력해주세요 (최대 200자).');
     $validColors = ['coral', 'amber', 'violet', 'teal', 'slate'];
     if (!in_array($color, $validColors, true)) jsonError('유효한 색상을 선택해주세요.');
-    if (!in_array($hostAccount, ['coach1', 'coach2'], true)) jsonError('호스트 계정을 선택해주세요.');
+
+    // 호스트 계정은 단계 기반 자동 매핑: 2단계만 coach2, 그 외(1단계/미지정)는 coach1.
+    $hostAccount = ($stage === 2) ? 'coach2' : 'coach1';
 
     [$h, $m] = explode(':', $startTime);
     if ((int)$h < 0 || (int)$h > 23 || (int)$m < 0 || (int)$m > 59) {
