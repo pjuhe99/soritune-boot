@@ -21,7 +21,8 @@ case 'login':
 
     if (!$phoneRaw) jsonError('휴대폰번호를 입력해주세요.');
     $phone = normalizePhone($phoneRaw);
-    if (strlen($phone) < 10 || strlen($phone) > 11) jsonError('올바른 휴대폰번호를 입력해주세요. (10~11자리)');
+    // 한국 휴대폰(10~11자리) + 국제번호(E.164 최대 15자리) 모두 허용.
+    if (strlen($phone) < 7 || strlen($phone) > 15) jsonError('올바른 휴대폰번호를 입력해주세요. (7~15자리)');
 
     $db = getDB();
     $member = findMemberByPhone($db, $phone);
