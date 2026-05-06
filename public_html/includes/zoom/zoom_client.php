@@ -101,3 +101,67 @@ function zoomGetAccessToken(bool $forceRefresh = false): string {
 
     return (string)$data['access_token'];
 }
+
+/**
+ * Zoom 미팅 생성. 토큰 캐시 사용.
+ * - 401 발생 시 캐시 토큰을 강제 갱신하여 1회 재시도 (재시도도 401이면 throw)
+ * - 응답에 id 또는 join_url 누락 시 throw (빈 row 저장 방지)
+ *
+ * @param string $hostUserId  Zoom 사용자 ID 또는 이메일
+ * @param array  $payload     Zoom POST body (topic, type, start_time, duration, timezone 등)
+ * @return array { meeting_id: string, join_url: string, password: ?string }
+ * @throws RuntimeException
+ */
+function zoomCreateMeeting(string $hostUserId, array $payload): array {
+    return zoomCreateMeetingWithToken($hostUserId, $payload, zoomGetAccessToken(false), false);
+}
+
+function zoomCreateMeetingWithToken(string $hostUserId, array $payload, string $token, bool $isRetry): array {
+    $url  = ZOOM_API_BASE . '/users/' . rawurlencode($hostUserId) . '/meetings';
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $body,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    $response = curl_exec($ch);
+    $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) {
+        throw new RuntimeException("Zoom API cURL: {$err}");
+    }
+
+    if ($code === 401 && !$isRetry) {
+        $newToken = zoomGetAccessToken(true);
+        return zoomCreateMeetingWithToken($hostUserId, $payload, $newToken, true);
+    }
+
+    if ($code < 200 || $code >= 300) {
+        $errData = json_decode((string)$response, true);
+        $msg     = is_array($errData) && !empty($errData['message'])
+            ? $errData['message']
+            : substr((string)$response, 0, 300);
+        throw new RuntimeException("Zoom API {$code}: {$msg}");
+    }
+
+    $data = json_decode((string)$response, true);
+    if (!is_array($data) || empty($data['id']) || empty($data['join_url'])) {
+        throw new RuntimeException('Zoom 응답 누락: id/join_url');
+    }
+
+    return [
+        'meeting_id' => (string)$data['id'],
+        'join_url'   => (string)$data['join_url'],
+        'password'   => isset($data['password']) ? (string)$data['password'] : null,
+    ];
+}
