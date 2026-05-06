@@ -18,16 +18,19 @@
 
 신규
 - `public_html/includes/zoom/zoom_client.php` — Server-to-Server OAuth + 미팅 API 래퍼
-- `keys/zoom.json` — `{accountId, clientId, clientSecret}` (gitignore, chmod 600)
+- `keys/zoom.json` — `{accountId, clientId, clientSecret}` (gitignore 자동 제외, 권한 `640 root:apache` — 아래 자격증명 섹션 참조)
 
 수정
 - `public_html/api/services/lecture.php`
   - `callLectureEventZoomWebhook()` 본문을 `zoom_client.php` 호출로 교체. 함수 시그니처/반환값 동일.
   - 실패 시 `lecture_events` 갱신 SQL 중복 → 헬퍼 `failLectureZoomEvent()` 로 추출.
   - 주석에서 "n8n webhook" 표현 제거.
+  - **버그 동반 수정**: 이벤트 생성 핸들러 (`lecture.php:448`) 응답의 `zoom_status` 가 실패 시 `'pending'` 으로 내려가는 문제 — DB와 어긋남. `'failed'` 로 통일. retry 핸들러도 동일 점검.
+  - **`zoom_start_url` 미저장 변경**: Zoom의 start_url 은 발급 후 약 2시간 후 만료될 수 있어, 며칠 뒤 예약된 강의에서 저장된 start_url 이 강의 시작 시점에 만료된 상태가 되는 위험이 있음. 현재 frontend 어느 파일도 `zoom_start_url` 을 사용하지 않음 (`grep -rln "start_url" public_html/js public_html/coach ... ` → 백엔드 저장/반환 코드만 hit). 따라서 `zoom_start_url` 컬럼은 NULL 로 두고 저장 흐름에서 제외. 향후 호스트 시작 링크가 실제로 필요해지면 별도 endpoint `lecture_event_zoom_start_url` 을 추가해 호출 시점에 `GET /meetings/{id}` 로 fresh 값 조회. (이번 범위 밖, 후속 hook으로만 명시.)
 
 삭제 (dead code 정리)
 - `public_html/api/services/study.php`의 `callZoomWebhook()`, `retryZoomForSession()` 제거.
+- 삭제 직전 검증 단계: `grep -rn "callZoomWebhook\b" public_html` 와 `grep -rn "retryZoomForSession\b" public_html` 로 호출처 0 확인 후 삭제 (라우터·include 어디에서도 안 부르는지 재확인).
 
 설정
 - `settings` 테이블에 `zoom_host_coach1`, `zoom_host_coach2` 두 행 추가 (값은 운영자가 직접 입력).
@@ -48,14 +51,18 @@
 }
 ```
 - 위치: `_______site_SORITUNECOM_DEV_BOOT/keys/zoom.json` (DEV), `_______site_SORITUNECOM_BOOT/keys/zoom.json` (PROD)
-- 권한: `chmod 600`. owner는 웹서버 계정 — `keys/solapi.json` 와 동일.
-- gitignore: `keys/` 디렉토리는 이미 `.gitignore` 에 등록돼 있어 자동 제외됨 (`keys/solapi.json` 와 동일).
+- 권한: `chown root:apache keys/zoom.json && chmod 640 keys/zoom.json` — `solapi.json` 실제 권한과 동일 (DEV `keys/` 디렉토리는 `750 root:apache`, `solapi.json` 은 `640 root:apache` 확인).
+- gitignore: `keys/` 디렉토리는 이미 `.gitignore` 에 등록돼 있어 자동 제외됨.
 
-토큰 캐시
-- 경로: `keys/zoom_token_cache.json`
-- 형식: `{"access_token":"...","expires_at":1745000000}` (epoch seconds)
-- 만료 60초 전부터 갱신.
-- 동시 요청 충돌 방지: `flock()` 으로 파일 락.
+Zoom 앱 권한 (Server-to-Server OAuth)
+- 필요한 scope: `meeting:write:admin` (관리자 단위 — 다른 사용자 명의로 미팅 생성 가능). 단일 사용자 모드라면 `meeting:write` 로도 가능. n8n 에서 사용 중인 자격증명을 그대로 재사용하므로 scope 가 이미 부여돼 있을 가능성 높음 — 첫 호출 시 401 발생하면 Zoom Marketplace 앱 설정에서 추가.
+
+토큰 캐시 — `settings` 테이블 사용 (파일 캐시 아님)
+- 키: `zoom_oauth_token`, 값: `{"access_token":"...","expires_at":<epoch>}` JSON.
+- 파일 권한 이슈 회피 (`keys/` 디렉토리에 apache 가 새 파일 만들기 어려움), `updateSetting()` / `getSettingFresh()` 로 충분.
+- 만료 60초 전부터 갱신. 매 요청마다 `getSettingFresh('zoom_oauth_token')` 1회 SELECT, 갱신 시 1회 UPSERT — 비용 무시할 수준.
+- 동시 요청에서 중복 발급될 수 있으나 Zoom S2S OAuth 는 기존 토큰을 무효화하지 않으므로 무해. 별도 락 불필요.
+- 캐시 쓰기 실패 시 (DB 오류 등) → 경고 로그 + 메모리 토큰만으로 현재 요청 처리, 다음 요청에서 재발급. 실패가 사용자 노출 에러로 번지지 않음.
 
 ## 인터페이스
 
@@ -93,15 +100,15 @@ function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): arr
         return failLectureZoomEvent($db, $eventId, mb_substr($e->getMessage(), 0, 500));
     }
 
+    // zoom_start_url 은 만료 위험 + 현재 frontend 미사용 → NULL 로 둔다
     $db->prepare("
         UPDATE lecture_events
-        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
+        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = NULL, zoom_password = ?,
             zoom_status = 'ready', zoom_error_message = NULL
         WHERE id = ?
     ")->execute([
         (string)$result['meeting_id'],
         $result['join_url'],
-        $result['start_url'],
         $result['password'],
         $eventId,
     ]);
@@ -110,7 +117,7 @@ function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): arr
 }
 ```
 
-함수 시그니처/반환값을 유지하므로 기존 호출처 (`lecture.php:437`, `lecture.php:534`) 는 수정하지 않는다.
+함수 시그니처/반환값은 유지하므로 기존 호출처 (`lecture.php:437`, `lecture.php:534`) 는 함수 호출 자체는 수정하지 않는다. 단 호출 후 응답 조립부 (`lecture.php:448` jsonSuccess) 에서 `'zoom_status' => $zoomResult['success'] ? 'ready' : 'pending'` 을 `'failed'` 로 바꿔 DB 와 일치시킨다.
 
 ## Zoom API 호출
 
@@ -144,24 +151,32 @@ Content-Type: application/json
 {
   "id": 12345678901,
   "join_url": "https://us02web.zoom.us/j/.../?pwd=...",
-  "start_url": "https://us02web.zoom.us/s/.../?zak=...",
   "password": "abc123"
 }
 ```
-`id` 는 number 이지만 컬럼이 `VARCHAR(50)` 이므로 `(string)` 캐스팅해 저장.
+`id` 는 number 이지만 컬럼이 `VARCHAR(50)` 이므로 `(string)` 캐스팅해 저장. `start_url` 은 응답에 포함되지만 사용·저장하지 않는다 (만료 위험 + 미사용).
+
+응답 검증 — `zoom_client.php` 안에서
+- `id` 또는 `join_url` 누락 → `RuntimeException("Zoom 응답 누락: id/join_url")`. 빈 row 저장 방지.
+- `password` 는 누락 가능 (Zoom 계정 설정에 따라). NULL 허용.
 
 ## 에러 처리
 
 - HTTP 4xx → `RuntimeException("Zoom API {code}: {message}")`. 상위에서 `zoom_status='failed'` + `zoom_error_message` (500자 잘라 저장).
 - HTTP 5xx / cURL error → 동일 처리.
-- 401 (토큰 만료/무효) 발생 시 → 캐시 파일 무효화 후 1회만 재시도. 재시도도 401이면 throw.
+- 401 (토큰 만료/무효) 발생 시 → `settings.zoom_oauth_token` 행 만료 처리(`expires_at=0`) 후 1회만 재발급+재시도. 재시도도 401이면 throw.
 - `getSetting("zoom_host_*")` 가 비어 있으면 API 호출 자체를 시도하지 않고 즉시 실패 처리.
 - 동작은 기존 n8n 호출 실패와 동일 — 어드민 화면의 재시도 버튼 (`handleLectureEventZoomRetry`) 그대로 사용.
 
 ## 마이그레이션 & 배포
 
 DEV (`boot-dev`)
-1. `keys/zoom.json` 작성, `chmod 600`.
+1. `keys/zoom.json` 작성:
+   ```bash
+   sudo tee /var/www/html/_______site_SORITUNECOM_DEV_BOOT/keys/zoom.json > /dev/null
+   sudo chown root:apache /var/www/html/_______site_SORITUNECOM_DEV_BOOT/keys/zoom.json
+   sudo chmod 640 /var/www/html/_______site_SORITUNECOM_DEV_BOOT/keys/zoom.json
+   ```
 2. DEV DB
    ```sql
    INSERT INTO settings (`key`,`value`,updated_at) VALUES
@@ -171,15 +186,17 @@ DEV (`boot-dev`)
    ```
 3. 코드 commit & push (dev 브랜치)
 4. `dev-boot.soritune.com` 검증
-   - 강의 이벤트 1개 생성 → `zoom_status='ready'` + 4개 컬럼 채워지는지
-   - 어드민 입장 링크 정상 진입
-   - host 매핑 비어있는 케이스 → `zoom_status='failed'` + 메시지 저장
-   - 재시도 버튼 정상 동작
+   - 강의 이벤트 1개 생성 → `zoom_status='ready'` + `zoom_meeting_id` / `zoom_join_url` / `zoom_password` 채워지는지 (`zoom_start_url` 은 NULL).
+   - 어드민 detail 응답에서 `zoom_join_url` 정상, 어드민 본인 Zoom 로그인 상태에서 join_url 클릭 시 호스트로 입장됨.
+   - 첫 호출에서 `settings.zoom_oauth_token` row 가 생성됐는지 확인.
+   - host 매핑 비어있는 케이스 → `zoom_status='failed'` + 메시지 저장. **API 응답의 `zoom_status` 도 `'failed'` 로 내려가는지** (기존 'pending' 버그 fix 검증).
+   - 재시도 버튼 (`lecture_event_zoom_retry`) 정상 동작.
+   - 의도적으로 `keys/zoom.json` 의 clientSecret 을 망가뜨려 401 시나리오 → 캐시 토큰 무효화 후 재시도 1회, 그래도 실패면 `zoom_status='failed'`.
 5. **사용자 확인 요청 후 정지**
 
 PROD (`boot-prod`) — 사용자 명시 요청 후에만
 6. PROD DB 동일 INSERT.
-7. PROD `keys/zoom.json` 동일 자격증명/권한.
+7. PROD `keys/zoom.json` 동일 자격증명/권한 (`640 root:apache`).
 8. main 머지 + `git pull`.
 9. 다음 강의 이벤트 생성 시 자체 코드 동작 확인.
 
