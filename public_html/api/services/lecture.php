@@ -711,69 +711,58 @@ function checkEventOverlap(PDO $db, string $eventDate, string $startTime, string
 }
 
 /**
- * n8n webhook 호출하여 이벤트 Zoom meeting 생성
+ * Zoom 미팅 생성 (boot 자체 구현, n8n 의존 제거).
+ * - host_account('coach1'|'coach2') → settings.zoom_host_<key> → Zoom userId 변환
+ * - 실패 시 zoom_status='failed' + zoom_error_message 저장 후 반환
+ * - zoom_start_url 은 만료 위험 + frontend 미사용 → NULL 유지
  */
 function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): array {
-    $webhookUrl = getSetting('lecture_zoom_webhook_url');
-    if (!$webhookUrl) {
-        $db->prepare("
-            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = 'webhook URL 미설정'
-            WHERE id = ?
-        ")->execute([$eventId]);
-        return ['success' => false, 'error' => 'Zoom webhook URL이 설정되지 않았습니다.'];
+    require_once __DIR__ . '/../../includes/zoom/zoom_client.php';
+
+    $hostKey = (string)($payload['host_account'] ?? '');
+    if ($hostKey === '') {
+        return failLectureZoomEvent($db, $eventId, 'host_account 미지정');
     }
 
-    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
-
-    $ch = curl_init($webhookUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $jsonPayload,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
-        $errorMsg = $curlError ?: "HTTP {$httpCode}";
-        $db->prepare("
-            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
-        return ['success' => false, 'error' => $errorMsg];
+    $hostUserId = getSetting("zoom_host_{$hostKey}");
+    if (!$hostUserId) {
+        return failLectureZoomEvent($db, $eventId, "zoom_host_{$hostKey} 미설정");
     }
 
-    $data = json_decode($response, true);
-    if (!$data || empty($data['success'])) {
-        $errorMsg = $data['error'] ?? $data['message'] ?? 'n8n 응답 파싱 실패';
-        $db->prepare("
-            UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
-        return ['success' => false, 'error' => $errorMsg];
+    try {
+        $result = zoomCreateMeeting((string)$hostUserId, [
+            'topic'      => (string)($payload['title'] ?? ''),
+            'type'       => 2,
+            'start_time' => (string)($payload['scheduled_at'] ?? ''),
+            'duration'   => (int)($payload['duration'] ?? 60),
+            'timezone'   => 'Asia/Seoul',
+        ]);
+    } catch (\Throwable $e) {
+        return failLectureZoomEvent($db, $eventId, mb_substr($e->getMessage(), 0, 500));
     }
 
     $db->prepare("
         UPDATE lecture_events
-        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
+        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = NULL, zoom_password = ?,
             zoom_status = 'ready', zoom_error_message = NULL
         WHERE id = ?
     ")->execute([
-        $data['zoom_meeting_id'] ?? null,
-        $data['zoom_join_url'] ?? null,
-        $data['zoom_start_url'] ?? null,
-        $data['zoom_password'] ?? null,
+        $result['meeting_id'],
+        $result['join_url'],
+        $result['password'],
         $eventId,
     ]);
 
     return [
-        'success' => true,
-        'zoom_join_url' => $data['zoom_join_url'] ?? null,
+        'success'       => true,
+        'zoom_join_url' => $result['join_url'],
     ];
+}
+
+function failLectureZoomEvent(PDO $db, int $eventId, string $errorMsg): array {
+    $db->prepare("
+        UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
+        WHERE id = ?
+    ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
+    return ['success' => false, 'error' => $errorMsg];
 }
