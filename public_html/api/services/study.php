@@ -472,27 +472,6 @@ function getStudySessionForRetry($db, $sessionId) {
     return $row;
 }
 
-/**
- * Zoom webhook 재시도 실행 (세션 row 기반)
- * callZoomWebhook()을 감싸는 편의 함수
- */
-function retryZoomForSession($db, $sessionRow) {
-    $sessionId = (int)$sessionRow['id'];
-    $timeLabel = substr($sessionRow['start_time'], 0, 5);
-    $endLabel = substr($sessionRow['end_time'], 0, 5);
-
-    return callZoomWebhook($db, $sessionId, [
-        'study_session_id' => $sessionId,
-        'title' => $sessionRow['title'],
-        'study_date' => $sessionRow['study_date'],
-        'start_time' => $timeLabel,
-        'end_time' => $endLabel,
-        'duration' => 60,
-        'host_nickname' => $sessionRow['host_nickname'],
-        'scheduled_at' => (new DateTime("{$sessionRow['study_date']} {$sessionRow['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
-}
-
 // ══════════════════════════════════════════════════════════════
 // Admin Study API
 // ══════════════════════════════════════════════════════════════
@@ -748,74 +727,4 @@ function getMemberCohortId($db, $memberId) {
     $stmt->execute([$memberId]);
     $row = $stmt->fetch();
     return $row ? (int)$row['cohort_id'] : null;
-}
-
-/**
- * n8n webhook 호출하여 Zoom meeting 생성
- */
-function callZoomWebhook($db, $sessionId, $payload) {
-    $webhookUrl = getSetting('study_zoom_webhook_url');
-    if (!$webhookUrl) {
-        // webhook URL 미설정 시 pending 유지
-        $db->prepare("
-            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = 'webhook URL 미설정'
-            WHERE id = ?
-        ")->execute([$sessionId]);
-        return ['success' => false, 'error' => 'Zoom webhook URL이 설정되지 않았습니다.'];
-    }
-
-    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
-
-    $ch = curl_init($webhookUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $jsonPayload,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($curlError || $httpCode < 200 || $httpCode >= 300) {
-        $errorMsg = $curlError ?: "HTTP {$httpCode}";
-        $db->prepare("
-            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $sessionId]);
-        return ['success' => false, 'error' => $errorMsg];
-    }
-
-    $data = json_decode($response, true);
-    if (!$data || empty($data['success'])) {
-        $errorMsg = $data['error'] ?? $data['message'] ?? 'n8n 응답 파싱 실패';
-        $db->prepare("
-            UPDATE study_sessions SET zoom_status = 'failed', zoom_error_message = ?
-            WHERE id = ?
-        ")->execute([mb_substr($errorMsg, 0, 500), $sessionId]);
-        return ['success' => false, 'error' => $errorMsg];
-    }
-
-    // Zoom 정보 저장 + status를 active로 전환
-    $db->prepare("
-        UPDATE study_sessions
-        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = ?, zoom_password = ?,
-            zoom_status = 'ready', zoom_error_message = NULL, status = 'active'
-        WHERE id = ?
-    ")->execute([
-        $data['zoom_meeting_id'] ?? null,
-        $data['zoom_join_url'] ?? null,
-        $data['zoom_start_url'] ?? null,
-        $data['zoom_password'] ?? null,
-        $sessionId,
-    ]);
-
-    return [
-        'success' => true,
-        'zoom_join_url' => $data['zoom_join_url'] ?? null,
-    ];
 }
