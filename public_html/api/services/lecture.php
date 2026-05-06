@@ -39,7 +39,7 @@ function handleLectureCoaches() {
 
 /**
  * 강의 스케줄 생성
- * 반복 규칙 저장 → 개별 세션 생성 → n8n webhook 호출
+ * 반복 규칙 저장 → 개별 세션 생성 (고정 Zoom URL 사용)
  */
 function handleLectureScheduleCreate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -346,7 +346,7 @@ function handleLectureZoomRetry($method) {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 이벤트 생성 — 1회성 날짜 + 직접 제목 + 컬러 + n8n Zoom
+ * 이벤트 생성 — 1회성 날짜 + 직접 제목 + 컬러 + Zoom 미팅
  */
 function handleLectureEventCreate($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -433,7 +433,7 @@ function handleLectureEventCreate($method) {
     ]);
     $eventId = (int)$db->lastInsertId();
 
-    // ── n8n webhook → Zoom 생성 ──
+    // ── Zoom 미팅 생성 ──
     $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
         'event_id'    => $eventId,
         'title'       => $title,
