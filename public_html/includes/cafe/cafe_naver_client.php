@@ -66,12 +66,13 @@ function cafeFetchBoardArticles(string $menuId, int $perPage = 20): array {
         $memberKey = $a['memberKey']          ?? null;
         $ts        = $a['writeDateTimestamp'] ?? null;
         if (!$articleId || !$memberKey || !$ts) continue;
+        $postedAtDt = (new DateTime('@' . (int)floor($ts / 1000)))->setTimezone(new DateTimeZone('Asia/Seoul'));
         $out[] = [
             'cafe_article_id' => (string)$articleId,
             'title'           => (string)($a['subject']        ?? ''),
             'member_key'      => (string)$memberKey,
             'nickname'        => (string)($a['writerNickname'] ?? ''),
-            'posted_at'       => date('Y-m-d H:i:s', (int)floor($ts / 1000)),
+            'posted_at'       => $postedAtDt->format('Y-m-d H:i:s'),
         ];
     }
     return $out;
