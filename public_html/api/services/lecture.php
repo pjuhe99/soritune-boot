@@ -712,21 +712,17 @@ function checkEventOverlap(PDO $db, string $eventDate, string $startTime, string
 
 /**
  * Zoom 미팅 생성 (boot 자체 구현, n8n 의존 제거).
- * - host_account('coach1'|'coach2') → settings.zoom_host_<key> → Zoom userId 변환
+ * - settings.zoom_host_default 에 지정된 단일 Zoom 사용자로 미팅 생성
+ *   (lecture_events.host_account 컬럼은 legacy 표시용, Zoom 라우팅에 영향 없음)
  * - 실패 시 zoom_status='failed' + zoom_error_message 저장 후 반환
  * - zoom_start_url 은 만료 위험 + frontend 미사용 → NULL 유지
  */
 function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): array {
     require_once __DIR__ . '/../../includes/zoom/zoom_client.php';
 
-    $hostKey = (string)($payload['host_account'] ?? '');
-    if ($hostKey === '') {
-        return failLectureZoomEvent($db, $eventId, 'host_account 미지정');
-    }
-
-    $hostUserId = getSetting("zoom_host_{$hostKey}");
+    $hostUserId = getSetting('zoom_host_default');
     if (!$hostUserId) {
-        return failLectureZoomEvent($db, $eventId, "zoom_host_{$hostKey} 미설정");
+        return failLectureZoomEvent($db, $eventId, 'zoom_host_default 미설정');
     }
 
     try {
