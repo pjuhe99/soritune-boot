@@ -148,94 +148,17 @@ function handleIntegrationCafePosts($method) {
     $posts = $input['posts'] ?? [];
     if (empty($posts)) jsonError('posts 필요');
 
-    $db = getDB();
-    $results = ['inserted' => 0, 'skipped' => 0, 'error' => 0, 'unmapped' => 0];
-    $unmappedKeys = [];
+    require_once __DIR__ . '/../../includes/cafe/cafe_ingest.php';
+    $r = ingestCafePosts($posts);
 
-    // menu_id → board_type 매핑 로드
-    $boardMapStmt = $db->query("SELECT menu_id, board_type FROM cafe_board_map WHERE is_active = 1");
-    $boardMap = [];
-    foreach ($boardMapStmt->fetchAll() as $bm) {
-        $boardMap[$bm['menu_id']] = $bm['board_type'];
-    }
-
-    $insertStmt = $db->prepare("
-        INSERT INTO cafe_posts (cafe_article_id, title, member_key, nickname, board_type, posted_at, member_id, mission_checked, assignment_date, raw_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            title = VALUES(title),
-            nickname = VALUES(nickname),
-            member_id = VALUES(member_id),
-            mission_checked = VALUES(mission_checked),
-            assignment_date = VALUES(assignment_date)
-    ");
-
-    $memberKeyCache = [];
-
-    foreach ($posts as $post) {
-        $articleId = $post['cafe_article_id'] ?? $post['article_id'] ?? '';
-        $title = $post['title'] ?? '';
-        $memberKey = $post['member_key'] ?? null;
-        $nickname = $post['nickname'] ?? null;
-        $postedAt = $post['posted_at'] ?? null;
-        $missionChecked = (int)($post['mission_checked'] ?? 0);
-        $assignmentDate = $post['assignment_date'] ?? null;
-
-        $boardType = $post['board_type'] ?? null;
-        if (!$boardType && isset($post['menu_id'])) {
-            $boardType = $boardMap[(string)$post['menu_id']] ?? null;
-        }
-
-        if (!$articleId) {
-            $results['error']++;
-            continue;
-        }
-
-        $memberId = null;
-        if ($memberKey) {
-            if (isset($memberKeyCache[$memberKey])) {
-                $memberId = $memberKeyCache[$memberKey];
-            } else {
-                $memberId = resolveMemberByKey($db, $memberKey);
-                $memberKeyCache[$memberKey] = $memberId;
-            }
-            if (!$memberId) {
-                $results['unmapped']++;
-                $unmappedKeys[$memberKey] = $nickname ?? '';
-            }
-        }
-
-        try {
-            $insertStmt->execute([
-                $articleId,
-                $title,
-                $memberKey,
-                $nickname,
-                $boardType,
-                $postedAt,
-                $memberId,
-                $missionChecked,
-                $assignmentDate,
-                !empty($post) ? json_encode($post, JSON_UNESCAPED_UNICODE) : null,
-            ]);
-            $results['inserted']++;
-
-            // 매핑된 회원 + board_type이 미션코드와 일치 + assignment_date가 있으면 자동 체크
-            if ($memberId && $boardType && $assignmentDate) {
-                $missionTypeId = getMissionTypeId($db, $boardType);
-                if ($missionTypeId) {
-                    saveCheck($db, $memberId, $assignmentDate, $missionTypeId, true, 'automation', "cafe:{$articleId}", null);
-                }
-            }
-        } catch (PDOException $e) {
-            $results['error']++;
-        }
-    }
-
-    $response = $results;
-    if (!empty($unmappedKeys)) {
-        $response['details']['unmapped_keys'] = $unmappedKeys;
-    }
+    $response = [
+        'inserted' => $r['inserted'],
+        'skipped'  => $r['skipped'],
+        'error'    => $r['error'],
+        'unmapped' => $r['unmapped'],
+    ];
+    if (!empty($r['unmapped_keys']))  $response['details']['unmapped_keys'] = $r['unmapped_keys'];
+    if (!empty($r['error_details']))  $response['details']['errors']        = $r['error_details'];
     jsonSuccess($response);
 }
 
