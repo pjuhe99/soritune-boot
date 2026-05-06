@@ -449,7 +449,7 @@ function handleLectureEventCreate($method) {
         'event_id'     => $eventId,
         'title'        => $title,
         'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        'zoom_status'  => $zoomResult['success'] ? 'ready' : 'pending',
+        'zoom_status'  => $zoomResult['success'] ? 'ready' : 'failed',
     ], '이벤트가 생성되었습니다.');
 }
 
