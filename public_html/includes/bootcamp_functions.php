@@ -116,105 +116,117 @@ function ensureMemberScoreFresh($db, $memberId) {
  */
 if (!function_exists('recalculateMemberScore')) {
 function recalculateMemberScore($db, $memberId, $adminId = null) {
-    $member = $db->prepare("SELECT id, cohort_id, stage_no FROM bootcamp_members WHERE id = ?");
-    $member->execute([$memberId]);
-    $member = $member->fetch();
-    if (!$member) return null;
-
-    $cohort = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
-    $cohort->execute([$member['cohort_id']]);
-    $cohortRow = $cohort->fetch();
-    $adaptationEnd = $cohortRow
-        ? date('Y-m-d', strtotime($cohortRow['start_date'] . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'))
-        : null;
-    $cohortEndDate = $cohortRow['end_date'] ?? null;
-
-    $codeToId = getMissionCodeToIdMap($db);
-
-    $checks = $db->prepare("
-        SELECT check_date, mission_type_id, status FROM member_mission_checks
-        WHERE member_id = ? AND check_date > ?
-        ORDER BY check_date
-    ");
-    $checks->execute([$memberId, $adaptationEnd ?? '1900-01-01']);
-    $byDate = [];
-    foreach ($checks->fetchAll() as $c) {
-        $byDate[$c['check_date']][(int)$c['mission_type_id']] = (int)$c['status'];
-    }
-
-    $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
-    $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $scoringEnd = ($cohortEndDate && $cohortEndDate < $yesterday) ? $cohortEndDate : $yesterday;
-    $rules = getPenaltyRules();
-    $penaltySum = 0;
-
-    $current = $scoringStart;
-    while ($current <= $scoringEnd) {
-        $missions = $byDate[$current] ?? [];
-        $dow = (int)date('w', strtotime($current));
-
-        foreach ($rules as $rule) {
-            if ($rule['weekday'] !== null && $dow !== $rule['weekday']) continue;
-
-            $passed = false;
-            foreach ($rule['codes'] as $code) {
-                $typeId = $codeToId[$code] ?? null;
-                if ($typeId && ($missions[$typeId] ?? 0) === 1) {
-                    $passed = true;
-                    break;
-                }
-            }
-            if (!$passed) {
-                $penaltySum += $rule['penalty'];
-            }
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $member = $db->prepare("SELECT id, cohort_id, stage_no FROM bootcamp_members WHERE id = ?");
+        $member->execute([$memberId]);
+        $member = $member->fetch();
+        if (!$member) {
+            if ($startedHere) $db->commit();
+            return null;
         }
 
-        $current = date('Y-m-d', strtotime($current . ' +1 day'));
-    }
+        $cohort = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
+        $cohort->execute([$member['cohort_id']]);
+        $cohortRow = $cohort->fetch();
+        $adaptationEnd = $cohortRow
+            ? date('Y-m-d', strtotime($cohortRow['start_date'] . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'))
+            : null;
+        $cohortEndDate = $cohortRow['end_date'] ?? null;
 
-    $revivals = $db->prepare("
-        SELECT SUM(after_score - before_score) AS revival_delta
-        FROM revival_logs WHERE member_id = ?
-    ");
-    $revivals->execute([$memberId]);
-    $revivalDelta = (int)($revivals->fetch()['revival_delta'] ?? 0);
+        $codeToId = getMissionCodeToIdMap($db);
 
-    $manuals = $db->prepare("
-        SELECT SUM(score_change) AS manual_delta
-        FROM score_logs WHERE member_id = ? AND reason_type = 'manual_adjustment'
-    ");
-    $manuals->execute([$memberId]);
-    $manualDelta = (int)($manuals->fetch()['manual_delta'] ?? 0);
+        $checks = $db->prepare("
+            SELECT check_date, mission_type_id, status FROM member_mission_checks
+            WHERE member_id = ? AND check_date > ?
+            ORDER BY check_date
+        ");
+        $checks->execute([$memberId, $adaptationEnd ?? '1900-01-01']);
+        $byDate = [];
+        foreach ($checks->fetchAll() as $c) {
+            $byDate[$c['check_date']][(int)$c['mission_type_id']] = (int)$c['status'];
+        }
 
-    $finalScore = SCORE_START + $penaltySum + $revivalDelta + $manualDelta;
+        $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        $scoringEnd = ($cohortEndDate && $cohortEndDate < $yesterday) ? $cohortEndDate : $yesterday;
+        $rules = getPenaltyRules();
+        $penaltySum = 0;
 
-    $current = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
-    $current->execute([$memberId]);
-    $currentRow = $current->fetch();
-    $beforeScore = $currentRow ? (int)$currentRow['current_score'] : 0;
+        $current = $scoringStart;
+        while ($current <= $scoringEnd) {
+            $missions = $byDate[$current] ?? [];
+            $dow = (int)date('w', strtotime($current));
 
-    $db->prepare("
-        INSERT INTO member_scores (member_id, current_score, last_calculated_at)
-        VALUES (?, ?, NOW())
-        ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
-    ")->execute([$memberId, $finalScore]);
+            foreach ($rules as $rule) {
+                if ($rule['weekday'] !== null && $dow !== $rule['weekday']) continue;
 
-    if ($finalScore <= SCORE_OUT_THRESHOLD) {
-        $db->prepare("UPDATE bootcamp_members SET member_status = 'out_of_group_management' WHERE id = ? AND member_status = 'active'")
-           ->execute([$memberId]);
-    } else {
-        $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ? AND member_status = 'out_of_group_management'")
-           ->execute([$memberId]);
-    }
+                $passed = false;
+                foreach ($rule['codes'] as $code) {
+                    $typeId = $codeToId[$code] ?? null;
+                    if ($typeId && ($missions[$typeId] ?? 0) === 1) {
+                        $passed = true;
+                        break;
+                    }
+                }
+                if (!$passed) {
+                    $penaltySum += $rule['penalty'];
+                }
+            }
 
-    if ($finalScore !== $beforeScore) {
+            $current = date('Y-m-d', strtotime($current . ' +1 day'));
+        }
+
+        $revivals = $db->prepare("
+            SELECT SUM(after_score - before_score) AS revival_delta
+            FROM revival_logs WHERE member_id = ?
+        ");
+        $revivals->execute([$memberId]);
+        $revivalDelta = (int)($revivals->fetch()['revival_delta'] ?? 0);
+
+        $manuals = $db->prepare("
+            SELECT SUM(score_change) AS manual_delta
+            FROM score_logs WHERE member_id = ? AND reason_type = 'manual_adjustment'
+        ");
+        $manuals->execute([$memberId]);
+        $manualDelta = (int)($manuals->fetch()['manual_delta'] ?? 0);
+
+        $finalScore = SCORE_START + $penaltySum + $revivalDelta + $manualDelta;
+
+        $current = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
+        $current->execute([$memberId]);
+        $currentRow = $current->fetch();
+        $beforeScore = $currentRow ? (int)$currentRow['current_score'] : 0;
+
         $db->prepare("
-            INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
-            VALUES (?, ?, ?, ?, 'recalculation', '전체 재계산', ?)
-        ")->execute([$memberId, $finalScore - $beforeScore, $beforeScore, $finalScore, $adminId]);
-    }
+            INSERT INTO member_scores (member_id, current_score, last_calculated_at)
+            VALUES (?, ?, NOW())
+            ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
+        ")->execute([$memberId, $finalScore]);
 
-    return $finalScore;
+        if ($finalScore <= SCORE_OUT_THRESHOLD) {
+            $db->prepare("UPDATE bootcamp_members SET member_status = 'out_of_group_management' WHERE id = ? AND member_status = 'active'")
+               ->execute([$memberId]);
+        } else {
+            $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ? AND member_status = 'out_of_group_management'")
+               ->execute([$memberId]);
+        }
+
+        if ($finalScore !== $beforeScore) {
+            $db->prepare("
+                INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
+                VALUES (?, ?, ?, ?, 'recalculation', '전체 재계산', ?)
+            ")->execute([$memberId, $finalScore - $beforeScore, $beforeScore, $finalScore, $adminId]);
+        }
+
+        if ($startedHere) $db->commit();
+        return $finalScore;
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
+    }
 }
 }
 
@@ -223,55 +235,67 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
  */
 if (!function_exists('saveCheck')) {
 function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source, $sourceRef, $adminId, $skipRecalc = false) {
-    $existing = $db->prepare("
-        SELECT id, status, source FROM member_mission_checks
-        WHERE member_id = ? AND check_date = ? AND mission_type_id = ?
-    ");
-    $existing->execute([$memberId, $checkDate, $missionTypeId]);
-    $existingRow = $existing->fetch();
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $existing = $db->prepare("
+            SELECT id, status, source FROM member_mission_checks
+            WHERE member_id = ? AND check_date = ? AND mission_type_id = ?
+        ");
+        $existing->execute([$memberId, $checkDate, $missionTypeId]);
+        $existingRow = $existing->fetch();
 
-    if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation' && (int)$existingRow['status'] === 1) {
-        return ['action' => 'skipped', 'reason' => 'manual check already completed'];
-    }
-
-    $member = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
-    $member->execute([$memberId]);
-    $memberRow = $member->fetch();
-    if (!$memberRow) return ['action' => 'error', 'reason' => 'member not found'];
-
-    $statusVal = $status ? 1 : 0;
-    $prevStatus = $existingRow ? (int)$existingRow['status'] : null;
-
-    if ($existingRow) {
-        $db->prepare("
-            UPDATE member_mission_checks
-            SET status = ?, source = ?, source_ref = ?, updated_by = ?, updated_at = NOW()
-            WHERE id = ?
-        ")->execute([$statusVal, $source, $sourceRef, $adminId, $existingRow['id']]);
-        $action = ((int)$existingRow['status'] !== $statusVal) ? 'updated' : 'unchanged';
-    } else {
-        $db->prepare("
-            INSERT INTO member_mission_checks
-                (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ")->execute([$memberId, $memberRow['cohort_id'], $memberRow['group_id'], $checkDate, $missionTypeId, $statusVal, $source, $sourceRef, $adminId]);
-        $action = 'created';
-    }
-
-    if ($action !== 'unchanged' && !$skipRecalc) {
-        recalculateMemberScore($db, $memberId, $adminId);
-    }
-
-    // 코인 처리 (score와 독립, skipRecalc 무관하게 항상 실행)
-    if ($action !== 'unchanged' && function_exists('processCoinForCheck')) {
-        $codeMap = array_flip(getMissionCodeToIdMap($db));
-        $mCode = $codeMap[$missionTypeId] ?? null;
-        if ($mCode) {
-            processCoinForCheck($db, $memberId, $checkDate, $mCode, $statusVal, $prevStatus, $adminId);
+        if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation' && (int)$existingRow['status'] === 1) {
+            if ($startedHere) $db->commit();
+            return ['action' => 'skipped', 'reason' => 'manual check already completed'];
         }
-    }
 
-    return ['action' => $action, 'prev_status' => $prevStatus];
+        $member = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
+        $member->execute([$memberId]);
+        $memberRow = $member->fetch();
+        if (!$memberRow) {
+            if ($startedHere) $db->commit();
+            return ['action' => 'error', 'reason' => 'member not found'];
+        }
+
+        $statusVal = $status ? 1 : 0;
+        $prevStatus = $existingRow ? (int)$existingRow['status'] : null;
+
+        if ($existingRow) {
+            $db->prepare("
+                UPDATE member_mission_checks
+                SET status = ?, source = ?, source_ref = ?, updated_by = ?, updated_at = NOW()
+                WHERE id = ?
+            ")->execute([$statusVal, $source, $sourceRef, $adminId, $existingRow['id']]);
+            $action = ((int)$existingRow['status'] !== $statusVal) ? 'updated' : 'unchanged';
+        } else {
+            $db->prepare("
+                INSERT INTO member_mission_checks
+                    (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([$memberId, $memberRow['cohort_id'], $memberRow['group_id'], $checkDate, $missionTypeId, $statusVal, $source, $sourceRef, $adminId]);
+            $action = 'created';
+        }
+
+        if ($action !== 'unchanged' && !$skipRecalc) {
+            recalculateMemberScore($db, $memberId, $adminId);
+        }
+
+        if ($action !== 'unchanged' && function_exists('processCoinForCheck')) {
+            $codeMap = array_flip(getMissionCodeToIdMap($db));
+            $mCode = $codeMap[$missionTypeId] ?? null;
+            if ($mCode) {
+                processCoinForCheck($db, $memberId, $checkDate, $mCode, $statusVal, $prevStatus, $adminId);
+            }
+        }
+
+        if ($startedHere) $db->commit();
+        return ['action' => $action, 'prev_status' => $prevStatus];
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
+    }
 }
 }
 
@@ -301,4 +325,41 @@ function resolveMemberByKey($db, $cafeKey) {
     $stmt->execute([$cafeKey]);
     $row = $stmt->fetch();
     return $row ? (int)$row['id'] : null;
+}
+
+/**
+ * 수동 점수 조정 — score_logs INSERT + member_scores UPSERT 를 tx 로 묶음.
+ *
+ * @return array { before_score: int, after_score: int }
+ */
+if (!function_exists('adjustMemberScore')) {
+function adjustMemberScore($db, int $memberId, int $scoreChange, ?string $reasonDetail, ?int $adminId): array {
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
+        $stmt->execute([$memberId]);
+        $row = $stmt->fetch();
+        $beforeScore = $row ? (int)$row['current_score'] : 0;
+        $afterScore = $beforeScore + $scoreChange;
+
+        $db->prepare("
+            INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
+            VALUES (?, ?, ?, ?, 'manual_adjustment', ?, ?)
+        ")->execute([$memberId, $scoreChange, $beforeScore, $afterScore, $reasonDetail, $adminId]);
+
+        $db->prepare("
+            INSERT INTO member_scores (member_id, current_score, last_calculated_at)
+            VALUES (?, ?, NOW())
+            ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
+        ")->execute([$memberId, $afterScore]);
+
+        if ($startedHere) $db->commit();
+        return ['before_score' => $beforeScore, 'after_score' => $afterScore];
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
+    }
+}
 }

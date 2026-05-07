@@ -7,6 +7,29 @@ const MemberApp = (() => {
     let root = null;
     let member = null;
 
+    // returnTo 화이트리스트 — open redirect 차단
+    function validateReturnTo(returnTo) {
+        if (typeof returnTo !== 'string' || !returnTo) return null;
+        try {
+            // URL 생성자로 정규화 — path traversal (..) 와 percent-encoding 도 처리
+            const url = new URL(returnTo, window.location.origin);
+            // same-origin 만 허용
+            if (url.origin !== window.location.origin) return null;
+            // 정규화된 pathname 이 /qr/ 로 시작하는지
+            if (!url.pathname.startsWith('/qr/')) return null;
+            // 정규화된 형태 반환 (path traversal 제거됨)
+            return url.pathname + url.search + url.hash;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function consumeReturnTo() {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('returnTo');
+        return validateReturnTo(raw);
+    }
+
     // ── Init ──
     async function init() {
         root = document.getElementById('member-root');
@@ -20,6 +43,12 @@ const MemberApp = (() => {
             if (member.needs_nickname) {
                 showNicknameSetup();
             } else {
+                // 이미 로그인된 상태에서 returnTo 있으면 즉시 이동
+                const rt = consumeReturnTo();
+                if (rt) {
+                    window.location.href = rt;
+                    return;
+                }
                 showDashboard();
             }
         } else {
@@ -73,6 +102,11 @@ const MemberApp = (() => {
                 if (member.needs_nickname) {
                     showNicknameSetup();
                 } else {
+                    const rt = consumeReturnTo();
+                    if (rt) {
+                        window.location.href = rt;
+                        return;
+                    }
                     showDashboard();
                 }
             }
@@ -127,6 +161,11 @@ const MemberApp = (() => {
                 member.nickname = r.nickname;
                 member.needs_nickname = false;
                 Toast.success(r.message);
+                const rt = consumeReturnTo();
+                if (rt) {
+                    window.location.href = rt;
+                    return;
+                }
                 showDashboard();
             }
         };
