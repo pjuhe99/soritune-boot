@@ -33,26 +33,11 @@ function handleScoreAdjust($method) {
     if (!$memberId || !$scoreChange) jsonError('member_id, score_change 필요');
 
     $db = getDB();
-    $stmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
-    $stmt->execute([$memberId]);
-    $row = $stmt->fetch();
-    $beforeScore = $row ? (int)$row['current_score'] : 0;
-    $afterScore = $beforeScore + $scoreChange;
-
-    $db->prepare("
-        INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
-        VALUES (?, ?, ?, ?, 'manual_adjustment', ?, ?)
-    ")->execute([$memberId, $scoreChange, $beforeScore, $afterScore, $reasonDetail, $admin['admin_id']]);
-
-    $db->prepare("
-        INSERT INTO member_scores (member_id, current_score, last_calculated_at)
-        VALUES (?, ?, NOW())
-        ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
-    ")->execute([$memberId, $afterScore]);
+    $result = adjustMemberScore($db, $memberId, $scoreChange, $reasonDetail, (int)$admin['admin_id']);
 
     jsonSuccess([
-        'before_score' => $beforeScore,
-        'after_score' => $afterScore,
+        'before_score' => $result['before_score'],
+        'after_score' => $result['after_score'],
     ], '점수가 조정되었습니다.');
 }
 

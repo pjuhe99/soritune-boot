@@ -326,3 +326,40 @@ function resolveMemberByKey($db, $cafeKey) {
     $row = $stmt->fetch();
     return $row ? (int)$row['id'] : null;
 }
+
+/**
+ * 수동 점수 조정 — score_logs INSERT + member_scores UPSERT 를 tx 로 묶음.
+ *
+ * @return array { before_score: int, after_score: int }
+ */
+if (!function_exists('adjustMemberScore')) {
+function adjustMemberScore($db, int $memberId, int $scoreChange, ?string $reasonDetail, ?int $adminId): array {
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $stmt = $db->prepare("SELECT current_score FROM member_scores WHERE member_id = ?");
+        $stmt->execute([$memberId]);
+        $row = $stmt->fetch();
+        $beforeScore = $row ? (int)$row['current_score'] : 0;
+        $afterScore = $beforeScore + $scoreChange;
+
+        $db->prepare("
+            INSERT INTO score_logs (member_id, score_change, before_score, after_score, reason_type, reason_detail, created_by)
+            VALUES (?, ?, ?, ?, 'manual_adjustment', ?, ?)
+        ")->execute([$memberId, $scoreChange, $beforeScore, $afterScore, $reasonDetail, $adminId]);
+
+        $db->prepare("
+            INSERT INTO member_scores (member_id, current_score, last_calculated_at)
+            VALUES (?, ?, NOW())
+            ON DUPLICATE KEY UPDATE current_score = VALUES(current_score), last_calculated_at = NOW()
+        ")->execute([$memberId, $afterScore]);
+
+        if ($startedHere) $db->commit();
+        return ['before_score' => $beforeScore, 'after_score' => $afterScore];
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
+    }
+}
+}
