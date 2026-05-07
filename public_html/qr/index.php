@@ -227,6 +227,13 @@ if (!$code) {
                 headers: options.body ? { 'Content-Type': 'application/json' } : {},
                 body: options.body ? JSON.stringify(options.body) : undefined,
             });
+            if (resp.status === 401) {
+                // 회원 세션 없음 → 로그인 페이지로 (현재 URL 보존)
+                const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = '/?returnTo=' + returnTo;
+                // pending Promise — 페이지 전환됨
+                return new Promise(() => {});
+            }
             return resp.json();
         }
 
