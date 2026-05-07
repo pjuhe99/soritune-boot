@@ -5,20 +5,14 @@
  */
 
 function handleAttendanceStats() {
-    requireAdmin();
+    $admin = requireAdmin();
+    $explicit = (int)($_GET['cohort_id'] ?? 0);
+    $cohortId = resolveAdminCohortId($explicit ?: null, $admin, false);
+    if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
     $db = getDB();
 
-    $cohortId = (int)($_GET['cohort_id'] ?? 0);
     $dateFrom = $_GET['date_from'] ?? date('Y-m-d', strtotime('-30 days'));
     $dateTo   = $_GET['date_to']   ?? date('Y-m-d');
-
-    // cohort_id 미지정 시 활성 기수 사용
-    if (!$cohortId) {
-        $stmt = $db->query("SELECT id FROM cohorts WHERE is_active = 1 ORDER BY start_date DESC LIMIT 1");
-        $row = $stmt->fetch();
-        if ($row) $cohortId = (int)$row['id'];
-        if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
-    }
 
     // 기수 활성 멤버 수 (출석률 분모)
     $totalStmt = $db->prepare("

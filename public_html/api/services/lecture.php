@@ -96,10 +96,11 @@ function handleLectureScheduleCreate($method) {
     if (!$coach) jsonError('유효한 코치를 찾을 수 없습니다.');
 
     // ── cohort 존재 + 기간 확인 ──
-    $cohortRow = $db->prepare("SELECT * FROM cohorts WHERE id = ? AND is_active = 1");
+    $cohortRow = $db->prepare("SELECT *, is_active FROM cohorts WHERE id = ?");
     $cohortRow->execute([$cohortId]);
     $cohort = $cohortRow->fetch();
     if (!$cohort) jsonError('유효한 기수를 찾을 수 없습니다.');
+    if (!$cohort['is_active']) jsonError("'{$cohort['cohort']}' 는 비활성 기수입니다. 어드민에서 활성화 후 다시 시도해주세요.");
 
     $cohortStart = $cohort['start_date'];
     $cohortEnd   = $cohort['end_date'];
@@ -396,9 +397,11 @@ function handleLectureEventCreate($method) {
     if (!$coach) jsonError('유효한 코치를 찾을 수 없습니다.');
 
     // ── cohort 확인 ──
-    $stmt = $db->prepare("SELECT * FROM cohorts WHERE id = ? AND is_active = 1");
+    $stmt = $db->prepare("SELECT *, is_active FROM cohorts WHERE id = ?");
     $stmt->execute([$cohortId]);
-    if (!$stmt->fetch()) jsonError('유효한 기수를 찾을 수 없습니다.');
+    $cohort = $stmt->fetch();
+    if (!$cohort) jsonError('유효한 기수를 찾을 수 없습니다.');
+    if (!$cohort['is_active']) jsonError("'{$cohort['cohort']}' 는 비활성 기수입니다. 어드민에서 활성화 후 다시 시도해주세요.");
 
     // ── host 중복 검사 (lecture_sessions + lecture_events 둘 다) ──
     $startTimeFull = $startTime . ':00';

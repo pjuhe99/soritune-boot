@@ -25,11 +25,17 @@ case 'login':
     if (strlen($phone) < 7 || strlen($phone) > 15) jsonError('올바른 휴대폰번호를 입력해주세요. (7~15자리)');
 
     $db = getDB();
-    $member = findMemberByPhone($db, $phone);
+    $rows = findMemberAccessibleRows($db, $phone);
+    if (!$rows) jsonError('등록되지 않은 휴대폰번호입니다.');
 
-    if (!$member) jsonError('등록되지 않은 휴대폰번호입니다.');
+    $member = $rows[0]; // cohort_id DESC 정렬, 최신 cohort 가 default
+    $accessible = array_map(fn($r) => [
+        'member_id'    => (int)$r['id'],
+        'cohort_id'    => (int)$r['cohort_id'],
+        'cohort_label' => $r['cohort'],
+    ], $rows);
 
-    loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
+    loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname'], $accessible);
 
     // 조장/부조장이면 admin 세션도 동시 생성 (조장 페이지에서 별도 로그인 불필요)
     if (in_array($member['member_role'] ?? '', ['leader', 'subleader'])) {
@@ -75,8 +81,23 @@ case 'login':
             'needs_nickname' => !hasNickname($member['nickname']),
             'member_role' => $member['member_role'] ?? 'member',
             'current_reward_group' => getCurrentRewardGroupForMember($db, $member['id']),
+            'accessible_cohorts' => $accessible,
         ],
     ], '로그인 성공');
+    break;
+
+case 'switch_cohort':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireMember();
+    $input = getJsonInput();
+    $cohortId = (int)($input['cohort_id'] ?? 0);
+    if (!$cohortId) jsonError('cohort_id 필요');
+
+    if (!swapMemberCohort($cohortId)) {
+        jsonError('해당 기수로 전환할 수 없습니다.', 403);
+    }
+    $member = getMemberSession();
+    jsonSuccess(['member' => $member], '기수가 전환되었습니다.');
     break;
 
 case 'check_session':
@@ -125,6 +146,7 @@ case 'check_session':
                     'needs_nickname' => !hasNickname($member['nickname']),
                     'member_role' => $member['member_role'] ?? 'member',
                     'current_reward_group' => getCurrentRewardGroupForMember($db, (int)$member['id']),
+                    'accessible_cohorts' => $s['accessible_cohorts'] ?? [],
                 ],
             ]);
         }

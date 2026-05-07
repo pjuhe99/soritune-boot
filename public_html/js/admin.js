@@ -152,13 +152,13 @@ const AdminApp = (() => {
                         <span class="role-label">${App.esc(roleLabel)}</span>
                     </div>
                     <div class="admin-header-right">
+                        <button class="cohort-chip-host" id="btn-admin-cohort"></button>
                         <span class="admin-name">${App.esc(admin.admin_name)}</span>
                         ${role === 'leader' ? '<a href="/" class="btn-member-page" id="btn-goto-member">내 회원페이지</a>' : ''}
                         ${role !== 'leader' ? '<button class="btn-change-pw" id="btn-change-pw">비밀번호 변경</button>' : ''}
                         <button class="btn-logout" id="btn-logout">로그아웃</button>
                     </div>
                 </div>
-                ${isOperation() ? '<div class="cohort-bar" id="cohort-bar"></div>' : ''}
                 <div class="admin-content">
                     <div class="section" id="sec-weekly"></div>
                     <div class="dashboard-card" id="card-tasks">
@@ -363,9 +363,7 @@ const AdminApp = (() => {
 
         const tabCtrl = App.initTabs(document.getElementById('sec-tabs'));
 
-        if (isOperation()) {
-            await renderCohortBar();
-        }
+        await renderCohortBar();
 
         await Promise.all([
             loadWeeklyGoal(),
@@ -651,25 +649,31 @@ const AdminApp = (() => {
         tabCtrl.activateFromHash();
     }
 
-    // ── Cohort Bar (Operation) ──
+    // ── Cohort Chip (모든 admin role 헤더 우측) ──
     async function renderCohortBar() {
-        const r = await App.get('/api/admin.php?action=cohort_list');
+        const container = document.getElementById('btn-admin-cohort');
+        if (!container) return;
+
+        const r = await App.get('/api/bootcamp.php?action=cohorts');
         if (!r.success) return;
-        const bar = document.getElementById('cohort-bar');
-        const opts = r.cohorts.map(c => `<option value="${App.esc(c)}" ${c === r.current_cohort ? 'selected' : ''}>${App.esc(c)}</option>`).join('');
-        bar.innerHTML = `
-            <span>현재 기수:</span>
-            <select id="cohort-select">${opts}</select>
-        `;
-        document.getElementById('cohort-select').onchange = async (e) => {
-            App.showLoading();
-            const res = await App.post('/api/admin.php?action=change_cohort', { cohort: e.target.value });
-            App.hideLoading();
-            if (res.success) {
-                Toast.success(res.message);
-                showDashboard();
-            }
-        };
+        const activeCohorts = (r.cohorts || []).filter(c => parseInt(c.is_active) === 1);
+
+        const viewId = admin.admin_view_cohort_id ?? null;
+        const currentLabel = viewId
+            ? ((activeCohorts.find(c => parseInt(c.id) === parseInt(viewId)) || {}).cohort || '전체')
+            : '전체';
+
+        const options = [
+            ...activeCohorts.map(c => ({cohort_id: parseInt(c.id), label: c.cohort})),
+            {cohort_id: null, label: '전체'},
+        ];
+
+        CohortChip.attach({
+            container,
+            currentLabel,
+            options,
+            apiUrl: '/api/admin.php?action=switch_cohort',
+        });
     }
 
     // ── Weekly Goal ──
@@ -1822,7 +1826,9 @@ const AdminApp = (() => {
                                 <td style="white-space:nowrap">${c.start_date}</td>
                                 <td style="white-space:nowrap">${c.end_date}</td>
                                 <td>${Number(c.is_active) === 1 ? '<span class="badge badge-success">활성</span>' : '<span class="badge">비활성</span>'}</td>
-                                <td>${c.cohort === r.current_cohort ? '<span class="badge badge-success">현재</span>' : ''}</td>
+                                <td>${c.cohort === r.current_cohort
+                                    ? '<span class="badge badge-success">현재 운영 기수</span>'
+                                    : `<button class="btn btn-sm set-current-cohort" data-cohort="${App.esc(c.cohort)}">운영 기수로 설정</button>`}</td>
                                 <td class="actions">
                                     <button class="btn-icon" onclick="AdminApp._editCohort(${c.id})">수정</button>
                                     ${Number(c.is_active) === 1
@@ -1837,6 +1843,19 @@ const AdminApp = (() => {
         `;
         if (!details.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">등록된 기수가 없습니다.</td></tr>';
         document.getElementById('btn-add-cohort').onclick = () => showCohortForm();
+        document.querySelectorAll('.set-current-cohort').forEach(btn => {
+            btn.onclick = async () => {
+                const cohort = btn.dataset.cohort;
+                if (!await App.confirm(`'${cohort}' 를 운영 기수로 설정하시겠습니까?\n(시스템 default. 신규 가입/cron 등 기준)`)) return;
+                App.showLoading();
+                const r = await App.post('/api/admin.php?action=change_cohort', { cohort });
+                App.hideLoading();
+                if (r.success) {
+                    Toast.success(r.message || '설정되었습니다.');
+                    location.reload();
+                }
+            };
+        });
     }
 
     function showCohortForm(data = {}) {

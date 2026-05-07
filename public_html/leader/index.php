@@ -22,6 +22,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="/js/memberTable.js<?= v('/js/memberTable.js') ?>"></script>
     <script src="/js/bootcamp.js<?= v('/js/bootcamp.js') ?>"></script>
+    <script src="/js/cohort-chip.js<?= v('/js/cohort-chip.js') ?>"></script>
     <script src="/js/admin.js<?= v('/js/admin.js') ?>"></script>
     <script src="/js/coin.js<?= v('/js/coin.js') ?>"></script>
     <script>AdminApp.init();</script>

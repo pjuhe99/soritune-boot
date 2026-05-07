@@ -5,26 +5,11 @@
  */
 
 function handleDashboardStats() {
-    requireAdmin();
-    $cohortId = (int)($_GET['cohort_id'] ?? 0);
+    $admin = requireAdmin();
+    $explicit = (int)($_GET['cohort_id'] ?? 0);
+    $cohortId = resolveAdminCohortId($explicit ?: null, $admin, false);
+    if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
     $db = getDB();
-
-    // cohort_id가 없으면 현재 세션 기수 또는 활성 기수 사용
-    if (!$cohortId) {
-        $currentCohort = getSetting('current_cohort');
-        if ($currentCohort) {
-            $stmt = $db->prepare("SELECT id FROM cohorts WHERE cohort = ? LIMIT 1");
-            $stmt->execute([$currentCohort]);
-            $row = $stmt->fetch();
-            if ($row) $cohortId = (int)$row['id'];
-        }
-        if (!$cohortId) {
-            $stmt = $db->query("SELECT id FROM cohorts WHERE is_active = 1 ORDER BY start_date DESC LIMIT 1");
-            $row = $stmt->fetch();
-            if ($row) $cohortId = (int)$row['id'];
-        }
-        if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
-    }
 
     // 1. 기수 정보
     $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
