@@ -232,6 +232,7 @@ case 'verify':
 
 // ── 조 목록 (공개, 유효 세션 필요) ──
 case 'groups':
+    requireMember();
     $code = trim($_GET['code'] ?? '');
     if (!$code) jsonError('code가 필요합니다.');
 
@@ -253,6 +254,7 @@ case 'groups':
 
 // ── 조원 목록 (공개, 유효 세션 필요) ──
 case 'group_members':
+    requireMember();
     $code = trim($_GET['code'] ?? '');
     $groupId = (int)($_GET['group_id'] ?? 0);
     if (!$code || !$groupId) jsonError('code와 group_id가 필요합니다.');
