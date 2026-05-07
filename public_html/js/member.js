@@ -7,6 +7,24 @@ const MemberApp = (() => {
     let root = null;
     let member = null;
 
+    // returnTo 화이트리스트 — open redirect 차단
+    function validateReturnTo(returnTo) {
+        if (typeof returnTo !== 'string' || !returnTo) return null;
+        // 절대 URL / protocol-relative / 다른 호스트 차단
+        if (returnTo.startsWith('//') || returnTo.startsWith('http://') || returnTo.startsWith('https://')) {
+            return null;
+        }
+        // 허용 prefix: /qr/ 만
+        if (!returnTo.startsWith('/qr/')) return null;
+        return returnTo;
+    }
+
+    function consumeReturnTo() {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('returnTo');
+        return validateReturnTo(raw);
+    }
+
     // ── Init ──
     async function init() {
         root = document.getElementById('member-root');
@@ -20,6 +38,12 @@ const MemberApp = (() => {
             if (member.needs_nickname) {
                 showNicknameSetup();
             } else {
+                // 이미 로그인된 상태에서 returnTo 있으면 즉시 이동
+                const rt = consumeReturnTo();
+                if (rt) {
+                    window.location.href = rt;
+                    return;
+                }
                 showDashboard();
             }
         } else {
@@ -73,6 +97,11 @@ const MemberApp = (() => {
                 if (member.needs_nickname) {
                     showNicknameSetup();
                 } else {
+                    const rt = consumeReturnTo();
+                    if (rt) {
+                        window.location.href = rt;
+                        return;
+                    }
                     showDashboard();
                 }
             }
@@ -127,6 +156,11 @@ const MemberApp = (() => {
                 member.nickname = r.nickname;
                 member.needs_nickname = false;
                 Toast.success(r.message);
+                const rt = consumeReturnTo();
+                if (rt) {
+                    window.location.href = rt;
+                    return;
+                }
                 showDashboard();
             }
         };
