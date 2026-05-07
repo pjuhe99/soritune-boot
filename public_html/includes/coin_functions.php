@@ -82,41 +82,63 @@ function getOrCreateMemberCycleCoins($db, $memberId, $cycleId) {
  * @return array ['before' => int, 'after' => int, 'applied' => int]
  */
 function applyCoinChange($db, $memberId, $cycleId, $coinChange, $reasonType, $reasonDetail = null, $adminId = null) {
-    $mcc = getOrCreateMemberCycleCoins($db, $memberId, $cycleId);
-    $cycleStmt = $db->prepare("SELECT max_coin FROM coin_cycles WHERE id = ?");
-    $cycleStmt->execute([$cycleId]);
-    $cycle = $cycleStmt->fetch();
-    $maxCoin = $cycle ? (int)$cycle['max_coin'] : COIN_CYCLE_MAX;
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $mcc = getOrCreateMemberCycleCoins($db, $memberId, $cycleId);
+        $cycleStmt = $db->prepare("SELECT max_coin FROM coin_cycles WHERE id = ?");
+        $cycleStmt->execute([$cycleId]);
+        $cycle = $cycleStmt->fetch();
+        $maxCoin = $cycle ? (int)$cycle['max_coin'] : COIN_CYCLE_MAX;
 
-    $beforeEarned = (int)$mcc['earned_coin'];
-    $newEarned = $beforeEarned + $coinChange;
+        $beforeEarned = (int)$mcc['earned_coin'];
 
-    // 양수 방향(적립)일 때만 캡 적용
-    if ($coinChange > 0 && $newEarned > $maxCoin) {
-        $coinChange = max(0, $maxCoin - $beforeEarned);
-        $newEarned = $beforeEarned + $coinChange;
+        if ($coinChange === 0) {
+            if ($startedHere) $db->commit();
+            return ['before' => $beforeEarned, 'after' => $beforeEarned, 'applied' => 0];
+        }
+
+        // Atomic UPDATE: 양수는 cap 적용, 음수는 cap 무관
+        if ($coinChange > 0) {
+            $db->prepare("
+                UPDATE member_cycle_coins
+                SET earned_coin = LEAST(earned_coin + ?, ?)
+                WHERE member_id = ? AND cycle_id = ?
+            ")->execute([$coinChange, $maxCoin, $memberId, $cycleId]);
+        } else {
+            $db->prepare("
+                UPDATE member_cycle_coins
+                SET earned_coin = earned_coin + ?
+                WHERE member_id = ? AND cycle_id = ?
+            ")->execute([$coinChange, $memberId, $cycleId]);
+        }
+
+        // 적용 후 실제 값 재조회 (race 시 약간 부정확할 수 있으나 balance 자체는 atomic)
+        $stmt = $db->prepare("SELECT earned_coin FROM member_cycle_coins WHERE member_id = ? AND cycle_id = ?");
+        $stmt->execute([$memberId, $cycleId]);
+        $newEarned = (int)$stmt->fetchColumn();
+        $applied = $newEarned - $beforeEarned;
+
+        // applied=0 이면 (cap 가득찬 상태에서 양수 시도) coin_logs 도 skip
+        if ($applied === 0) {
+            if ($startedHere) $db->commit();
+            return ['before' => $beforeEarned, 'after' => $beforeEarned, 'applied' => 0];
+        }
+
+        $db->prepare("
+            INSERT INTO coin_logs (member_id, cycle_id, coin_change, before_coin, after_coin, reason_type, reason_detail, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ")->execute([$memberId, $cycleId, $applied, $beforeEarned, $newEarned, $reasonType, $reasonDetail, $adminId]);
+
+        syncMemberCoinBalance($db, $memberId);
+
+        if ($startedHere) $db->commit();
+        return ['before' => $beforeEarned, 'after' => $newEarned, 'applied' => $applied];
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
     }
-
-    // 변동이 0이면 skip
-    if ($coinChange === 0) {
-        return ['before' => $beforeEarned, 'after' => $beforeEarned, 'applied' => 0];
-    }
-
-    // member_cycle_coins 업데이트
-    $db->prepare("
-        UPDATE member_cycle_coins SET earned_coin = ? WHERE member_id = ? AND cycle_id = ?
-    ")->execute([$newEarned, $memberId, $cycleId]);
-
-    // coin_logs 기록
-    $db->prepare("
-        INSERT INTO coin_logs (member_id, cycle_id, coin_change, before_coin, after_coin, reason_type, reason_detail, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ")->execute([$memberId, $cycleId, $coinChange, $beforeEarned, $newEarned, $reasonType, $reasonDetail, $adminId]);
-
-    // member_coin_balances 동기화 (전체 cycle 합산)
-    syncMemberCoinBalance($db, $memberId);
-
-    return ['before' => $beforeEarned, 'after' => $newEarned, 'applied' => $coinChange];
 }
 
 /**
