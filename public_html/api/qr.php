@@ -277,6 +277,7 @@ case 'group_members':
 case 'record':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
 
+    $s = requireMember();   // ← 회원 세션 강제
     $input = getJsonInput();
     $code = trim($input['session_code'] ?? '');
     $memberId = (int)($input['member_id'] ?? 0);
@@ -288,64 +289,24 @@ case 'record':
         jsonError('세션이 만료되었거나 종료되었습니다.');
     }
 
-    // 멤버 확인
-    $memberStmt = $db->prepare("
-        SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
-        WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
-    ");
-    $memberStmt->execute([$memberId, $session['cohort_id']]);
-    $member = $memberStmt->fetch();
-    if (!$member) jsonError('유효하지 않은 회원입니다.');
+    require_once __DIR__ . '/../includes/qr_actions.php';
 
-    // 중복 출석 체크
-    $dupStmt = $db->prepare("
-        SELECT id FROM qr_attendance WHERE qr_session_id = ? AND member_id = ?
-    ");
-    $dupStmt->execute([$session['id'], $memberId]);
-    $already = (bool)$dupStmt->fetch();
+    $result = qrRecordAttendance(
+        $db,
+        $session,
+        $memberId,
+        (int)$s['member_id'],
+        getClientIP(),
+        $_SERVER['HTTP_USER_AGENT'] ?? ''
+    );
 
-    if (!$already) {
-        // qr_attendance 기록
-        $db->prepare("
-            INSERT IGNORE INTO qr_attendance (qr_session_id, member_id, group_id, ip_address)
-            VALUES (?, ?, ?, ?)
-        ")->execute([$session['id'], $memberId, $member['group_id'], getClientIP()]);
-
-        // 복습스터디 연결 여부 확인
-        $studyLink = $db->prepare("SELECT id, study_date FROM study_sessions WHERE qr_session_id = ?");
-        $studyLink->execute([$session['id']]);
-        $studyRow = $studyLink->fetch();
-
-        if ($studyRow) {
-            // 복습스터디 출석 → bookclub_join 체크
-            $missionCode = 'bookclub_join';
-            $checkDate = $studyRow['study_date'];
-            $sourceRef = 'study_qr:' . $studyRow['id'];
-        } else {
-            // 일반 줌 출석 → zoom_daily 체크
-            $missionCode = 'zoom_daily';
-            $checkDate = date('Y-m-d');
-            $sourceRef = 'qr_session:' . $code;
-        }
-
-        $missionTypeId = getMissionTypeId($db, $missionCode);
-        if ($missionTypeId) {
-            saveCheck(
-                $db,
-                $memberId,
-                $checkDate,
-                $missionTypeId,
-                1,                              // status = pass
-                'manual',                       // source (QR은 manual 취급, automation보다 우선)
-                $sourceRef,
-                $session['admin_id'] ? (int)$session['admin_id'] : null
-            );
-        }
+    if (!$result['ok']) {
+        jsonError($result['error'], $result['http_status'] ?? 400);
     }
 
     jsonSuccess([
-        'member_name' => $member['nickname'],
-        'already'     => $already,
+        'member_name' => $result['member_name'],
+        'already'     => $result['already'],
     ]);
     break;
 
