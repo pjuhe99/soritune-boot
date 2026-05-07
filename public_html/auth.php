@@ -112,6 +112,47 @@ function requireMember(): array {
     return $s;
 }
 
+/**
+ * 세션의 member_id 를 같은 사람의 다른 cohort row 로 swap.
+ * accessible_cohorts 안에 cohort_id 가 있어야 함.
+ *
+ * @return bool 성공 여부
+ */
+function swapMemberCohort(int $cohortId): bool {
+    startSessionFor('member');
+    if (empty($_SESSION['member_id'])) { session_write_close(); return false; }
+
+    $accessible = $_SESSION['accessible_cohorts'] ?? [];
+    $target = null;
+    foreach ($accessible as $row) {
+        if ((int)($row['cohort_id'] ?? 0) === $cohortId) { $target = $row; break; }
+    }
+    if (!$target) { session_write_close(); return false; }
+
+    // 보안: row 의 member_id 가 실제 그 cohort 에 속하는지 재확인
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.real_name, c.cohort, bm.nickname
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE bm.id = ? AND bm.cohort_id = ?
+          AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+          AND c.is_active = 1
+    ");
+    $stmt->execute([(int)$target['member_id'], $cohortId]);
+    $row = $stmt->fetch();
+    if (!$row) { session_write_close(); return false; }
+
+    session_regenerate_id(true);
+    $_SESSION['member_id']   = (int)$row['id'];
+    $_SESSION['member_name'] = $row['real_name'];
+    $_SESSION['cohort']      = $row['cohort'];
+    $_SESSION['nickname']    = $row['nickname'];
+    // accessible_cohorts 는 그대로 유지
+    session_write_close();
+    return true;
+}
+
 function logoutMember(): void {
     destroySession('member');
 }

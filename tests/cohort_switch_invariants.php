@@ -65,5 +65,23 @@ if ($multi) {
 $rows = findMemberAccessibleRows($db, '99999999999');
 t('findMemberAccessibleRows 미존재 phone → 빈 array', $rows === []);
 
+// ── swapMemberCohort ──
+// PHP CLI 에서 세션 시뮬레이션. session_start 가능한 환경 가정 (아니면 skip)
+if (function_exists('session_start')) {
+    if (session_status() === PHP_SESSION_NONE) {
+        // CLI에서 명시적 session 디렉토리 사용
+        $tmpDir = sys_get_temp_dir() . '/cohort_test_' . uniqid();
+        @mkdir($tmpDir);
+        session_save_path($tmpDir);
+    }
+    // 미존재 cohort_id → false
+    $_SESSION = [
+        'member_id' => 999999,
+        'cohort' => '12기',
+        'accessible_cohorts' => [['member_id' => 999999, 'cohort_id' => $id12, 'cohort_label' => '12기']],
+    ];
+    t('swapMemberCohort 비목록 cohort_id → false', swapMemberCohort(99999) === false);
+}
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
