@@ -223,55 +223,67 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
  */
 if (!function_exists('saveCheck')) {
 function saveCheck($db, $memberId, $checkDate, $missionTypeId, $status, $source, $sourceRef, $adminId, $skipRecalc = false) {
-    $existing = $db->prepare("
-        SELECT id, status, source FROM member_mission_checks
-        WHERE member_id = ? AND check_date = ? AND mission_type_id = ?
-    ");
-    $existing->execute([$memberId, $checkDate, $missionTypeId]);
-    $existingRow = $existing->fetch();
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
+    try {
+        $existing = $db->prepare("
+            SELECT id, status, source FROM member_mission_checks
+            WHERE member_id = ? AND check_date = ? AND mission_type_id = ?
+        ");
+        $existing->execute([$memberId, $checkDate, $missionTypeId]);
+        $existingRow = $existing->fetch();
 
-    if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation' && (int)$existingRow['status'] === 1) {
-        return ['action' => 'skipped', 'reason' => 'manual check already completed'];
-    }
-
-    $member = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
-    $member->execute([$memberId]);
-    $memberRow = $member->fetch();
-    if (!$memberRow) return ['action' => 'error', 'reason' => 'member not found'];
-
-    $statusVal = $status ? 1 : 0;
-    $prevStatus = $existingRow ? (int)$existingRow['status'] : null;
-
-    if ($existingRow) {
-        $db->prepare("
-            UPDATE member_mission_checks
-            SET status = ?, source = ?, source_ref = ?, updated_by = ?, updated_at = NOW()
-            WHERE id = ?
-        ")->execute([$statusVal, $source, $sourceRef, $adminId, $existingRow['id']]);
-        $action = ((int)$existingRow['status'] !== $statusVal) ? 'updated' : 'unchanged';
-    } else {
-        $db->prepare("
-            INSERT INTO member_mission_checks
-                (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ")->execute([$memberId, $memberRow['cohort_id'], $memberRow['group_id'], $checkDate, $missionTypeId, $statusVal, $source, $sourceRef, $adminId]);
-        $action = 'created';
-    }
-
-    if ($action !== 'unchanged' && !$skipRecalc) {
-        recalculateMemberScore($db, $memberId, $adminId);
-    }
-
-    // 코인 처리 (score와 독립, skipRecalc 무관하게 항상 실행)
-    if ($action !== 'unchanged' && function_exists('processCoinForCheck')) {
-        $codeMap = array_flip(getMissionCodeToIdMap($db));
-        $mCode = $codeMap[$missionTypeId] ?? null;
-        if ($mCode) {
-            processCoinForCheck($db, $memberId, $checkDate, $mCode, $statusVal, $prevStatus, $adminId);
+        if ($existingRow && $existingRow['source'] === 'manual' && $source === 'automation' && (int)$existingRow['status'] === 1) {
+            if ($startedHere) $db->commit();
+            return ['action' => 'skipped', 'reason' => 'manual check already completed'];
         }
-    }
 
-    return ['action' => $action, 'prev_status' => $prevStatus];
+        $member = $db->prepare("SELECT cohort_id, group_id FROM bootcamp_members WHERE id = ?");
+        $member->execute([$memberId]);
+        $memberRow = $member->fetch();
+        if (!$memberRow) {
+            if ($startedHere) $db->commit();
+            return ['action' => 'error', 'reason' => 'member not found'];
+        }
+
+        $statusVal = $status ? 1 : 0;
+        $prevStatus = $existingRow ? (int)$existingRow['status'] : null;
+
+        if ($existingRow) {
+            $db->prepare("
+                UPDATE member_mission_checks
+                SET status = ?, source = ?, source_ref = ?, updated_by = ?, updated_at = NOW()
+                WHERE id = ?
+            ")->execute([$statusVal, $source, $sourceRef, $adminId, $existingRow['id']]);
+            $action = ((int)$existingRow['status'] !== $statusVal) ? 'updated' : 'unchanged';
+        } else {
+            $db->prepare("
+                INSERT INTO member_mission_checks
+                    (member_id, cohort_id, group_id, check_date, mission_type_id, status, source, source_ref, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([$memberId, $memberRow['cohort_id'], $memberRow['group_id'], $checkDate, $missionTypeId, $statusVal, $source, $sourceRef, $adminId]);
+            $action = 'created';
+        }
+
+        if ($action !== 'unchanged' && !$skipRecalc) {
+            recalculateMemberScore($db, $memberId, $adminId);
+        }
+
+        if ($action !== 'unchanged' && function_exists('processCoinForCheck')) {
+            $codeMap = array_flip(getMissionCodeToIdMap($db));
+            $mCode = $codeMap[$missionTypeId] ?? null;
+            if ($mCode) {
+                processCoinForCheck($db, $memberId, $checkDate, $mCode, $statusVal, $prevStatus, $adminId);
+            }
+        }
+
+        if ($startedHere) $db->commit();
+        return ['action' => $action, 'prev_status' => $prevStatus];
+
+    } catch (\Throwable $e) {
+        if ($startedHere) $db->rollBack();
+        throw $e;
+    }
 }
 }
 
