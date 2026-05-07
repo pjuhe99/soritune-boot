@@ -43,26 +43,33 @@
 
 ```javascript
 const AdminCafeApp = (() => {
+    let containerEl = null;   // renderTab 에서 받은 element 캐시 (sub-load 에서 재사용)
     let page = 1;
     let filter = {};
 
-    async function renderTab(_el) {
-        // _el 은 미래 재사용 위한 인자 — 현재는 무시하고 ID 로 DOM 찾음
-        // (group_assignment.js 도 동일 패턴)
-        const sec = document.getElementById('tab-cafe-posts');
-        if (!sec) return;
-        page = 1;  // 진입 시 첫 페이지로
+    async function renderTab(container) {
+        if (!container) return;
+        containerEl = container;
+        page = 1;
+        filter = {};
         await load();
     }
 
     async function load() {
-        // 현재 admin.js 의 loadCafePosts 본문 그대로 (state 변수만 page/filter 로 rename)
+        if (!containerEl) return;
+        // 현재 admin.js 의 loadCafePosts 본문 그대로 (sec → containerEl 로 변경,
+        // state 변수만 page/filter 로 rename)
+        // containerEl.innerHTML = ... 로 채움
         // ...
     }
 
-    function _setPage(p) {
+    async function loadPage(p) {
         page = p;
-        load();
+        await load();
+    }
+
+    function _setPage(p) {
+        loadPage(p);
     }
 
     return { renderTab, _setPage };
@@ -72,8 +79,10 @@ const AdminCafeApp = (() => {
 핵심 변경:
 - `cafePostPage` → `page` (모듈 내부 변수)
 - `cafePostFilter` → `filter`
-- `loadCafePosts(p)` → `load()` (page 인자는 모듈 state 로 흡수). `renderTab` 이 첫 진입에서 호출.
-- HTML 인라인 `onclick="AdminApp._cafePostPage(...)"` → `onclick="AdminCafeApp._setPage(...)"`
+- `loadCafePosts(p)` → `loadPage(p)` (page 전이용) + `load()` (현재 state 로 재로드)
+- 진입 시 `renderTab(container)` 가 container 캐시 + state 초기화 + load 호출 (group-assignment.js:25 패턴 — `container.innerHTML = ...` 직접 사용)
+- 필터 적용 / 초기화 / 수동 반영 성공 모두 `loadPage(1)` 로 통일 (page 1 로 명시 전이)
+- 페이지네이션 onclick: `AdminApp._cafePostPage(...)` → `AdminCafeApp._setPage(...)` (HTML 인라인)
 
 ### admin.js 가 AdminCafeApp 을 모르는 페이지에서 호출되는 시나리오
 
@@ -87,11 +96,15 @@ const AdminCafeApp = (() => {
 1. operation 페이지 로드 → admin.js + admin-cafe.js 둘 다 로드
 2. AdminApp.init() → check_session → showDashboard()
 3. showDashboard() 가 dashboard render → cafe 탭 button + #tab-cafe-posts container 생성 (line 208)
-4. line 405: AdminCafeApp.renderTab() 호출 → AdminCafeApp 가 #tab-cafe-posts 채움
-5. 사용자 필터 변경 → filter 모듈 state 갱신 → load() 재호출 → API → 재렌더
-6. 사용자 페이지네이션 클릭 → onclick AdminCafeApp._setPage(N) → page 갱신 → load()
-7. 수동 반영 버튼 → POST cafe_remap_unmapped → 성공 시 load(1) (필터 유지, 페이지 1)
+4. line 405: const el = document.getElementById('tab-cafe-posts'); AdminCafeApp.renderTab(el)
+   → AdminCafeApp 가 container 캐시 + state 초기화 + load() → containerEl.innerHTML 채움
+5. 사용자 필터 변경 → filter 모듈 state 갱신 → loadPage(1) (page=1 로 명시 전이)
+6. 사용자 필터 초기화 → filter = {} → loadPage(1)
+7. 사용자 페이지네이션 클릭 → onclick AdminCafeApp._setPage(N) → loadPage(N)
+8. 수동 반영 버튼 → POST cafe_remap_unmapped → 성공 시 loadPage(1) (필터 유지, 페이지 1 로 복귀)
 ```
+
+핵심: page 전이는 항상 `loadPage(p)` 로. 인자 없는 `load()` 는 "현재 state 로 재로드" 의미만.
 
 ## 에러 핸들링
 
@@ -101,9 +114,22 @@ const AdminCafeApp = (() => {
 
 ## 테스트
 
-자동화 어려움 (frontend UI). 수동 시나리오로 회귀 검증.
+### 자동 (수동 UI 검증 전 필수)
 
-DEV 시나리오:
+```bash
+node --check /root/boot-dev/public_html/js/admin-cafe.js
+node --check /root/boot-dev/public_html/js/admin.js
+```
+
+각각 종료 코드 0 + 빈 stdout 이면 syntax OK. `node --check` 는 parse-only 라 `window`/`document` 같은 브라우저 글로벌 사용해도 통과 — syntax 오류 (typo, 잘못된 괄호, 모듈 잘림 등) 만 잡음. operation 페이지 전체 깨질 위험 큰 변경이라 manual 진입 전에 자동 체크 필수.
+
+회귀 (백엔드):
+- `php tests/qr_auth_invariants.php` → 13/13 PASS
+- `php tests/transaction_invariants.php` → 12/12 PASS
+
+### 수동 (DEV)
+
+frontend UI 라 자동화 어려움. 수동 시나리오:
 1. **카페 탭 진입**: operation 페이지 → 카페 게시글 탭 클릭 → 데이터 로드, 통계 배지, 테이블 렌더
 2. **필터**: 게시판/날짜/매핑/키워드 각각 필터 → 검색 → 결과 정확
 3. **필터 초기화**: 초기화 버튼 → 빈 필터로 1페이지 로드
