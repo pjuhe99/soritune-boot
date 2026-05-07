@@ -49,16 +49,18 @@ case 'login':
     $db->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
     $bcGroupId = $admin['bootcamp_group_id'] ? (int)$admin['bootcamp_group_id'] : null;
     loginAdmin($admin['id'], $admin['name'], $roles, $admin['cohort'], $bcGroupId);
+    $s = getAdminSession();
 
     jsonSuccess([
         'admin' => [
-            'admin_id'    => $admin['id'],
-            'admin_name'  => $admin['name'],
-            'admin_roles' => $roles,
-            'cohort'      => $admin['cohort'],
-            'team'        => $admin['team'],
-            'class_time'  => $admin['class_time'],
-            'bootcamp_group_id' => $bcGroupId,
+            'admin_id'             => $admin['id'],
+            'admin_name'           => $admin['name'],
+            'admin_roles'          => $roles,
+            'cohort'               => $admin['cohort'],
+            'team'                 => $admin['team'],
+            'class_time'           => $admin['class_time'],
+            'bootcamp_group_id'    => $bcGroupId,
+            'admin_view_cohort_id' => $s['admin_view_cohort_id'] ?? null,
         ],
     ], '로그인 성공');
     break;
@@ -101,16 +103,18 @@ case 'login_phone':
 
     // 회원 세션도 동시 생성 (리더가 회원페이지에서 별도 로그인 불필요)
     loginMember($member['id'], $member['real_name'], $member['cohort'], $member['nickname']);
+    $s = getAdminSession();
 
     jsonSuccess([
         'admin' => [
-            'admin_id'    => $member['id'],
-            'admin_name'  => $displayName,
-            'admin_roles' => [$role],
-            'cohort'      => $member['cohort'],
-            'team'        => $member['group_name'],
-            'class_time'  => null,
-            'bootcamp_group_id' => $bcGroupId,
+            'admin_id'             => $member['id'],
+            'admin_name'           => $displayName,
+            'admin_roles'          => [$role],
+            'cohort'               => $member['cohort'],
+            'team'                 => $member['group_name'],
+            'class_time'           => null,
+            'bootcamp_group_id'    => $bcGroupId,
+            'admin_view_cohort_id' => $s['admin_view_cohort_id'] ?? null,
         ],
     ], '로그인 성공');
     break;
