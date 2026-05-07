@@ -5,9 +5,14 @@ RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Block access to sensitive files
-<FilesMatch "\.(env|credentials|log|sql|bak)$">
+<FilesMatch "\.(env|credentials|log|sql|bak|csv|tsv|xlsx?|json|yml|yaml|ini|conf)$">
     Require all denied
 </FilesMatch>
+
+# Allow public manifest.json (PWA)
+<Files "manifest.json">
+    Require all granted
+</Files>
 
 # Block access to hidden files (except .htaccess)
 <FilesMatch "^\.(?!htaccess)">
