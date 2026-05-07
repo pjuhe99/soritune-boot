@@ -167,7 +167,19 @@ function loginAdmin(int $id, string $name, array $roles, ?string $cohort, ?int $
     $_SESSION['admin_roles'] = $roles;
     $_SESSION['cohort']      = $cohort;
     $_SESSION['bootcamp_group_id'] = $bootcampGroupId;
-    session_write_close();   // flush to disk + release lock before response
+
+    // admin_view_cohort_id default = settings.current_cohort 매핑.
+    // 매핑 cohort 가 inactive 면 가장 최근 active cohort.
+    $defaultCohortId = null;
+    $currentLabel = getSetting('current_cohort');
+    if ($currentLabel) $defaultCohortId = getCohortIdByLabel($currentLabel);
+    if (!$defaultCohortId) {
+        $row = getDB()->query("SELECT id FROM cohorts WHERE is_active = 1 ORDER BY start_date DESC LIMIT 1")->fetch();
+        if ($row) $defaultCohortId = (int)$row['id'];
+    }
+    $_SESSION['admin_view_cohort_id'] = $defaultCohortId;
+
+    session_write_close();
 }
 
 function getAdminSession(): ?array {
@@ -176,14 +188,24 @@ function getAdminSession(): ?array {
         session_write_close();
         return null;
     }
+
+    // 구버전 세션 마이그레이션
+    if (!array_key_exists('admin_view_cohort_id', $_SESSION)) {
+        $defaultCohortId = null;
+        $currentLabel = getSetting('current_cohort');
+        if ($currentLabel) $defaultCohortId = getCohortIdByLabel($currentLabel);
+        $_SESSION['admin_view_cohort_id'] = $defaultCohortId;
+    }
+
     $data = [
-        'admin_id'    => $_SESSION['admin_id'],
-        'admin_name'  => $_SESSION['admin_name'],
-        'admin_roles' => $_SESSION['admin_roles'] ?? [],
-        'cohort'      => $_SESSION['cohort'],
-        'bootcamp_group_id' => $_SESSION['bootcamp_group_id'] ?? null,
+        'admin_id'             => $_SESSION['admin_id'],
+        'admin_name'           => $_SESSION['admin_name'],
+        'admin_roles'          => $_SESSION['admin_roles'] ?? [],
+        'cohort'               => $_SESSION['cohort'],
+        'bootcamp_group_id'    => $_SESSION['bootcamp_group_id'] ?? null,
+        'admin_view_cohort_id' => $_SESSION['admin_view_cohort_id'] ?? null,
     ];
-    session_write_close();   // release lock so parallel requests don't block
+    session_write_close();
     return $data;
 }
 
@@ -215,6 +237,12 @@ function hasAnyRole(array $session, array $roles): bool {
 // ── Cohort Resolution ──────────────────────────────────────
 
 function getEffectiveCohort(array $session): ?string {
+    // admin_view_cohort_id 가 있으면 그 라벨 우선
+    $viewId = $session['admin_view_cohort_id'] ?? null;
+    if ($viewId !== null) {
+        $label = getCohortLabelById($viewId);
+        if ($label) return $label;
+    }
     if (hasRole($session, 'operation')) {
         return getSetting('current_cohort');
     }
