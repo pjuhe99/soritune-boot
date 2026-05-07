@@ -28,6 +28,7 @@
     <div id="member-root"></div>
     <script src="/js/toast.js<?= v('/js/toast.js') ?>"></script>
     <script src="/js/common.js<?= v('/js/common.js') ?>"></script>
+    <script src="/js/cohort-chip.js<?= v('/js/cohort-chip.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
     <script src="/js/member-utils.js<?= v('/js/member-utils.js') ?>"></script>

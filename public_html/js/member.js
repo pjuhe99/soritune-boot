@@ -192,11 +192,17 @@ const MemberApp = (() => {
     // ══════════════════════════════════════════════════════════
 
     function showDashboard() {
+        const accessible = member.accessible_cohorts || [];
+        const isMulti = accessible.length >= 2;
+        const cohortMarkup = isMulti
+            ? `<button class="member-cohort cohort-chip-host" id="btn-member-cohort"></button>`
+            : `<div class="member-cohort">${App.esc(member.cohort)}</div>`;
+
         root.innerHTML = `
             <div class="member-dashboard">
                 <div class="member-header">
                     <div class="header-title">소리튠 부트캠프</div>
-                    <div class="member-cohort">${App.esc(member.cohort)}</div>
+                    ${cohortMarkup}
                 </div>
                 <div class="member-content">
                     <div id="member-home-area"></div>
@@ -226,6 +232,15 @@ const MemberApp = (() => {
 
         // 탭 초기화
         MemberTabs.init(document.getElementById('member-tabs-area'), member);
+
+        if (isMulti) {
+            CohortChip.attach({
+                container: document.getElementById('btn-member-cohort'),
+                currentLabel: member.cohort,
+                options: accessible.map(a => ({cohort_id: a.cohort_id, label: a.cohort_label})),
+                apiUrl: '/api/member.php?action=switch_cohort',
+            });
+        }
     }
 
     function openCoinHistory() {
