@@ -146,6 +146,7 @@ case 'check_session':
                     'needs_nickname' => !hasNickname($member['nickname']),
                     'member_role' => $member['member_role'] ?? 'member',
                     'current_reward_group' => getCurrentRewardGroupForMember($db, (int)$member['id']),
+                    'accessible_cohorts' => $s['accessible_cohorts'] ?? [],
                 ],
             ]);
         }
