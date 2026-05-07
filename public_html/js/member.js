@@ -10,13 +10,18 @@ const MemberApp = (() => {
     // returnTo 화이트리스트 — open redirect 차단
     function validateReturnTo(returnTo) {
         if (typeof returnTo !== 'string' || !returnTo) return null;
-        // 절대 URL / protocol-relative / 다른 호스트 차단
-        if (returnTo.startsWith('//') || returnTo.startsWith('http://') || returnTo.startsWith('https://')) {
+        try {
+            // URL 생성자로 정규화 — path traversal (..) 와 percent-encoding 도 처리
+            const url = new URL(returnTo, window.location.origin);
+            // same-origin 만 허용
+            if (url.origin !== window.location.origin) return null;
+            // 정규화된 pathname 이 /qr/ 로 시작하는지
+            if (!url.pathname.startsWith('/qr/')) return null;
+            // 정규화된 형태 반환 (path traversal 제거됨)
+            return url.pathname + url.search + url.hash;
+        } catch (e) {
             return null;
         }
-        // 허용 prefix: /qr/ 만
-        if (!returnTo.startsWith('/qr/')) return null;
-        return returnTo;
     }
 
     function consumeReturnTo() {
