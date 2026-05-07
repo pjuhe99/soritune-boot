@@ -435,6 +435,27 @@ case 'change_cohort':
     jsonSuccess([], "기수가 '{$newCohort}'으로 변경되었습니다.");
     break;
 
+case 'switch_cohort':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin();
+    $input = getJsonInput();
+    $rawCohortId = $input['cohort_id'] ?? null;
+    $cohortId = ($rawCohortId === null || $rawCohortId === '') ? null : (int)$rawCohortId;
+
+    // null = '전체'. 그 외에는 active cohort 인지 검증.
+    if ($cohortId !== null) {
+        if ($cohortId <= 0) jsonError('cohort_id 형식 오류');
+        $stmt = getDB()->prepare("SELECT 1 FROM cohorts WHERE id = ? AND is_active = 1");
+        $stmt->execute([$cohortId]);
+        if (!$stmt->fetchColumn()) jsonError('해당 기수가 활성 상태가 아닙니다.', 403);
+    }
+
+    startSessionFor('admin');
+    $_SESSION['admin_view_cohort_id'] = $cohortId;
+    session_write_close();
+    jsonSuccess(['view_cohort_id' => $cohortId], '기수 보기가 전환되었습니다.');
+    break;
+
 case 'cohort_list':
     requireAdmin(['operation']);
     $db = getDB();
