@@ -286,3 +286,19 @@ function getMissionTypeId($db, $code) {
     return $row ? (int)$row['id'] : null;
 }
 }
+
+/**
+ * cafe_member_key → member_id 변환.
+ * (이전 위치: api/bootcamp.php — cron 이 require 할 수 있도록 includes 로 이전)
+ */
+function resolveMemberByKey($db, $cafeKey) {
+    if (!$cafeKey) return null;
+    $stmt = $db->prepare("
+        SELECT id FROM bootcamp_members
+        WHERE cafe_member_key = ? AND is_active = 1
+        LIMIT 1
+    ");
+    $stmt->execute([$cafeKey]);
+    $row = $stmt->fetch();
+    return $row ? (int)$row['id'] : null;
+}

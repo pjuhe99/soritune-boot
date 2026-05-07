@@ -69,20 +69,6 @@ function requireApiKey() {
     if (!$stmt->fetch()) jsonError('Invalid API key', 401);
 }
 
-/**
- * cafe_member_key → member_id 변환
- */
-function resolveMemberByKey($db, $cafeKey) {
-    if (!$cafeKey) return null;
-    $stmt = $db->prepare("
-        SELECT id FROM bootcamp_members
-        WHERE cafe_member_key = ? AND is_active = 1
-        LIMIT 1
-    ");
-    $stmt->execute([$cafeKey]);
-    $row = $stmt->fetch();
-    return $row ? (int)$row['id'] : null;
-}
 
 /**
  * integration_logs 저장

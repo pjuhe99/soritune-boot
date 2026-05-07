@@ -6,6 +6,7 @@
  * Commands:
  *   init_daily_checks  - 매일 06:00 실행. 활성 멤버에게 필수 미션 미완료(status=0) 레코드 생성
  *   run_all            - 기존 일괄 크론 (향후 확장용)
+ *   cafe_poll          매시 1회. 네이버 카페 활성 보드 폴링 → cafe_posts UPSERT
  */
 
 if (php_sapi_name() !== 'cli') {
@@ -32,12 +33,16 @@ switch ($command) {
         require_once __DIR__ . '/includes/notify/dispatcher.php';
         notifyDispatch();
         break;
+    case 'cafe_poll':
+        cafePoll();
+        break;
     default:
         echo "Usage: php cron.php <command>\n";
         echo "  init_daily_checks  매일 06:00 필수 미션 미완료 레코드 생성\n";
         echo "  backfill_checks    과거 날짜 미션 레코드 소급 생성 (1회성)\n";
         echo "  run_all            일괄 크론\n";
         echo "  notify_dispatch    매분 실행. 활성 시나리오의 cron 식이 매칭되면 발송\n";
+        echo "  cafe_poll          매시 카페 활성 보드 폴링\n";
         exit(1);
 }
 
@@ -203,6 +208,45 @@ function backfillChecks() {
     }
 
     cronLog("backfill_checks DONE: {$created}/{$total} records created (rest already existed)");
+}
+
+// ══════════════════════════════════════════════════════════════
+// cafe_poll: 네이버 카페 활성 보드 polling (매시 실행)
+// ══════════════════════════════════════════════════════════════
+
+function cafePoll() {
+    cronLog('cafe_poll START');
+    require_once __DIR__ . '/includes/cafe/cafe_naver_client.php';
+    require_once __DIR__ . '/includes/cafe/cafe_ingest.php';
+
+    $boards = cafeFetchActiveBoards();
+    if (empty($boards)) { cronLog('cafe_poll: no active boards'); return; }
+
+    $newPosts = [];
+    foreach ($boards as $b) {
+        try {
+            $articles = cafeFetchBoardArticles($b['menu_id'], 20);
+        } catch (\Throwable $e) {
+            cronLog("cafe_poll fetch fail menu={$b['menu_id']}: " . $e->getMessage());
+            continue;
+        }
+        foreach ($articles as $a) {
+            if (cafeArticleExists($a['cafe_article_id'])) continue;
+            $a['menu_id']         = $b['menu_id'];
+            $a['board_type']      = $b['board_type'];
+            $a['assignment_date'] = substr($a['posted_at'], 0, 10);
+            $a['mission_checked'] = 1;
+            $newPosts[] = $a;
+        }
+    }
+
+    if (empty($newPosts)) { cronLog('cafe_poll: no new posts'); return; }
+
+    $r = ingestCafePosts($newPosts);
+    cronLog(sprintf(
+        'cafe_poll DONE: inserted=%d skipped=%d error=%d unmapped=%d',
+        $r['inserted'], $r['skipped'], $r['error'], $r['unmapped']
+    ));
 }
 
 // ══════════════════════════════════════════════════════════════
