@@ -26,7 +26,7 @@
 ## 변경 범위
 
 수정
-- `public_html/api/qr.php` — 4개 case (`groups`, `group_members`, `record`, `revival_record`) 에 `requireMember()` 추가. `record`/`revival_record` 가 `actor_member_id` 컬럼에 요청 주체 회원 ID 기록. `revival_record` 의 IP+UA 중복 가드를 `qr_attendance.uk_session_member` UNIQUE 제약 활용으로 단순화.
+- `public_html/api/qr.php` — 공개 QR 참여 엔드포인트(verify 제외) 4개 case (`groups`, `group_members`, `record`, `revival_record`) 에 `requireMember()` 추가. `record`/`revival_record` 가 `actor_member_id` 컬럼에 요청 주체 회원 ID 기록. `record`/`revival_record` 둘 다 **reserve-first** 패턴으로 변경 — `qr_attendance` UNIQUE 가드를 가장 먼저 시도, `rowCount === 0` 이면 즉시 `already: true` 반환, 그 이후에만 saveCheck/revival 본 처리 진행. IP+UA 가드는 제거.
 - `public_html/qr/index.php` — fetch 호출이 401 응답을 받을 때 `/` 로 redirect (URL 에 returnTo 쿼리 포함). `verify` 단계는 그대로 비로그인 허용.
 - `public_html/index.php` 의 SPA (MemberApp) — `?returnTo=` 파라미터를 읽어, 로그인 성공 시 해당 URL 로 이동.
 
@@ -59,6 +59,14 @@ ALTER TABLE revival_logs
 
 전부 NULLable + idempotent 가드(`IF NOT EXISTS` PHP 측에서). 12기 데이터 거의 없는 시점이라 lock 영향 무시 가능.
 
+### FK 결정
+
+`qr_attendance.actor_member_id` 와 `revival_logs.actor_member_id` 모두 **FK 없이 인덱스만**. 근거:
+- `qr_attendance` 의 기존 `member_id` 도 FK 없음 — 일관성 유지
+- boot 은 `bootcamp_members.is_active = 0` 소프트 삭제 패턴 사용. hard delete 거의 없어 audit drift 위험 낮음
+- 마이그 경량성 우선 (12기 오픈 4일 전)
+- audit 페이지에서 actor 가 NULL/missing 인 케이스만 별도 표시
+
 ### audit log 의 의미
 
 - `actor_member_id = member_id` → 본인 입력 (정상 패턴)
@@ -78,9 +86,44 @@ ALTER TABLE revival_logs
 4. 사용자가 본인 또는 다른 조원 클릭
 5. record 또는 revival_record 호출 (회원 세션 필요)
    - 비로그인 → 401 → 위와 동일하게 redirect
-   - 로그인 → 출석/부활 처리, actor_member_id = 세션 member_id 기록
-6. 로그인 페이지(/) 에서 로그인 성공 → returnTo 파라미터 있으면 해당 URL 로 이동
+   - 로그인 → reserve-first 처리 (아래 "쓰기 순서" 참조), actor_member_id = 세션 member_id 기록
+6. 로그인 페이지(/) 에서 로그인 성공 → returnTo 검증 통과 시 해당 URL 로 이동
 ```
+
+### returnTo 검증 (open redirect 방지)
+
+frontend(`MemberApp`) 가 returnTo 파라미터 사용 전 화이트리스트 검증:
+- `^/qr/` 로 시작하는 same-origin 상대경로만 허용
+- `//` (protocol-relative) / `http://` / `https://` / 다른 절대 URL 은 무시 → 기본 `/` 로 이동
+
+서버 측 `auth.php` 도움 함수는 불필요 (returnTo 는 클라이언트 redirect 용도). 단 `/login.php` 같은 별도 페이지가 도입되면 서버에서도 같은 검증 필요.
+
+### 쓰기 순서 (reserve-first 패턴)
+
+**`record` (출석)**:
+```
+1. requireMember() — 세션 actor_member_id 확보
+2. validate session/member (cohort/active 검증)
+3. INSERT IGNORE INTO qr_attendance (...) — UNIQUE (qr_session_id, member_id) 가드
+4. if rowCount === 0 → already=true 즉시 반환, 이후 단계 skip
+5. saveCheck(...) — member_mission_checks 처리 (점수/코인 부수 효과 포함)
+6. 응답
+```
+
+**`revival_record` (패자부활)**:
+```
+1. requireMember()
+2. validate session(type=revival)/member
+3. INSERT IGNORE INTO qr_attendance (...) — 가드
+4. if rowCount === 0 → already=true 즉시 반환
+5. ensureMemberScoreFresh + 점수 부적격 체크 (>-10 이면 not_eligible 반환, 단 가드 row 는 이미 만들어짐 → revival 미적용 audit 표식이 됨. 의도적 — 한 사용자가 부활 QR 을 한 세션에 여러번 시도 못 하게)
+6. INSERT revival_logs / score_logs / UPDATE member_scores / UPDATE bootcamp_members.member_status
+7. 응답
+```
+
+핵심: **UNIQUE 가드를 가장 먼저** 두어 race 시 두 번째 트랜잭션이 모든 부수 효과 진입 전에 차단됨. saveCheck 의 내부 idempotency 에 의존하지 않음.
+
+부적격 케이스 (5번)에서 가드 row 만 남고 부활 미적용은 의도된 동작 — 같은 부활 세션에서 점수 회복 후 재진입 시도(점수 조작) 차단. 이전 동작과 약간 다르므로 회귀 테스트에서 명시 검증.
 
 ## 에러 핸들링
 
@@ -101,7 +144,7 @@ ALTER TABLE revival_logs
 SELECT id FROM qr_attendance WHERE qr_session_id = ? AND ip_address = ? AND user_agent = ?
 ```
 
-는 같은 사용자가 다른 기기로 우회 가능. `qr_attendance.uk_session_member` UNIQUE 제약(이미 존재) 으로 대체. 의미: **한 부활 QR 세션 내에서 회원당 1회** (다른 QR 세션 = 다른 부활 이벤트 에서는 또 처리 가능). 기존 IP+UA 의도와 동일하나 더 정확. UA 가 NULL/empty 인 케이스도 자연스레 처리 — `INSERT IGNORE` 가 UNIQUE 충돌만 검사.
+는 같은 사용자가 다른 기기로 우회 가능. **reserve-first** 패턴 (위 데이터 플로우 §) 으로 대체. 의미: **한 부활 QR 세션 내에서 회원당 1회** (다른 QR 세션 = 다른 부활 이벤트 에서는 또 처리 가능). 기존 IP+UA 의도와 동일하나 더 정확. race 안전.
 
 ### actor_member_id NULL 처리
 
@@ -114,11 +157,12 @@ SELECT id FROM qr_attendance WHERE qr_session_id = ? AND ip_address = ? AND user
 1. **비로그인 차단** — 로그아웃 상태에서 `groups`, `group_members`, `record`, `revival_record` 호출 → 401 응답
 2. **로그인 후 본인 출석** — 정상 200 + qr_attendance 의 `actor_member_id = member_id`
 3. **로그인 후 대리 출석** — 본인이 아닌 다른 회원 ID 로 호출 → 정상 200 + `actor_member_id ≠ member_id` (audit 대상 표식)
-4. **중복 출석 race** — 같은 회원 동시 2회 호출 → 첫 1번만 INSERT, 둘째는 `already: true`
-5. **중복 패자부활 race** — 같은 회원 동시 2회 호출 → 첫 1번만 score 부여, 둘째는 `already: true`
-6. **로그인 redirect** — 비로그인으로 `/qr/?code=xxx` 접근 → 그룹 클릭 시 401 → `/?returnTo=/qr/...` redirect → 로그인 → returnTo 로 자동 복귀
-7. **패자부활 점수 정합성** — 4번 race 상황에서 score 가 +7 만 한 번 적용 (UNIQUE 가드로 보장)
-8. **verify 는 비로그인 가능** — `verify` 만 호출 시 회원 세션 없어도 200 (랜딩 페이지가 무한 redirect 루프 안 만들어야 함)
+4. **중복 출석 race (reserve-first)** — 같은 회원 동시 2회 호출 → 첫 호출만 saveCheck 실행, 둘째는 INSERT IGNORE rowCount=0 으로 즉시 `already: true`. member_mission_checks/score_logs/coin_logs 모두 1회만 적용
+5. **중복 패자부활 race (reserve-first)** — 같은 회원 동시 2회 호출 → revival_logs/score_logs 모두 1회만 INSERT, member_scores 도 +7 1회만 적용. 둘째는 `already: true`
+6. **로그인 redirect + returnTo 검증** — 비로그인으로 `/qr/?code=xxx` 접근 → 그룹 클릭 시 401 → `/?returnTo=/qr/...` redirect → 로그인 → returnTo 로 자동 복귀
+7. **returnTo open redirect 차단** — `/?returnTo=https://evil.com` 또는 `/?returnTo=//evil.com` 으로 직접 접근 시 returnTo 무시하고 `/` 로 이동
+8. **패자부활 부적격 + 가드 row** — 점수 +5 인 회원이 부활 QR 시도 → `not_eligible: true` + qr_attendance 가드 row 만 남고 revival_logs/score_logs 미생성. 같은 세션 내 재시도 시 `already: true`
+9. **verify 는 비로그인 가능** — `verify` 만 호출 시 회원 세션 없어도 200 (랜딩 페이지가 무한 redirect 루프 안 만들어야 함)
 
 ### 회귀 (필수)
 
@@ -143,7 +187,7 @@ SELECT id FROM qr_attendance WHERE qr_session_id = ? AND ip_address = ? AND user
 
 ## 인접 spec과의 관계
 
-- **#3 점수/코인 트랜잭션화** (별도 spec) — `revival_record` 의 `INSERT revival_logs → INSERT score_logs → UPDATE member_scores → UPDATE bootcamp_members.member_status → INSERT qr_attendance` 순차 처리는 #3 의 트랜잭션 가드 대상에 포함된다. 이번 spec 은 **인증/audit log 만**, 트랜잭션화는 #3 에서.
+- **#3 점수/코인 트랜잭션화** (별도 spec) — 이번 spec 의 reserve-first 패턴은 race 시 두 번째 트랜잭션 진입을 차단하는 효과만. revival 의 5개 쓰기 (revival_logs/score_logs/member_scores/bootcamp_members/qr_attendance) 사이의 부분 실패 처리(예: INSERT score_logs 후 UPDATE member_scores 가 실패하는 경우의 롤백) 는 #3 의 BEGIN/COMMIT 트랜잭션 도입에서 다룸. 이번은 **race 차단 + 인증/audit log 만**.
 - **#5 admin.php 분리** (오픈 후) — QR 관련 코드는 별도 파일이라 영향 없음.
 
 ## 안 함
