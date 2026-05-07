@@ -201,6 +201,30 @@ function findMemberByPhone(PDO $db, string $phone): ?array {
     return $stmt->fetch() ?: null;
 }
 
+/**
+ * phone 으로 active cohort 의 모든 member row 반환 (cohort_id DESC).
+ * findMemberByPhone 의 multi-row 버전.
+ */
+function findMemberAccessibleRows(PDO $db, string $phone): array {
+    $normalized = normalizePhone($phone);
+    if (!$normalized) return [];
+
+    $stmt = $db->prepare("
+        SELECT bm.*, c.cohort,
+               COALESCE(NULLIF(bm.kakao_link, ''), bg.kakao_link) AS kakao_link,
+               bg.name AS group_name
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+        WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ?
+          AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+          AND c.is_active = 1
+        ORDER BY bm.cohort_id DESC
+    ");
+    $stmt->execute([$normalized]);
+    return $stmt->fetchAll();
+}
+
 // ── Nickname Helpers ──────────────────────────────────────
 
 /**

@@ -41,5 +41,29 @@ t('resolveAdminCohortId(view=12) returns 12', $result === $id12);
 $result = resolveAdminCohortId(99, $session, false);
 t('resolveAdminCohortId(explicit) overrides view', $result === 99);
 
+// ── findMemberAccessibleRows ──
+// DEV DB 에 phone 이 있는 회원 임의 1명 + multi-cohort 후보 필요. 없으면 skip.
+$multi = $db->query("
+    SELECT bm.phone
+    FROM bootcamp_members bm
+    JOIN cohorts c ON bm.cohort_id = c.id
+    WHERE bm.is_active = 1 AND c.is_active = 1
+      AND bm.phone IS NOT NULL AND bm.phone != ''
+    GROUP BY bm.phone
+    HAVING COUNT(DISTINCT bm.cohort_id) >= 2
+    LIMIT 1
+")->fetch();
+
+if ($multi) {
+    $rows = findMemberAccessibleRows($db, $multi['phone']);
+    t('findMemberAccessibleRows multi-cohort 회원 시 2+ row', count($rows) >= 2);
+    t('findMemberAccessibleRows cohort_id DESC 정렬', $rows[0]['cohort_id'] >= $rows[1]['cohort_id']);
+} else {
+    echo "SKIP  findMemberAccessibleRows multi-cohort (no test data)\n";
+}
+
+$rows = findMemberAccessibleRows($db, '99999999999');
+t('findMemberAccessibleRows 미존재 phone → 빈 array', $rows === []);
+
 echo "\n{$pass} passed, {$fail} failed\n";
 exit($fail > 0 ? 1 : 0);
