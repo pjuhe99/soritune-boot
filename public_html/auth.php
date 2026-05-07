@@ -68,14 +68,15 @@ function destroySession(string $tier): void {
 
 // ── Member Session ─────────────────────────────────────────
 
-function loginMember(int $id, string $name, string $cohort, ?string $nickname = null): void {
+function loginMember(int $id, string $name, string $cohort, ?string $nickname = null, array $accessibleCohorts = []): void {
     startSessionFor('member');
     session_regenerate_id(true);
     $_SESSION['member_id']   = $id;
     $_SESSION['member_name'] = $name;
     $_SESSION['cohort']      = $cohort;
     $_SESSION['nickname']    = $nickname;
-    session_write_close();   // flush to disk + release lock before response
+    $_SESSION['accessible_cohorts'] = $accessibleCohorts;
+    session_write_close();
 }
 
 function getMemberSession(): ?array {
@@ -84,13 +85,24 @@ function getMemberSession(): ?array {
         session_write_close();
         return null;
     }
+
+    // 구버전 세션 inline 마이그레이션: accessible_cohorts 가 없으면 현재 cohort 1개로 채움
+    if (!isset($_SESSION['accessible_cohorts']) || !is_array($_SESSION['accessible_cohorts'])) {
+        $_SESSION['accessible_cohorts'] = [[
+            'member_id'    => (int)$_SESSION['member_id'],
+            'cohort_id'    => null, // 미상 — switch 시도 시 fallback 처리
+            'cohort_label' => $_SESSION['cohort'] ?? '',
+        ]];
+    }
+
     $data = [
-        'member_id'   => $_SESSION['member_id'],
-        'member_name' => $_SESSION['member_name'],
-        'cohort'      => $_SESSION['cohort'],
-        'nickname'    => $_SESSION['nickname'] ?? null,
+        'member_id'          => $_SESSION['member_id'],
+        'member_name'        => $_SESSION['member_name'],
+        'cohort'             => $_SESSION['cohort'],
+        'nickname'           => $_SESSION['nickname'] ?? null,
+        'accessible_cohorts' => $_SESSION['accessible_cohorts'],
     ];
-    session_write_close();   // release lock so parallel requests don't block
+    session_write_close();
     return $data;
 }
 
