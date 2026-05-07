@@ -218,3 +218,46 @@ function updateMemberNickname(string $nickname): void {
     $_SESSION['nickname'] = $nickname;
     session_write_close();
 }
+
+// ── Cohort Resolution Helpers ──────────────────────────────
+
+/**
+ * cohort.id → cohort 라벨 ('12기')
+ */
+function getCohortLabelById(int $id): ?string {
+    static $cache = [];
+    if (isset($cache[$id])) return $cache[$id];
+    $stmt = getDB()->prepare("SELECT cohort FROM cohorts WHERE id = ?");
+    $stmt->execute([$id]);
+    $label = $stmt->fetchColumn();
+    return $cache[$id] = ($label !== false ? $label : null);
+}
+
+/**
+ * cohort 라벨 ('12기') → cohort.id
+ */
+function getCohortIdByLabel(string $label): ?int {
+    static $cache = [];
+    if (isset($cache[$label])) return $cache[$label];
+    $stmt = getDB()->prepare("SELECT id FROM cohorts WHERE cohort = ?");
+    $stmt->execute([$label]);
+    $id = $stmt->fetchColumn();
+    return $cache[$label] = ($id !== false ? (int)$id : null);
+}
+
+/**
+ * 어드민 view cohort 결정.
+ * 명시 cohort_id → admin_view_cohort_id → (supportsAll ? null : settings.current_cohort)
+ *
+ * @param int|null $explicit  request 에서 전달된 cohort_id (0 = 미지정)
+ * @param array    $session   admin session
+ * @param bool     $supportsAll  true 면 view 가 null('전체') 일 때 null 반환, 아니면 settings fallback
+ */
+function resolveAdminCohortId(?int $explicit, array $session, bool $supportsAll = false): ?int {
+    if ($explicit !== null && $explicit > 0) return $explicit;
+    $view = $session['admin_view_cohort_id'] ?? null;
+    if ($view !== null) return $view;
+    if ($supportsAll) return null;
+    $label = getSetting('current_cohort');
+    return $label ? getCohortIdByLabel($label) : null;
+}
