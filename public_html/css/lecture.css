@@ -387,6 +387,49 @@
     box-shadow: 0 0 0 1px currentColor;
 }
 
+/* ── 회차별 시간 변경 배지 ─────────────────────────────────── */
+.lec-chip-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #FF5E00;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 14px;
+}
+.lec-chip.lec-chip-time-changed {
+    box-shadow: inset 0 0 0 2px #FF5E00;
+}
+.lec-detail-badge {
+    font-size: 11px;
+    line-height: 16px;
+}
+.lec-detail-changed-note {
+    color: #888;
+    font-size: 12px;
+}
+.lec-detail-edit-area {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+}
+.lec-detail-edit-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #555;
+}
+.lec-detail-edit-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.lec-detail-edit-row .form-input {
+    max-width: 140px;
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 640px) {
     .lec-chip, .lec-event-chip {

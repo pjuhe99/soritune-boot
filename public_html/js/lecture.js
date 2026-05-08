@@ -80,11 +80,14 @@ const LectureApp = (() => {
                     const stageClass = `stage-${s.stage}`;
                     const zoomClass = s.zoom_status === 'failed' ? 'zoom-failed' : '';
                     const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
+                    const timeChanged = s.schedule_start_time && s.start_time !== s.schedule_start_time;
+                    const changedClass = timeChanged ? 'lec-chip-time-changed' : '';
                     const timeLabel = (s.start_time || '').substring(0, 5);
                     const stageLabel = STAGE_LABELS[s.stage] || '';
-                    const firstLine = `${timeLabel} ${stageLabel}`;
+                    const badge = timeChanged ? '<span class="lec-chip-badge">시간변경</span>' : '';
+                    const firstLine = `${timeLabel} ${stageLabel}${badge}`;
                     const coachName = App.esc(s.coach_name || '');
-                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
+                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass} ${changedClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
                 }).join('');
             },
         }).mount();
@@ -154,11 +157,18 @@ const LectureApp = (() => {
         const dateKo = App.formatDateKo(s.lecture_date);
         const timeLabel = (s.start_time || '').substring(0, 5) + ' ~ ' + (s.end_time || '').substring(0, 5);
         const stageLabel = STAGE_LABELS[s.stage] || s.stage;
+        const timeChanged = s.schedule_start_time && s.start_time !== s.schedule_start_time;
+        const origTimeNote = timeChanged
+            ? ` <span class="lec-detail-changed-note">(원래 ${(s.schedule_start_time || '').substring(0, 5)})</span>`
+            : '';
+        const timeBadge = timeChanged
+            ? ' <span class="lec-chip-badge lec-detail-badge">시간변경</span>'
+            : '';
 
         let body = `
             <div class="lec-detail-info">
                 <div class="lec-detail-row"><span class="lec-detail-label">날짜</span><span class="lec-detail-value">${dateKo}</span></div>
-                <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}${timeBadge}${origTimeNote}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(s.coach_name)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>
             </div>
