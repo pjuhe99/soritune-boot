@@ -436,23 +436,20 @@ function handleLectureEventCreate($method) {
     ]);
     $eventId = (int)$db->lastInsertId();
 
-    // ── Zoom 미팅 생성 ──
-    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
-        'event_id'    => $eventId,
-        'title'       => $title,
-        'event_date'  => $eventDate,
-        'start_time'  => $startTime,
-        'end_time'    => $endDt->format('H:i'),
-        'duration'    => 60,
-        'host_account' => $hostAccount,
-        'scheduled_at' => (new DateTime("{$eventDate} {$startTimeFull}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
+    // ── 단계별 고정 Zoom URL 설정 (반복 강의와 동일 방식) ──
+    $zoomJoinUrl = getFixedZoomUrl((int)$stage);
+
+    $db->prepare("
+        UPDATE lecture_events
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $eventId]);
 
     jsonSuccess([
         'event_id'     => $eventId,
         'title'        => $title,
-        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        'zoom_status'  => $zoomResult['success'] ? 'ready' : 'failed',
+        'zoom_join_url' => $zoomJoinUrl,
+        'zoom_status'  => 'ready',
     ], '이벤트가 생성되었습니다.');
 }
 
