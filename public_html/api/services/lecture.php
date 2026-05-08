@@ -207,7 +207,8 @@ function handleLectureSessions() {
         SELECT ls.id, ls.schedule_id, ls.title, ls.lecture_date, ls.start_time, ls.end_time,
                ls.stage, ls.host_account, ls.status, ls.coach_admin_id,
                a.name AS coach_name,
-               lsch.zoom_status
+               lsch.zoom_status,
+               lsch.start_time AS schedule_start_time
         FROM lecture_sessions ls
         JOIN admins a ON ls.coach_admin_id = a.id
         JOIN lecture_schedules lsch ON ls.schedule_id = lsch.id
@@ -238,7 +239,9 @@ function handleLectureSessionDetail() {
         SELECT ls.*, a.name AS coach_name,
                lsch.zoom_meeting_id, lsch.zoom_join_url, lsch.zoom_start_url,
                lsch.zoom_password, lsch.zoom_status, lsch.zoom_error_message,
-               lsch.host_account AS schedule_host_account
+               lsch.host_account AS schedule_host_account,
+               lsch.start_time AS schedule_start_time,
+               lsch.duration_minutes AS schedule_duration_minutes
         FROM lecture_sessions ls
         JOIN admins a ON ls.coach_admin_id = a.id
         JOIN lecture_schedules lsch ON ls.schedule_id = lsch.id
