@@ -265,6 +265,106 @@ function handleLectureSessionDetail() {
 }
 
 /**
+ * 회차별 시간 변경 — 한 lecture_sessions row 의 start_time / end_time / title 만 UPDATE.
+ * 부모 lecture_schedules 와 다른 회차에는 영향 없음.
+ *
+ * 권한: operation / head / subhead1 / subhead2.
+ * 검증: 시간 형식 + active 상태 + host 중복 (다른 강의 / 이벤트).
+ * 제목은 `[HH:MM] ...` prefix 패턴 매칭 시 시간 부분만 갱신.
+ */
+function handleLectureSessionUpdateTime($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    requireAdmin(['operation', 'head', 'subhead1', 'subhead2']);
+    $input = getJsonInput();
+
+    $sessionId = (int)($input['session_id'] ?? 0);
+    $startTime = trim($input['start_time'] ?? '');
+
+    if (!$sessionId) jsonError('session_id 필요');
+    if (!preg_match('/^\d{2}:\d{2}$/', $startTime)) jsonError('시간 형식: HH:MM');
+    [$h, $m] = explode(':', $startTime);
+    if ((int)$h < 0 || (int)$h > 23 || (int)$m < 0 || (int)$m > 59) {
+        jsonError('유효하지 않은 시간입니다.');
+    }
+
+    $db = getDB();
+
+    $stmt = $db->prepare("
+        SELECT ls.id, ls.schedule_id, ls.lecture_date, ls.start_time, ls.end_time,
+               ls.host_account, ls.title, ls.status,
+               lsch.duration_minutes
+        FROM lecture_sessions ls
+        JOIN lecture_schedules lsch ON ls.schedule_id = lsch.id
+        WHERE ls.id = ?
+    ");
+    $stmt->execute([$sessionId]);
+    $session = $stmt->fetch();
+    if (!$session) jsonError('강의 회차를 찾을 수 없습니다.', 404);
+    if ($session['status'] !== 'active') jsonError('취소된 회차는 시간을 변경할 수 없습니다.');
+
+    $duration = (int)$session['duration_minutes'];
+    if ($duration <= 0) $duration = 60;
+
+    $startTimeFull = $startTime . ':00';
+
+    // 변경 후 같은 시작 시간이면 no-op (early return)
+    if ($session['start_time'] === $startTimeFull) {
+        jsonSuccess([
+            'session_id' => $sessionId,
+            'start_time' => $startTimeFull,
+            'end_time'   => $session['end_time'],
+            'title'      => $session['title'],
+            'changed'    => false,
+        ], '시간 변경 없음.');
+    }
+
+    // end_time 계산
+    $startDt = new DateTime("2000-01-01 {$startTimeFull}");
+    $endDt = clone $startDt;
+    $endDt->modify("+{$duration} minutes");
+    $endTimeFull = $endDt->format('H:i:s');
+
+    // host 중복 — 다른 강의 회차
+    $overlap = checkLectureOverlap(
+        $db,
+        [$session['lecture_date']],
+        $startTimeFull,
+        $session['host_account'],
+        null,
+        $sessionId
+    );
+    if ($overlap) {
+        jsonError("중복: {$overlap['lecture_date']} {$overlap['title']} — 같은 시간·호스트 계정에 다른 강의가 있습니다.");
+    }
+
+    // host 중복 — 이벤트
+    $overlapEvt = checkEventOverlap($db, $session['lecture_date'], $startTimeFull, $session['host_account']);
+    if ($overlapEvt) {
+        jsonError("중복: {$overlapEvt['event_date']} {$overlapEvt['title']} — 같은 시간·호스트 계정에 이벤트가 있습니다.");
+    }
+
+    // 제목 prefix 자동 갱신 (`[HH:MM] ...` 패턴만)
+    $newTitle = $session['title'];
+    if (preg_match('/^\[\d{2}:\d{2}\]/', $newTitle)) {
+        $newTitle = preg_replace('/^\[\d{2}:\d{2}\]/', "[{$startTime}]", $newTitle);
+    }
+
+    $db->prepare("
+        UPDATE lecture_sessions
+        SET start_time = ?, end_time = ?, title = ?
+        WHERE id = ?
+    ")->execute([$startTimeFull, $endTimeFull, $newTitle, $sessionId]);
+
+    jsonSuccess([
+        'session_id' => $sessionId,
+        'start_time' => $startTimeFull,
+        'end_time'   => $endTimeFull,
+        'title'      => $newTitle,
+        'changed'    => true,
+    ], '시간이 변경되었습니다.');
+}
+
+/**
  * 강의 스케줄 취소 (미래 세션 일괄 취소)
  */
 function handleLectureScheduleCancel($method) {
