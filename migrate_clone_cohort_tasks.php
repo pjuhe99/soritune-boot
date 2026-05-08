@@ -72,3 +72,104 @@ echo "[cohort 정보]\n";
 echo "  {$fromCohort} 시작: {$fromRow['start_date']}\n";
 echo "  {$toCohort} 시작: {$toRow['start_date']}\n";
 echo "  Day shift: " . ($dayOffset >= 0 ? "+{$dayOffset}" : (string)$dayOffset) . "일\n\n";
+
+// ── 멱등 가드: 대상 cohort 에 이미 데이터 있나? ───────────────
+$countTasksStmt = $db->prepare("SELECT COUNT(*) FROM tasks WHERE cohort = ?");
+$countTasksStmt->execute([$toCohort]);
+$nTasks = (int)$countTasksStmt->fetchColumn();
+
+$countCurStmt = $db->prepare("SELECT COUNT(*) FROM curriculum_items WHERE cohort = ?");
+$countCurStmt->execute([$toCohort]);
+$nCur = (int)$countCurStmt->fetchColumn();
+
+if (($nTasks > 0 || $nCur > 0) && !$force) {
+    fwrite(STDERR, "대상 cohort '{$toCohort}' 에 이미 task {$nTasks}건 / curriculum {$nCur}건 존재.\n");
+    fwrite(STDERR, "  --force 사용하거나 수동 삭제 후 재실행하세요.\n");
+    exit(3);
+}
+
+if ($nTasks > 0 || $nCur > 0) {
+    echo "[--force] 대상 기존 데이터 task {$nTasks} + curriculum {$nCur} 건 삭제 예정\n\n";
+}
+
+// ── 11기 source 데이터 사전 통계 ────────────────────────────
+$srcRoleStats = $db->prepare("
+    SELECT role,
+           COUNT(*) AS n,
+           SUM(assignee_admin_id IS NOT NULL) AS admin_assigned,
+           SUM(assignee_member_id IS NOT NULL) AS member_assigned,
+           SUM(assignee_admin_id IS NULL AND assignee_member_id IS NULL) AS unassigned
+    FROM tasks WHERE cohort = ?
+    GROUP BY role ORDER BY role
+");
+$srcRoleStats->execute([$fromCohort]);
+$srcRoles = $srcRoleStats->fetchAll(PDO::FETCH_ASSOC);
+
+echo "[원본 task 분포 ({$fromCohort})]\n";
+printf("  %-12s %6s %6s %6s %6s\n", 'role', 'n', 'admin', 'member', 'null');
+foreach ($srcRoles as $r) {
+    printf("  %-12s %6d %6d %6d %6d\n",
+        $r['role'], $r['n'], $r['admin_assigned'], $r['member_assigned'], $r['unassigned']);
+}
+echo "\n";
+
+$countCurStmt->execute([$fromCohort]);
+$srcCur = (int)$countCurStmt->fetchColumn();
+echo "[원본 curriculum_items ({$fromCohort})]: {$srcCur}건\n\n";
+
+// ── 12기 후보 검증 (role 별 ≥ 1) ──────────────────────────
+$srcUsedRoles = array_column($srcRoles, 'role');
+
+$candidateCounts = [];
+foreach ($srcUsedRoles as $role) {
+    $candidateCounts[$role] = countCandidates($db, $role, $toCohort);
+}
+
+echo "[대상 후보 ({$toCohort})]\n";
+foreach ($candidateCounts as $role => $count) {
+    printf("  %-12s %6d명\n", $role, $count);
+}
+echo "\n";
+
+$missing = array_filter($candidateCounts, fn($c) => $c === 0);
+if ($missing && !$allowMissingRoles) {
+    fwrite(STDERR, "다음 role 의 대상 후보가 0명입니다: " . implode(', ', array_keys($missing)) . "\n");
+    fwrite(STDERR, "  admin_roles 등록 후 재실행하거나 --allow-missing-roles 사용\n");
+    exit(4);
+}
+
+/**
+ * 특정 role 의 대상 cohort 후보 수.
+ * - admin role (head/coach/sub_coach/subhead1/subhead2): admin_roles JOIN (admins.cohort = $toCohort)
+ * - operation: cohort=NULL 인 active operation admin (binnie4/wannie 등)
+ * - leader/subleader: bootcamp_members (cohort_id, member_role)
+ */
+function countCandidates(PDO $db, string $role, string $toCohort): int {
+    if (in_array($role, ['head', 'coach', 'sub_coach', 'subhead1', 'subhead2'], true)) {
+        $stmt = $db->prepare("
+            SELECT COUNT(DISTINCT a.id)
+            FROM admins a JOIN admin_roles ar ON ar.admin_id = a.id
+            WHERE a.cohort = ? AND ar.role = ? AND a.is_active = 1
+        ");
+        $stmt->execute([$toCohort, $role]);
+        return (int)$stmt->fetchColumn();
+    }
+    if ($role === 'operation') {
+        $stmt = $db->prepare("
+            SELECT COUNT(*) FROM admins
+            WHERE cohort IS NULL AND role = 'operation' AND is_active = 1
+        ");
+        $stmt->execute();
+        return (int)$stmt->fetchColumn();
+    }
+    if (in_array($role, ['leader', 'subleader'], true)) {
+        $stmt = $db->prepare("
+            SELECT COUNT(*) FROM bootcamp_members bm
+            JOIN cohorts c ON c.id = bm.cohort_id
+            WHERE c.cohort = ? AND bm.member_role = ? AND bm.is_active = 1
+        ");
+        $stmt->execute([$toCohort, $role]);
+        return (int)$stmt->fetchColumn();
+    }
+    return 0;
+}
