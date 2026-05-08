@@ -284,11 +284,12 @@ case 'admin_study_cancel':
 // ── Lecture (코치 강의) ────────────────────────────────────
 
 case 'lecture_coaches':           handleLectureCoaches(); break;
-case 'lecture_sessions':          handleLectureSessions(); break;
-case 'lecture_session_detail':    handleLectureSessionDetail(); break;
-case 'lecture_schedule_create':   handleLectureScheduleCreate($method); break;
-case 'lecture_schedule_cancel':   handleLectureScheduleCancel($method); break;
-case 'lecture_zoom_retry':        handleLectureZoomRetry($method); break;
+case 'lecture_sessions':            handleLectureSessions(); break;
+case 'lecture_session_detail':      handleLectureSessionDetail(); break;
+case 'lecture_session_update_time': handleLectureSessionUpdateTime($method); break;
+case 'lecture_schedule_create':     handleLectureScheduleCreate($method); break;
+case 'lecture_schedule_cancel':     handleLectureScheduleCancel($method); break;
+case 'lecture_zoom_retry':          handleLectureZoomRetry($method); break;
 
 // ── Lecture Events (1회성 이벤트) ────────────────────────
 

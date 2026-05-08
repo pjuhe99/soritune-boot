@@ -80,11 +80,14 @@ const LectureApp = (() => {
                     const stageClass = `stage-${s.stage}`;
                     const zoomClass = s.zoom_status === 'failed' ? 'zoom-failed' : '';
                     const mineClass = highlightAdminId && parseInt(s.coach_admin_id) === highlightAdminId ? 'lec-chip-mine' : '';
+                    const timeChanged = s.schedule_start_time && s.start_time !== s.schedule_start_time;
+                    const changedClass = timeChanged ? 'lec-chip-time-changed' : '';
                     const timeLabel = (s.start_time || '').substring(0, 5);
                     const stageLabel = STAGE_LABELS[s.stage] || '';
-                    const firstLine = `${timeLabel} ${stageLabel}`;
+                    const badge = timeChanged ? '<span class="lec-chip-badge">시간변경</span>' : '';
+                    const firstLine = `${timeLabel} ${stageLabel}${badge}`;
                     const coachName = App.esc(s.coach_name || '');
-                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
+                    return `<div class="lec-chip ${stageClass} ${zoomClass} ${mineClass} ${changedClass}" data-id="${s.id}" title="${App.esc(s.title)}"><span class="chip-line1">${firstLine}</span><span class="chip-line2">${coachName}</span></div>`;
                 }).join('');
             },
         }).mount();
@@ -154,11 +157,18 @@ const LectureApp = (() => {
         const dateKo = App.formatDateKo(s.lecture_date);
         const timeLabel = (s.start_time || '').substring(0, 5) + ' ~ ' + (s.end_time || '').substring(0, 5);
         const stageLabel = STAGE_LABELS[s.stage] || s.stage;
+        const timeChanged = s.schedule_start_time && s.start_time !== s.schedule_start_time;
+        const origTimeNote = timeChanged
+            ? ` <span class="lec-detail-changed-note">(원래 ${(s.schedule_start_time || '').substring(0, 5)})</span>`
+            : '';
+        const timeBadge = timeChanged
+            ? ' <span class="lec-chip-badge lec-detail-badge">시간변경</span>'
+            : '';
 
         let body = `
             <div class="lec-detail-info">
                 <div class="lec-detail-row"><span class="lec-detail-label">날짜</span><span class="lec-detail-value">${dateKo}</span></div>
-                <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}</span></div>
+                <div class="lec-detail-row"><span class="lec-detail-label">시간</span><span class="lec-detail-value">${App.esc(timeLabel)}${timeBadge}${origTimeNote}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">코치</span><span class="lec-detail-value">${App.esc(s.coach_name)}</span></div>
                 <div class="lec-detail-row"><span class="lec-detail-label">단계</span><span class="lec-detail-value">${App.esc(stageLabel)}</span></div>
             </div>
@@ -184,6 +194,21 @@ const LectureApp = (() => {
             body += `<div class="lec-notice muted">Zoom 생성 대기 중입니다.</div>`;
         }
 
+        // Edit time form (admin only)
+        const canEditTime = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
+        if (canEditTime) {
+            const curStart = (s.start_time || '').substring(0, 5);
+            body += `
+                <div class="lec-detail-edit-area">
+                    <div class="lec-detail-edit-label">시간 변경</div>
+                    <div class="lec-detail-edit-row">
+                        <input type="time" id="lec-edit-time" class="form-input" value="${curStart}">
+                        <button class="btn btn-primary btn-sm" id="btn-lec-edit-time" data-session="${s.id}">저장</button>
+                    </div>
+                </div>
+            `;
+        }
+
         // Cancel button (admin only)
         const canCancel = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
         if (canCancel) {
@@ -197,6 +222,28 @@ const LectureApp = (() => {
         App.openModal(s.title || '강의 상세', body);
 
         // Bind events
+        const editBtn = document.getElementById('btn-lec-edit-time');
+        if (editBtn) {
+            editBtn.onclick = async () => {
+                const newTime = document.getElementById('lec-edit-time').value;
+                if (!newTime || !/^\d{2}:\d{2}$/.test(newTime)) {
+                    Toast.error('시간 형식: HH:MM');
+                    return;
+                }
+                App.showLoading();
+                const r = await App.post(API + 'lecture_session_update_time', {
+                    session_id: parseInt(editBtn.dataset.session),
+                    start_time: newTime,
+                });
+                App.hideLoading();
+                if (r.success) {
+                    Toast.success(r.message || '시간이 변경되었습니다.');
+                    App.closeModal();
+                    loadAllData();
+                }
+            };
+        }
+
         const retryBtn = document.getElementById('btn-zoom-retry');
         if (retryBtn) retryBtn.onclick = () => retryZoom(parseInt(retryBtn.dataset.schedule));
 
