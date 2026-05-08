@@ -636,7 +636,14 @@ function generateLectureDates(string $startDate, string $endDate, array $weekday
  * host 중복 검사
  * 같은 날짜 + 같은 시작 시간 + 같은 host_account인 active 세션이 있으면 반환
  */
-function checkLectureOverlap(PDO $db, array $dates, string $startTime, string $hostAccount, ?int $excludeScheduleId = null): ?array {
+function checkLectureOverlap(
+    PDO $db,
+    array $dates,
+    string $startTime,
+    string $hostAccount,
+    ?int $excludeScheduleId = null,
+    ?int $excludeSessionId = null
+): ?array {
     if (empty($dates)) return null;
 
     $placeholders = implode(',', array_fill(0, count($dates), '?'));
@@ -644,11 +651,16 @@ function checkLectureOverlap(PDO $db, array $dates, string $startTime, string $h
     $params[] = $startTime;
     $params[] = $hostAccount;
 
-    $excludeClause = '';
+    $excludeClauses = [];
     if ($excludeScheduleId) {
-        $excludeClause = 'AND ls.schedule_id != ?';
+        $excludeClauses[] = 'AND ls.schedule_id != ?';
         $params[] = $excludeScheduleId;
     }
+    if ($excludeSessionId) {
+        $excludeClauses[] = 'AND ls.id != ?';
+        $params[] = $excludeSessionId;
+    }
+    $excludeClause = implode(' ', $excludeClauses);
 
     $stmt = $db->prepare("
         SELECT ls.id, ls.lecture_date, ls.title, ls.start_time, ls.host_account
