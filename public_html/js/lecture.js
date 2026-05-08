@@ -15,6 +15,14 @@ const LectureApp = (() => {
     const STAGE_LABELS = { 1: '1단계', 2: '2단계' };
     const WEEKDAY_NAMES = ['', '월', '화', '수', '목', '금', '토', '일'];
 
+    // 다음 정각 "HH:00" — type=time 디폴트값. 분이 0이면 그대로, 아니면 시 +1 (24h wrap).
+    function nextHourTime() {
+        const now = new Date();
+        let h = now.getHours();
+        if (now.getMinutes() > 0) h = (h + 1) % 24;
+        return String(h).padStart(2, '0') + ':00';
+    }
+
     // 이벤트 컬러 팔레트
     const EVENT_COLORS = {
         coral:  { bg: '#fee2e2', fg: '#dc2626', label: '코랄' },
@@ -327,7 +335,7 @@ const LectureApp = (() => {
 
                     <div class="form-group">
                         <label class="form-label">시작 시간 <span class="text-danger">*</span></label>
-                        <input type="time" class="form-input" id="lec-time" required>
+                        <input type="time" class="form-input" id="lec-time" value="${nextHourTime()}" required>
                         <p class="lec-form-hint">수업 시간: 60분 (자동)</p>
                     </div>
                 </fieldset>
@@ -616,7 +624,7 @@ const LectureApp = (() => {
 
                     <div class="form-group">
                         <label class="form-label">시작 시간 <span class="text-danger">*</span></label>
-                        <input type="time" class="form-input" id="evt-time" required>
+                        <input type="time" class="form-input" id="evt-time" value="${nextHourTime()}" required>
                         <p class="lec-form-hint">수업 시간: 60분 (자동)</p>
                     </div>
                 </fieldset>
