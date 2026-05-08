@@ -6,6 +6,11 @@
  *   cd /root/boot-dev && php migrate_event_fixed_zoom.php --apply  # 실제 적용
  */
 
+if (php_sapi_name() !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 require_once __DIR__ . '/public_html/config.php';
 require_once __DIR__ . '/public_html/api/services/lecture.php'; // getFixedZoomUrl
 
