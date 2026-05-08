@@ -46,3 +46,29 @@ $dbName = $db->query("SELECT DATABASE()")->fetchColumn();
 echo "=== Cohort Clone: {$fromCohort} → {$toCohort} ===\n";
 echo "DB: {$dbName}\n";
 echo "Mode: " . ($dryRun ? 'DRY-RUN' : 'APPLY') . ($force ? ' (FORCE)' : '') . "\n\n";
+
+// ── cohort 정보 ─────────────────────────────────────────────
+$cohortStmt = $db->prepare("SELECT id, cohort, start_date, end_date FROM cohorts WHERE cohort = ?");
+
+$cohortStmt->execute([$fromCohort]);
+$fromRow = $cohortStmt->fetch(PDO::FETCH_ASSOC);
+if (!$fromRow) {
+    fwrite(STDERR, "원본 cohort '{$fromCohort}' 가 cohorts 테이블에 없습니다\n");
+    exit(2);
+}
+
+$cohortStmt->execute([$toCohort]);
+$toRow = $cohortStmt->fetch(PDO::FETCH_ASSOC);
+if (!$toRow) {
+    fwrite(STDERR, "대상 cohort '{$toCohort}' 가 cohorts 테이블에 없습니다\n");
+    exit(2);
+}
+
+$fromStart = new DateTime($fromRow['start_date']);
+$toStart   = new DateTime($toRow['start_date']);
+$dayOffset = (int)$fromStart->diff($toStart)->format('%r%a');
+
+echo "[cohort 정보]\n";
+echo "  {$fromCohort} 시작: {$fromRow['start_date']}\n";
+echo "  {$toCohort} 시작: {$toRow['start_date']}\n";
+echo "  Day shift: " . ($dayOffset >= 0 ? "+{$dayOffset}" : (string)$dayOffset) . "일\n\n";
