@@ -24,6 +24,12 @@ if (php_sapi_name() !== 'cli') {
     exit('CLI only');
 }
 
+// 테스트 등에서 require_once 시 main 흐름 실행 방지 (함수 정의는 그대로 노출됨)
+if (defined('CLONE_LIB_ONLY')) {
+    require_once __DIR__ . '/public_html/config.php';
+    return;
+}
+
 require_once __DIR__ . '/public_html/config.php';
 
 $opts = getopt('', ['from:', 'to:', 'dry-run', 'force', 'allow-missing-roles', 'help']);
