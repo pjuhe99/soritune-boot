@@ -586,6 +586,7 @@ case 'member_create':
     $nickname = trim($input['nickname'] ?? '');
     $phone    = trim($input['phone'] ?? '');
     $userId   = trim($input['user_id'] ?? '') ?: null;
+    $cohortIdInput = isset($input['cohort_id']) ? (int)$input['cohort_id'] : 0;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $groupId  = !empty($input['group_id']) ? (int)$input['group_id'] : null;
     $stageNo  = isset($input['stage_no']) ? (int)$input['stage_no'] : 1;
@@ -594,10 +595,17 @@ case 'member_create':
     if (!$userId) jsonError('아이디를 입력해주세요.');
 
     $db = getDB();
-    $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
-    $stmt->execute([$cohort]);
-    $cohortRow = $stmt->fetch();
-    if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+    if ($cohortIdInput > 0) {
+        $stmt = $db->prepare('SELECT id FROM cohorts WHERE id = ?');
+        $stmt->execute([$cohortIdInput]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+    } else {
+        $stmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+        $stmt->execute([$cohort]);
+        $cohortRow = $stmt->fetch();
+        if (!$cohortRow) jsonError('해당 기수가 존재하지 않습니다.');
+    }
 
     $newId = createMember($db, [
         'cohort_id' => (int)$cohortRow['id'],

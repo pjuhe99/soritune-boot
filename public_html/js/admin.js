@@ -928,8 +928,14 @@ const AdminApp = (() => {
     async function loadMembersMgmt() {
         const sec = document.getElementById('tab-members');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
-        const r = await App.get('/api/admin.php?action=member_list');
+        const [r, rCohorts] = await Promise.all([
+            App.get('/api/admin.php?action=member_list'),
+            App.get('/api/bootcamp.php?action=cohorts'),
+        ]);
         if (!r.success) return;
+        const activeCohorts = rCohorts.success
+            ? (rCohorts.cohorts || []).filter(c => parseInt(c.is_active) === 1)
+            : [];
 
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
@@ -953,12 +959,27 @@ const AdminApp = (() => {
         MemberTable.bindSearch(tableEl);
         MemberTable.bindEntranceFilter(tableEl);
         MemberTable.bindGroupFilter(tableEl);
-        document.getElementById('btn-add-member').onclick = () => showMemberForm();
+        document.getElementById('btn-add-member').onclick = () => showMemberForm({}, activeCohorts);
     }
 
-    function showMemberForm(data = {}) {
+    function showMemberForm(data = {}, cohorts = []) {
         const isEdit = !!data.id;
+        const viewId = admin && admin.admin_view_cohort_id != null ? parseInt(admin.admin_view_cohort_id) : null;
+        const defaultCohortId = viewId
+            && cohorts.some(c => parseInt(c.id) === viewId)
+            ? viewId
+            : (cohorts[0] ? parseInt(cohorts[0].id) : null);
+        const defaultCohortLabel = (cohorts.find(c => parseInt(c.id) === defaultCohortId) || {}).cohort || '';
+        const cohortPickerHtml = !isEdit && cohorts.length > 0 ? `
+            <div class="form-group" style="padding: 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 6px; margin-bottom: 12px;">
+                <label class="form-label" style="font-weight: 600; color: #c2410c;">추가될 기수 *</label>
+                <select class="form-select" id="mf-cohort">
+                    ${cohorts.map(c => `<option value="${parseInt(c.id)}" ${parseInt(c.id) === defaultCohortId ? 'selected' : ''}>${App.esc(c.cohort)}</option>`).join('')}
+                </select>
+                <div style="font-size: 11px; color: #9a3412; margin-top: 6px;">현재 보기 기수(${App.esc(defaultCohortLabel)})로 자동 선택됨. 다른 기수에 추가하려면 위에서 변경하세요.</div>
+            </div>` : '';
         const body = `
+            ${cohortPickerHtml}
             <div class="form-group">
                 <label class="form-label">이름 *</label>
                 <input type="text" class="form-input" id="mf-name" value="${App.esc(data.real_name || '')}">
@@ -1024,6 +1045,9 @@ const AdminApp = (() => {
             if (isEdit) {
                 payload.id = data.id;
                 payload.is_active = parseInt(document.getElementById('mf-active').value);
+            } else {
+                const mfCohort = document.getElementById('mf-cohort');
+                if (mfCohort) payload.cohort_id = parseInt(mfCohort.value);
             }
             if (!payload.real_name) return Toast.warning('이름을 입력해주세요.');
             if (!payload.user_id) return Toast.warning('아이디를 입력해주세요.');
