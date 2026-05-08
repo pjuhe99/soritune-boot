@@ -176,6 +176,89 @@ foreach ($plannedRowsByRole as $role => $cnt) {
 echo "  " . str_repeat('-', 25) . "\n";
 printf("  %-12s %6d rows\n\n", 'TOTAL', $plannedTotal);
 
+// ── 트랜잭션 시작 ─────────────────────────────────────────
+$db->beginTransaction();
+
+try {
+    if ($force) {
+        $delTasks = $db->prepare("DELETE FROM tasks WHERE cohort = ?");
+        $delTasks->execute([$toCohort]);
+        $deletedTasks = $delTasks->rowCount();
+
+        $delCur = $db->prepare("DELETE FROM curriculum_items WHERE cohort = ?");
+        $delCur->execute([$toCohort]);
+        $deletedCur = $delCur->rowCount();
+
+        echo "[--force] 삭제: tasks {$deletedTasks}건, curriculum_items {$deletedCur}건\n\n";
+    }
+
+    $insertTask = $db->prepare("
+        INSERT INTO tasks (
+            title, role, assignee_admin_id, assignee_member_id, completed,
+            start_date, end_date, content_markdown, cohort
+        ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)
+    ");
+
+    $toBase = new DateTimeImmutable($toRow['start_date']);
+    $taskInserted = 0;
+    foreach ($plan as $entry) {
+        $tpl = $entry['template'];
+        $newStart = $toBase->modify("+{$tpl['start_day_offset']} day")->format('Y-m-d');
+        $newEnd   = $toBase->modify("+{$tpl['end_day_offset']} day")->format('Y-m-d');
+
+        foreach ($entry['candidates'] as $cand) {
+            $insertTask->execute([
+                $tpl['title'],
+                $tpl['role'],
+                $cand['admin_id']  ?? null,
+                $cand['member_id'] ?? null,
+                $newStart,
+                $newEnd,
+                $tpl['content_markdown'],
+                $toCohort,
+            ]);
+            $taskInserted++;
+        }
+    }
+    echo "[Task INSERT] {$taskInserted} rows\n";
+
+    $curInsert = $db->prepare("
+        INSERT INTO curriculum_items (cohort, target_date, task_type, note, sort_order, created_by)
+        SELECT ?, DATE_ADD(target_date, INTERVAL ? DAY), task_type, note, sort_order, NULL
+        FROM curriculum_items
+        WHERE cohort = ?
+    ");
+    $curInsert->execute([$toCohort, $dayOffset, $fromCohort]);
+    $curInserted = $curInsert->rowCount();
+    echo "[Curriculum INSERT] {$curInserted} rows\n\n";
+
+    $verifyStmt = $db->prepare("SELECT role, COUNT(*) AS n FROM tasks WHERE cohort = ? GROUP BY role ORDER BY role");
+    $verifyStmt->execute([$toCohort]);
+    echo "[검증] 12기 task 분포:\n";
+    foreach ($verifyStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        printf("  %-12s %6d rows\n", $r['role'], $r['n']);
+    }
+
+    $verifyCur = $db->prepare("SELECT COUNT(*) FROM curriculum_items WHERE cohort = ?");
+    $verifyCur->execute([$toCohort]);
+    echo "[검증] 12기 curriculum: " . (int)$verifyCur->fetchColumn() . " rows\n\n";
+
+    if ($dryRun) {
+        $db->rollBack();
+        echo "[DRY-RUN] ROLLBACK 완료. 변경 없음.\n";
+    } else {
+        $db->commit();
+        echo "[APPLY] COMMIT 완료.\n";
+    }
+} catch (Throwable $e) {
+    if ($db->inTransaction()) $db->rollBack();
+    fwrite(STDERR, "ERROR: " . $e->getMessage() . "\n");
+    fwrite(STDERR, $e->getTraceAsString() . "\n");
+    exit(5);
+}
+
+echo "\nDone.\n";
+
 /**
  * 특정 role 의 대상 cohort 후보 수.
  * - admin role (head/coach/sub_coach/subhead1/subhead2): admin_roles JOIN (admins.cohort = $toCohort)
