@@ -138,6 +138,20 @@ if ($missing && !$allowMissingRoles) {
     exit(4);
 }
 
+// ── Template 추출 ─────────────────────────────────────────
+$templates = extractTemplates($db, $fromCohort, $fromRow['start_date']);
+
+$tplByRole = [];
+foreach ($templates as $tpl) {
+    $tplByRole[$tpl['role']] = ($tplByRole[$tpl['role']] ?? 0) + 1;
+}
+
+echo "[Template 추출] " . count($templates) . " templates (dedupe 결과)\n";
+foreach ($tplByRole as $role => $cnt) {
+    printf("  %-12s %6d templates\n", $role, $cnt);
+}
+echo "\n";
+
 /**
  * 특정 role 의 대상 cohort 후보 수.
  * - admin role (head/coach/sub_coach/subhead1/subhead2): admin_roles JOIN (admins.cohort = $toCohort)
@@ -172,4 +186,68 @@ function countCandidates(PDO $db, string $role, string $toCohort): int {
         return (int)$stmt->fetchColumn();
     }
     return 0;
+}
+
+/**
+ * 원본 cohort 의 task 를 (role, title, content_markdown, start_day_offset, end_day_offset) 로 dedupe.
+ * 각 template 은 11기 assignee 정보(operation 보존용) 와 source row 수 함께 보관.
+ *
+ * @return array<int, array{
+ *   role: string,
+ *   title: string,
+ *   content_markdown: ?string,
+ *   start_day_offset: int,
+ *   end_day_offset: int,
+ *   src_assignee_admin_ids: int[],
+ *   src_has_unassigned: bool,
+ *   src_row_count: int
+ * }>
+ */
+function extractTemplates(PDO $db, string $fromCohort, string $fromStart): array {
+    $stmt = $db->prepare("
+        SELECT role, title, content_markdown,
+               DATEDIFF(start_date, ?) AS start_day_offset,
+               DATEDIFF(end_date, ?)   AS end_day_offset,
+               assignee_admin_id, assignee_member_id
+        FROM tasks
+        WHERE cohort = ?
+        ORDER BY start_day_offset, role, title, id
+    ");
+    $stmt->execute([$fromStart, $fromStart, $fromCohort]);
+
+    $templates = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $key = sha1(implode('|', [
+            $r['role'],
+            $r['title'],
+            $r['content_markdown'] ?? '',
+            (string)$r['start_day_offset'],
+            (string)$r['end_day_offset'],
+        ]));
+        if (!isset($templates[$key])) {
+            $templates[$key] = [
+                'role' => $r['role'],
+                'title' => $r['title'],
+                'content_markdown' => $r['content_markdown'],
+                'start_day_offset' => (int)$r['start_day_offset'],
+                'end_day_offset'   => (int)$r['end_day_offset'],
+                'src_assignee_admin_ids' => [],
+                'src_has_unassigned' => false,
+                'src_row_count' => 0,
+            ];
+        }
+        $t = &$templates[$key];
+        $t['src_row_count']++;
+        if ($r['assignee_admin_id'] !== null) {
+            $aid = (int)$r['assignee_admin_id'];
+            if (!in_array($aid, $t['src_assignee_admin_ids'], true)) {
+                $t['src_assignee_admin_ids'][] = $aid;
+            }
+        }
+        if ($r['assignee_admin_id'] === null && $r['assignee_member_id'] === null) {
+            $t['src_has_unassigned'] = true;
+        }
+        unset($t);
+    }
+    return array_values($templates);
 }
