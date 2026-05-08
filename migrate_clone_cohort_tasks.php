@@ -152,6 +152,30 @@ foreach ($tplByRole as $role => $cnt) {
 }
 echo "\n";
 
+// ── 12기 row 예상 카운트 ──────────────────────────────────
+$plannedRowsByRole = [];
+$plannedTotal = 0;
+$plan = [];
+
+foreach ($templates as $tpl) {
+    $cands = resolveCandidates($db, $tpl, $toCohort);
+    if (empty($cands)) {
+        if ($allowMissingRoles) continue;
+        fwrite(STDERR, "role '{$tpl['role']}' 후보 없음 (template: {$tpl['title']})\n");
+        exit(4);
+    }
+    $plan[] = ['template' => $tpl, 'candidates' => $cands];
+    $plannedRowsByRole[$tpl['role']] = ($plannedRowsByRole[$tpl['role']] ?? 0) + count($cands);
+    $plannedTotal += count($cands);
+}
+
+echo "[12기 task 예상 row]\n";
+foreach ($plannedRowsByRole as $role => $cnt) {
+    printf("  %-12s %6d rows\n", $role, $cnt);
+}
+echo "  " . str_repeat('-', 25) . "\n";
+printf("  %-12s %6d rows\n\n", 'TOTAL', $plannedTotal);
+
 /**
  * 특정 role 의 대상 cohort 후보 수.
  * - admin role (head/coach/sub_coach/subhead1/subhead2): admin_roles JOIN (admins.cohort = $toCohort)
@@ -250,4 +274,59 @@ function extractTemplates(PDO $db, string $fromCohort, string $fromStart): array
         unset($t);
     }
     return array_values($templates);
+}
+
+/**
+ * 특정 template 에 대한 12기 row 생성 후보 목록.
+ *
+ * @return array<int, array{admin_id?: int, member_id?: int}>
+ *   - admin_id 만 채워진 행: assignee_admin_id 로 INSERT
+ *   - member_id 만 채워진 행: assignee_member_id 로 INSERT
+ *   - 빈 array []: NULL assignee row
+ */
+function resolveCandidates(PDO $db, array $template, string $toCohort): array {
+    $role = $template['role'];
+
+    if ($role === 'operation') {
+        if (empty($template['src_assignee_admin_ids']) && !$template['src_has_unassigned']) {
+            return [];
+        }
+        $out = [];
+        foreach ($template['src_assignee_admin_ids'] as $aid) {
+            $out[] = ['admin_id' => $aid];
+        }
+        if ($template['src_has_unassigned']) {
+            $out[] = [];
+        }
+        return $out;
+    }
+
+    if (in_array($role, ['head', 'coach', 'sub_coach', 'subhead1', 'subhead2'], true)) {
+        $stmt = $db->prepare("
+            SELECT DISTINCT a.id
+            FROM admins a JOIN admin_roles ar ON ar.admin_id = a.id
+            WHERE a.cohort = ? AND ar.role = ? AND a.is_active = 1
+            ORDER BY a.id
+        ");
+        $stmt->execute([$toCohort, $role]);
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return array_map(fn($id) => ['admin_id' => (int)$id], $ids);
+    }
+
+    if (in_array($role, ['leader', 'subleader'], true)) {
+        if ($template['src_has_unassigned'] && empty($template['src_assignee_admin_ids'])) {
+            return [[]];
+        }
+        $stmt = $db->prepare("
+            SELECT bm.id
+            FROM bootcamp_members bm JOIN cohorts c ON c.id = bm.cohort_id
+            WHERE c.cohort = ? AND bm.member_role = ? AND bm.is_active = 1
+            ORDER BY bm.id
+        ");
+        $stmt->execute([$toCohort, $role]);
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return array_map(fn($id) => ['member_id' => (int)$id], $ids);
+    }
+
+    return [];
 }
