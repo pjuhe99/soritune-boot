@@ -925,11 +925,13 @@ const AdminApp = (() => {
     // ══════════════════════════════════════════════════════════
 
     // ── Members Management ──
+    let _membersIncludeInactive = false;
     async function loadMembersMgmt() {
         const sec = document.getElementById('tab-members');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
+        const memberUrl = '/api/admin.php?action=member_list' + (_membersIncludeInactive ? '&include_inactive=1' : '');
         const [r, rCohorts] = await Promise.all([
-            App.get('/api/admin.php?action=member_list'),
+            App.get(memberUrl),
             App.get('/api/bootcamp.php?action=cohorts'),
         ]);
         if (!r.success) return;
@@ -937,9 +939,25 @@ const AdminApp = (() => {
             ? (rCohorts.cohorts || []).filter(c => parseInt(c.is_active) === 1)
             : [];
 
+        const sc = r.status_counts || {};
+        const refundedN = parseInt(sc.refunded) || 0;
+        const outN = parseInt(sc.out_of_group_management) || 0;
+        const leavingN = parseInt(sc.leaving) || 0;
+        const inactiveExtra = [];
+        if (refundedN) inactiveExtra.push(`환불 ${refundedN}`);
+        if (outN) inactiveExtra.push(`탈락 ${outN}`);
+        if (leavingN) inactiveExtra.push(`나간 회원 ${leavingN}`);
+        const headerLabel = _membersIncludeInactive
+            ? `회원 ${r.members.length}명 (전체)`
+            : `활성 회원 ${r.members.length}명${inactiveExtra.length ? ` <span style="font-weight:normal;color:var(--color-text-sub);font-size:var(--text-xs)">(${inactiveExtra.join(' · ')} 미포함)</span>` : ''}`;
+
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
-                <span style="font-weight:600">회원 (${r.members.length}명)</span>
+                <span style="font-weight:600">${headerLabel}</span>
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--color-text-sub);margin-left:12px;cursor:pointer;">
+                    <input type="checkbox" id="mf-include-inactive" ${_membersIncludeInactive ? 'checked' : ''}>
+                    환불·탈락·나간 회원 포함
+                </label>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
             </div>
             <div id="op-members-table">
@@ -960,6 +978,10 @@ const AdminApp = (() => {
         MemberTable.bindEntranceFilter(tableEl);
         MemberTable.bindGroupFilter(tableEl);
         document.getElementById('btn-add-member').onclick = () => showMemberForm({}, activeCohorts);
+        document.getElementById('mf-include-inactive').onchange = (e) => {
+            _membersIncludeInactive = e.target.checked;
+            loadMembersMgmt();
+        };
     }
 
     function showMemberForm(data = {}, cohorts = []) {

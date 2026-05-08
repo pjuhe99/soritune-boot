@@ -548,11 +548,18 @@ case 'cohort_activate':
 case 'member_list':
     $admin = requireAdmin(['operation']);
     $cohort = getEffectiveCohort($admin);
+    $includeInactive = !empty($_GET['include_inactive']);
     $db = getDB();
     $cStmt = $db->prepare("SELECT id FROM cohorts WHERE cohort = ? LIMIT 1");
     $cStmt->execute([$cohort]);
     $cRow = $cStmt->fetch();
     if ($cRow) ensureScoresFresh($db, (int)$cRow['id']);
+
+    $where = ["c.cohort = ?"];
+    $params = [$cohort];
+    if (!$includeInactive) {
+        $where[] = "bm.member_status = 'active'";
+    }
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
                bm.cohort_id, c.cohort, bm.group_id, bg.name AS group_name,
@@ -571,11 +578,26 @@ case 'member_list':
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
         LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
-        WHERE c.cohort = ?
+        WHERE " . implode(' AND ', $where) . "
         ORDER BY bm.real_name
     ");
-    $stmt->execute([$cohort]);
-    jsonSuccess(['members' => $stmt->fetchAll()]);
+    $stmt->execute($params);
+    $members = $stmt->fetchAll();
+
+    $countStmt = $db->prepare("
+        SELECT bm.member_status, COUNT(*) AS cnt
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        WHERE c.cohort = ?
+        GROUP BY bm.member_status
+    ");
+    $countStmt->execute([$cohort]);
+    $statusCounts = ['active' => 0, 'leaving' => 0, 'refunded' => 0, 'out_of_group_management' => 0];
+    foreach ($countStmt->fetchAll() as $row) {
+        $statusCounts[$row['member_status']] = (int)$row['cnt'];
+    }
+
+    jsonSuccess(['members' => $members, 'status_counts' => $statusCounts]);
     break;
 
 case 'member_create':
