@@ -184,6 +184,21 @@ const LectureApp = (() => {
             body += `<div class="lec-notice muted">Zoom 생성 대기 중입니다.</div>`;
         }
 
+        // Edit time form (admin only)
+        const canEditTime = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
+        if (canEditTime) {
+            const curStart = (s.start_time || '').substring(0, 5);
+            body += `
+                <div class="lec-detail-edit-area">
+                    <div class="lec-detail-edit-label">시간 변경</div>
+                    <div class="lec-detail-edit-row">
+                        <input type="time" id="lec-edit-time" class="form-input" value="${curStart}">
+                        <button class="btn btn-primary btn-sm" id="btn-lec-edit-time" data-session="${s.id}">저장</button>
+                    </div>
+                </div>
+            `;
+        }
+
         // Cancel button (admin only)
         const canCancel = ['operation', 'head', 'subhead1', 'subhead2'].includes(role);
         if (canCancel) {
@@ -197,6 +212,28 @@ const LectureApp = (() => {
         App.openModal(s.title || '강의 상세', body);
 
         // Bind events
+        const editBtn = document.getElementById('btn-lec-edit-time');
+        if (editBtn) {
+            editBtn.onclick = async () => {
+                const newTime = document.getElementById('lec-edit-time').value;
+                if (!newTime || !/^\d{2}:\d{2}$/.test(newTime)) {
+                    Toast.error('시간 형식: HH:MM');
+                    return;
+                }
+                App.showLoading();
+                const r = await App.post(API + 'lecture_session_update_time', {
+                    session_id: parseInt(editBtn.dataset.session),
+                    start_time: newTime,
+                });
+                App.hideLoading();
+                if (r.success) {
+                    Toast.success(r.message || '시간이 변경되었습니다.');
+                    App.closeModal();
+                    loadAllData();
+                }
+            };
+        }
+
         const retryBtn = document.getElementById('btn-zoom-retry');
         if (retryBtn) retryBtn.onclick = () => retryZoom(parseInt(retryBtn.dataset.schedule));
 
