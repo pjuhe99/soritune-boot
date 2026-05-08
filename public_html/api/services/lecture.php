@@ -507,7 +507,8 @@ function handleLectureEventDetail() {
 }
 
 /**
- * 이벤트 Zoom 재시도
+ * 이벤트 Zoom 재시도 — 단계별 fixed URL 로 (재)세팅
+ * legacy 'failed' 이벤트 복구 또는 stage 변경 후 갱신용
  */
 function handleLectureEventZoomRetry($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -519,35 +520,24 @@ function handleLectureEventZoomRetry($method) {
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT le.*, a.name AS coach_name
+        SELECT le.id, le.stage
         FROM lecture_events le
-        JOIN admins a ON le.coach_admin_id = a.id
         WHERE le.id = ? AND le.status = 'active'
     ");
     $stmt->execute([$eventId]);
     $event = $stmt->fetch();
     if (!$event) jsonError('이벤트를 찾을 수 없습니다.', 404);
 
-    $startTime = substr($event['start_time'], 0, 5);
-    $endTime   = substr($event['end_time'], 0, 5);
+    $zoomJoinUrl = getFixedZoomUrl((int)$event['stage']);
 
-    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
-        'event_id'     => $eventId,
-        'title'        => $event['title'],
-        'event_date'   => $event['event_date'],
-        'start_time'   => $startTime,
-        'end_time'     => $endTime,
-        'duration'     => 60,
-        'host_account' => $event['host_account'],
-        'scheduled_at' => (new DateTime("{$event['event_date']} {$event['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
-
-    if (!$zoomResult['success']) {
-        jsonError('Zoom 재시도 실패: ' . ($zoomResult['error'] ?? '알 수 없는 오류'));
-    }
+    $db->prepare("
+        UPDATE lecture_events
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $eventId]);
 
     jsonSuccess([
-        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+        'zoom_join_url' => $zoomJoinUrl,
     ], 'Zoom URL이 설정되었습니다.');
 }
 
