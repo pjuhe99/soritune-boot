@@ -303,7 +303,7 @@ function countCandidates(PDO $db, string $role, string $toCohort): int {
 
 /**
  * 원본 cohort 의 task 를 (role, title, content_markdown, start_day_offset, end_day_offset) 로 dedupe.
- * 각 template 은 11기 assignee 정보(operation 보존용) 와 source row 수 함께 보관.
+ * 각 template 은 11기 assignee 정보(operation 보존 / leader NULL 판정용) 와 source row 수 함께 보관.
  *
  * @return array<int, array{
  *   role: string,
@@ -312,6 +312,7 @@ function countCandidates(PDO $db, string $role, string $toCohort): int {
  *   start_day_offset: int,
  *   end_day_offset: int,
  *   src_assignee_admin_ids: int[],
+ *   src_assignee_member_ids: int[],
  *   src_has_unassigned: bool,
  *   src_row_count: int
  * }>
@@ -345,6 +346,7 @@ function extractTemplates(PDO $db, string $fromCohort, string $fromStart): array
                 'start_day_offset' => (int)$r['start_day_offset'],
                 'end_day_offset'   => (int)$r['end_day_offset'],
                 'src_assignee_admin_ids' => [],
+                'src_assignee_member_ids' => [],
                 'src_has_unassigned' => false,
                 'src_row_count' => 0,
             ];
@@ -355,6 +357,12 @@ function extractTemplates(PDO $db, string $fromCohort, string $fromStart): array
             $aid = (int)$r['assignee_admin_id'];
             if (!in_array($aid, $t['src_assignee_admin_ids'], true)) {
                 $t['src_assignee_admin_ids'][] = $aid;
+            }
+        }
+        if ($r['assignee_member_id'] !== null) {
+            $mid = (int)$r['assignee_member_id'];
+            if (!in_array($mid, $t['src_assignee_member_ids'], true)) {
+                $t['src_assignee_member_ids'][] = $mid;
             }
         }
         if ($r['assignee_admin_id'] === null && $r['assignee_member_id'] === null) {
@@ -403,9 +411,13 @@ function resolveCandidates(PDO $db, array $template, string $toCohort): array {
     }
 
     if (in_array($role, ['leader', 'subleader'], true)) {
-        if ($template['src_has_unassigned'] && empty($template['src_assignee_admin_ids'])) {
+        // src 가 모두 unassigned (NULL) 인 경우만 NULL row 1개로 복제
+        $hasAnyAssignee = !empty($template['src_assignee_admin_ids'])
+                       || !empty($template['src_assignee_member_ids']);
+        if (!$hasAnyAssignee && $template['src_has_unassigned']) {
             return [[]];
         }
+        // src 에 member 또는 admin assigned 행이 있으면 12기 멤버에게 fan-out
         $stmt = $db->prepare("
             SELECT bm.id
             FROM bootcamp_members bm JOIN cohorts c ON c.id = bm.cohort_id
