@@ -1,7 +1,7 @@
 <?php
 /**
  * Lecture Service
- * 코치 강의 스케줄 생성/조회/상세/취소 + Zoom webhook
+ * 코치 강의 스케줄 생성/조회/상세/취소 + Zoom (fixed URL)
  */
 
 // ══════════════════════════════════════════════════════════════
@@ -436,23 +436,20 @@ function handleLectureEventCreate($method) {
     ]);
     $eventId = (int)$db->lastInsertId();
 
-    // ── Zoom 미팅 생성 ──
-    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
-        'event_id'    => $eventId,
-        'title'       => $title,
-        'event_date'  => $eventDate,
-        'start_time'  => $startTime,
-        'end_time'    => $endDt->format('H:i'),
-        'duration'    => 60,
-        'host_account' => $hostAccount,
-        'scheduled_at' => (new DateTime("{$eventDate} {$startTimeFull}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
+    // ── 단계별 고정 Zoom URL 설정 (반복 강의와 동일 방식) ──
+    $zoomJoinUrl = getFixedZoomUrl((int)$stage);
+
+    $db->prepare("
+        UPDATE lecture_events
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $eventId]);
 
     jsonSuccess([
         'event_id'     => $eventId,
         'title'        => $title,
-        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
-        'zoom_status'  => $zoomResult['success'] ? 'ready' : 'failed',
+        'zoom_join_url' => $zoomJoinUrl,
+        'zoom_status'  => 'ready',
     ], '이벤트가 생성되었습니다.');
 }
 
@@ -510,7 +507,8 @@ function handleLectureEventDetail() {
 }
 
 /**
- * 이벤트 Zoom 재시도
+ * 이벤트 Zoom 재시도 — 단계별 fixed URL 로 (재)세팅
+ * legacy 'failed' 이벤트 복구 또는 stage 변경 후 갱신용
  */
 function handleLectureEventZoomRetry($method) {
     if ($method !== 'POST') jsonError('POST only', 405);
@@ -522,35 +520,24 @@ function handleLectureEventZoomRetry($method) {
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT le.*, a.name AS coach_name
+        SELECT le.id, le.stage
         FROM lecture_events le
-        JOIN admins a ON le.coach_admin_id = a.id
         WHERE le.id = ? AND le.status = 'active'
     ");
     $stmt->execute([$eventId]);
     $event = $stmt->fetch();
     if (!$event) jsonError('이벤트를 찾을 수 없습니다.', 404);
 
-    $startTime = substr($event['start_time'], 0, 5);
-    $endTime   = substr($event['end_time'], 0, 5);
+    $zoomJoinUrl = getFixedZoomUrl((int)$event['stage']);
 
-    $zoomResult = callLectureEventZoomWebhook($db, $eventId, [
-        'event_id'     => $eventId,
-        'title'        => $event['title'],
-        'event_date'   => $event['event_date'],
-        'start_time'   => $startTime,
-        'end_time'     => $endTime,
-        'duration'     => 60,
-        'host_account' => $event['host_account'],
-        'scheduled_at' => (new DateTime("{$event['event_date']} {$event['start_time']}", new DateTimeZone('Asia/Seoul')))->format('c'),
-    ]);
-
-    if (!$zoomResult['success']) {
-        jsonError('Zoom 재시도 실패: ' . ($zoomResult['error'] ?? '알 수 없는 오류'));
-    }
+    $db->prepare("
+        UPDATE lecture_events
+        SET zoom_join_url = ?, zoom_status = 'ready', zoom_error_message = NULL
+        WHERE id = ?
+    ")->execute([$zoomJoinUrl, $eventId]);
 
     jsonSuccess([
-        'zoom_join_url' => $zoomResult['zoom_join_url'] ?? null,
+        'zoom_join_url' => $zoomJoinUrl,
     ], 'Zoom URL이 설정되었습니다.');
 }
 
@@ -711,57 +698,4 @@ function checkEventOverlap(PDO $db, string $eventDate, string $startTime, string
     ");
     $stmt->execute($params);
     return $stmt->fetch() ?: null;
-}
-
-/**
- * Zoom 미팅 생성 (boot 자체 구현, n8n 의존 제거).
- * - settings.zoom_host_default 에 지정된 단일 Zoom 사용자로 미팅 생성
- *   (lecture_events.host_account 컬럼은 legacy 표시용, Zoom 라우팅에 영향 없음)
- * - 실패 시 zoom_status='failed' + zoom_error_message 저장 후 반환
- * - zoom_start_url 은 만료 위험 + frontend 미사용 → NULL 유지
- */
-function callLectureEventZoomWebhook(PDO $db, int $eventId, array $payload): array {
-    require_once __DIR__ . '/../../includes/zoom/zoom_client.php';
-
-    $hostUserId = getSetting('zoom_host_default');
-    if (!$hostUserId) {
-        return failLectureZoomEvent($db, $eventId, 'zoom_host_default 미설정');
-    }
-
-    try {
-        $result = zoomCreateMeeting((string)$hostUserId, [
-            'topic'      => (string)($payload['title'] ?? ''),
-            'type'       => 2,
-            'start_time' => (string)($payload['scheduled_at'] ?? ''),
-            'duration'   => (int)($payload['duration'] ?? 60),
-            'timezone'   => 'Asia/Seoul',
-        ]);
-    } catch (\Throwable $e) {
-        return failLectureZoomEvent($db, $eventId, mb_substr($e->getMessage(), 0, 500));
-    }
-
-    $db->prepare("
-        UPDATE lecture_events
-        SET zoom_meeting_id = ?, zoom_join_url = ?, zoom_start_url = NULL, zoom_password = ?,
-            zoom_status = 'ready', zoom_error_message = NULL
-        WHERE id = ?
-    ")->execute([
-        $result['meeting_id'],
-        $result['join_url'],
-        $result['password'],
-        $eventId,
-    ]);
-
-    return [
-        'success'       => true,
-        'zoom_join_url' => $result['join_url'],
-    ];
-}
-
-function failLectureZoomEvent(PDO $db, int $eventId, string $errorMsg): array {
-    $db->prepare("
-        UPDATE lecture_events SET zoom_status = 'failed', zoom_error_message = ?
-        WHERE id = ?
-    ")->execute([mb_substr($errorMsg, 0, 500), $eventId]);
-    return ['success' => false, 'error' => $errorMsg];
 }
