@@ -959,6 +959,7 @@ const AdminApp = (() => {
                     환불·탈락·나간 회원 포함
                 </label>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
+                <button class="btn btn-secondary btn-sm" id="btn-cafe-bulk">카페 키 일괄 등록</button>
             </div>
             <div id="op-members-table">
                 ${MemberTable.groupFilterHtml(r.members)}
@@ -982,6 +983,18 @@ const AdminApp = (() => {
             _membersIncludeInactive = e.target.checked;
             loadMembersMgmt();
         };
+        const cafeBulkBtn = document.getElementById('btn-cafe-bulk');
+        if (cafeBulkBtn) {
+            cafeBulkBtn.onclick = () => {
+                if (typeof AdminCafeBulkApp === 'undefined') return Toast.error('카페 일괄 등록 모듈 로드 실패');
+                const tabContainer = document.getElementById('tab-members') || document.querySelector('.tab-content.active');
+                const originalHtml = tabContainer.innerHTML;
+                AdminCafeBulkApp.show(tabContainer, () => {
+                    tabContainer.innerHTML = originalHtml;
+                    loadMembersMgmt(); // 복귀 시 리로드 (방금 등록한 키 반영)
+                });
+            };
+        }
     }
 
     function showMemberForm(data = {}, cohorts = []) {

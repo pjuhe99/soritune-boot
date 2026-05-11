@@ -777,53 +777,26 @@ case 'member_set_status':
 
 case 'fetch_cafe_info':
     $admin = requireAdmin(['operation']);
+    require_once __DIR__ . '/../includes/cafe/cafe_article_fetch.php';
     $articleId = $_GET['article_id'] ?? '';
     if (!$articleId) jsonError('게시글 번호가 필요합니다.');
-    
-    $cafeId = 23243775;
-    $buid = 'a968c143-ebd4-46bb-82ff-5f11230389c5';
-    $url = "https://article.cafe.naver.com/gw/v4/cafes/{$cafeId}/articles/{$articleId}?fromList=true&menuId=292&tc=cafe_article_list&useCafeId=true&buid={$buid}";
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($httpCode !== 200) {
-        jsonError("HTTP 오류: {$httpCode}");
+
+    try {
+        $info = fetchCafeArticleInfo($articleId);
+    } catch (CafeArticleFetchException $e) {
+        jsonError($e->getMessage());
     }
-    
-    $data = json_decode($response, true);
-    if (isset($data['result']['errorCode'])) {
-        jsonError($data['result']['message'] ?? '게시글 접근 불가');
-    }
-    
-    if (!isset($data['result']['article']['writer'])) {
-        jsonError('작성자 정보를 찾을 수 없습니다.');
-    }
-    
-    $writer = $data['result']['article']['writer'];
-    $memberKey = $writer['memberKey'] ?? '';
-    $nick = $writer['nick'] ?? '';
-    
-    if (!$memberKey) {
-        jsonError('memberKey를 추출할 수 없습니다.');
-    }
-    
+
     $db = getDB();
     $stmt = $db->prepare('SELECT id, real_name FROM bootcamp_members WHERE cafe_member_key = ?');
-    $stmt->execute([$memberKey]);
+    $stmt->execute([$info['member_key']]);
     $existingMember = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     jsonSuccess([
         'data' => [
-            'memberKey' => $memberKey,
-            'nick' => $nick,
-            'existingMember' => $existingMember ?: null
+            'memberKey'      => $info['member_key'],
+            'nick'           => $info['nick'],
+            'existingMember' => $existingMember ?: null,
         ]
     ]);
     break;
@@ -862,6 +835,141 @@ case 'lookup_cafe_nick':
             'existingMember' => $existingMember ?: null
         ]
     ]);
+    break;
+
+case 'cafe_bulk_parse':
+    $admin = requireAdmin(['operation']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    require_once __DIR__ . '/../includes/cafe/cafe_csv_parser.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_link_parser.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_article_fetch.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_bulk_match.php';
+
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $csv = (string)($input['csv'] ?? '');
+    if (trim($csv) === '') jsonError('CSV 가 비어있습니다.');
+
+    $parsed = parseCafeCsv($csv);
+    if (count($parsed['rows']) === 0 && count($parsed['errors']) === 0) {
+        jsonError('파싱 결과 행이 없습니다.');
+    }
+
+    $cohortId = resolveAdminCohortId(null, $admin, false);
+    if (!$cohortId) jsonError('cohort 컨텍스트가 없습니다. chip 으로 cohort 선택하세요.');
+
+    $db = getDB();
+
+    $rowsOut = [];
+    $rowNum = 0;
+    $seenArticle = [];
+
+    foreach ($parsed['rows'] as $r) {
+        $rowNum++;
+        $out = [
+            'row'   => $rowNum,
+            'group' => $r['group'],
+            'name'  => $r['name'],
+            'nick'  => $r['nick'],
+            'url'   => $r['url'],
+        ];
+
+        // 링크 파싱
+        $link = parseCafeLink($r['url']);
+        if ($link['error'] !== null) {
+            $out['status'] = $link['error'] === 'wrong_cafe' ? 'WRONG_CAFE' : 'INVALID_LINK';
+            $out['error']  = $link['error'];
+            $rowsOut[] = $out;
+            continue;
+        }
+        $out['article_id'] = $link['article_id'];
+
+        // batch 안 중복
+        if (isset($seenArticle[$link['article_id']])) {
+            $out['status'] = 'DUPLICATE_IN_BATCH';
+            $rowsOut[] = $out;
+            continue;
+        }
+        $seenArticle[$link['article_id']] = true;
+
+        // 카페 API
+        try {
+            $info = fetchCafeArticleInfo($link['article_id']);
+        } catch (CafeArticleFetchException $e) {
+            $out['status'] = 'CAFE_FETCH_FAIL';
+            $out['error']  = $e->getMessage();
+            $rowsOut[] = $out;
+            continue;
+        }
+        $out['member_key'] = $info['member_key'];
+        $out['cafe_nick']  = $info['nick'];
+
+        // 매칭
+        $match = matchCandidates(
+            $db, $cohortId, $info['member_key'],
+            $r['group'] !== '' ? $r['group'] : null,
+            $r['name'],
+            $r['nick']  !== '' ? $r['nick']  : null
+        );
+        $out['status']          = $match['status'];
+        $out['candidates']      = $match['candidates'];
+        $out['existing_member'] = $match['existing_member'];
+
+        $rowsOut[] = $out;
+    }
+
+    // CSV 파싱 에러 행
+    foreach ($parsed['errors'] as $err) {
+        $rowsOut[] = [
+            'row'    => $err['row'],
+            'status' => 'CSV_ERROR',
+            'error'  => $err['reason'],
+        ];
+    }
+
+    // 요약
+    $summary = ['total' => count($rowsOut), 'high' => 0, 'mid' => 0, 'low' => 0, 'fail' => 0, 'skip' => 0];
+    foreach ($rowsOut as $r) {
+        $s = $r['status'] ?? '';
+        if ($s === 'HIGH') $summary['high']++;
+        elseif (in_array($s, ['MID', 'MID_MULTI'], true)) $summary['mid']++;
+        elseif ($s === 'LOW') $summary['low']++;
+        elseif (in_array($s, ['ALREADY_MAPPED_SAME', 'DUPLICATE_IN_BATCH'], true)) $summary['skip']++;
+        elseif (in_array($s, ['INVALID_LINK', 'WRONG_CAFE', 'CAFE_FETCH_FAIL', 'CSV_ERROR', 'NO_MATCH', 'ALREADY_MAPPED_DIFF'], true)) {
+            // NO_MATCH / DIFF 는 실패 아니라 어드민 처리 대기 → fail 카운트엔 안 넣음
+            if (in_array($s, ['INVALID_LINK', 'WRONG_CAFE', 'CAFE_FETCH_FAIL', 'CSV_ERROR'], true)) $summary['fail']++;
+        }
+    }
+
+    jsonSuccess(['data' => ['rows' => $rowsOut, 'summary' => $summary]]);
+    break;
+
+case 'cafe_bulk_apply':
+    $admin = requireAdmin(['operation']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    require_once __DIR__ . '/../includes/cafe/cafe_bulk_apply.php';
+
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $rows = $input['rows'] ?? [];
+    if (!is_array($rows) || empty($rows)) jsonError('적용할 행이 없습니다.');
+    if (count($rows) > 100) jsonError('한 번에 100행 까지만 적용 가능합니다.');
+
+    $db = getDB();
+    $out = applyCafeBulkMapping($db, $rows);
+
+    // cron.log INFO (작업 흐름 추적용)
+    $logLine = '[' . date('Y-m-d H:i:s') . '] cafe_bulk_apply: '
+             . 'applied=' . $out['summary']['applied']
+             . ' skipped=' . $out['summary']['skipped']
+             . ' failed=' . $out['summary']['failed']
+             . ' by=admin#' . ($admin['admin_id'] ?? $admin['id'] ?? '?') . "\n";
+    $logFile = dirname(__DIR__, 2) . '/logs/cron.log';
+    if (is_writable(dirname($logFile))) {
+        @file_put_contents($logFile, $logLine, FILE_APPEND);
+    }
+
+    jsonSuccess(['data' => $out]);
     break;
 
 // ── Admin CRUD (operation only) ─────────────────────────────
