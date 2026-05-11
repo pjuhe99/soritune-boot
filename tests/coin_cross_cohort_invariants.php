@@ -141,5 +141,78 @@ if ($s11) {
         count($g11) >= 2);
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// INV-1~4: getMemberDisplayedCoinTotal 합산 검증
+// ══════════════════════════════════════════════════════════════
+
+// helper: old-equivalent (displayed_groups 한정 + currentMemberId 만) 의 mcc 합산
+function oldEquivalentTotal(PDO $db, int $memberId, array $groupIds): int {
+    if (empty($groupIds)) return 0;
+    $ph = implode(',', array_fill(0, count($groupIds), '?'));
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0)
+        FROM member_cycle_coins mcc
+        JOIN coin_cycles cc ON cc.id = mcc.cycle_id
+        WHERE cc.reward_group_id IN ($ph) AND mcc.member_id = ?
+    ");
+    $stmt->execute(array_merge($groupIds, [$memberId]));
+    return max(0, (int)$stmt->fetchColumn());
+}
+
+// INV-2: sibling 0건 회원 (non-dual) → 새 잔액 = old-equivalent
+$nonDual = $db->query("
+    SELECT bm.id, bm.user_id, bm.cohort_id
+    FROM bootcamp_members bm
+    WHERE bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        WHERE bm2.user_id = bm.user_id AND bm2.id <> bm.id
+      )
+    LIMIT 1
+")->fetch();
+if ($nonDual) {
+    $sib = findCoinSiblingMemberIds($db, (int)$nonDual['id']);
+    $gids = getDisplayedRewardGroupIds($db, (int)$nonDual['id'], $sib);
+    $newTotal = getMemberDisplayedCoinTotal($db, (int)$nonDual['id']);
+    $oldEq = oldEquivalentTotal($db, (int)$nonDual['id'], $gids);
+    t('INV-2 sibling 0 회원 새 잔액 = old-equivalent',
+        $newTotal === $oldEq,
+        "new={$newTotal} old={$oldEq}");
+}
+
+// INV-3: 11기 chip 회원 새 잔액 = old-equivalent
+if (isset($s11) && $s11) {
+    $newTotal = getMemberDisplayedCoinTotal($db, (int)$s11['id']);
+    $sib = findCoinSiblingMemberIds($db, (int)$s11['id']);
+    $gids = getDisplayedRewardGroupIds($db, (int)$s11['id'], $sib);
+    $oldEq = oldEquivalentTotal($db, (int)$s11['id'], $gids);
+    t('INV-3 11기 chip 회원 새 잔액 = old-equivalent',
+        $newTotal === $oldEq,
+        "new={$newTotal} old={$oldEq}");
+}
+
+// INV-1 + INV-4: 12기 chip dual-enrollment
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $newTotal = getMemberDisplayedCoinTotal($db, $cur);
+    $sib = findCoinSiblingMemberIds($db, $cur);
+    $gids = getDisplayedRewardGroupIds($db, $cur, $sib);
+    $oldEq = oldEquivalentTotal($db, $cur, $gids);
+    t('INV-1 12기 chip 새 잔액 ≥ old-equivalent', $newTotal >= $oldEq,
+        "new={$newTotal} old={$oldEq}");
+
+    // INV-4: 새 잔액 = 자기 mcc 합산(displayed 안) + sibling mcc 합산(displayed 안)
+    $sibTotals = 0;
+    foreach ($sib as $s) {
+        if ((int)$s['member_id'] === $cur) continue;
+        $sibTotals += oldEquivalentTotal($db, (int)$s['member_id'], $gids);
+    }
+    $expected = max(0, $oldEq + $sibTotals);
+    t('INV-4 12기 chip dual 새 잔액 = 자기 displayed mcc + sibling displayed mcc',
+        $newTotal === $expected,
+        "new={$newTotal} expected={$expected} (self={$oldEq} sib={$sibTotals})");
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail === 0 ? 0 : 1);

@@ -938,3 +938,31 @@ function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
     }
     return $result;
 }
+
+/**
+ * 대시보드 stat 카드용. 회원 view 에 표시되는 코인 합계.
+ * displayed reward groups 안의 sibling-포함 mcc 합산. coin_logs 미사용 (race-safe).
+ */
+function getMemberDisplayedCoinTotal($db, $memberId): int {
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return 0;
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return 0;
+
+    $memberIds = array_column($siblings, 'member_id');
+    $ph1 = implode(',', array_fill(0, count($groupIds), '?'));
+    $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
+
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0) AS total
+        FROM member_cycle_coins mcc
+        JOIN coin_cycles cc   ON cc.id = mcc.cycle_id
+        JOIN reward_groups rg ON rg.id = cc.reward_group_id
+        WHERE rg.status = 'open'
+          AND rg.id IN ($ph1)
+          AND mcc.member_id IN ($ph2)
+    ");
+    $stmt->execute(array_merge($groupIds, $memberIds));
+    $sum = (int)$stmt->fetchColumn();
+    return max(0, $sum);
+}
