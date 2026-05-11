@@ -218,5 +218,47 @@ if ($sample) {
     }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// getMemberCoinHistory 응답 구조 검증
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $hist = getMemberCoinHistory($db, $cur);
+    t('history 응답이 array',  is_array($hist));
+
+    // 12기 chip dual 회원: 12기 cycle 카드가 반드시 1개 이상
+    $has12 = false;
+    foreach ($hist as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            if ($c['cycle_name'] === '12기') $has12 = true;
+            t("cycle.logs_by_cohort 존재 ({$c['cycle_name']})", isset($c['logs_by_cohort']) && is_array($c['logs_by_cohort']));
+        }
+    }
+    t('12기 cycle 카드 존재 (12기 chip)', $has12);
+
+    // 11기 rg only (cycle_11) 카드는 12기 chip 에서 안 나와야
+    $has11Only = false;
+    foreach ($hist as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            if ($c['cycle_name'] === '11기') $has11Only = true;
+        }
+    }
+    t('11기 cycle 카드 미포함 (12기 chip, rg_11only)', !$has11Only);
+}
+
+// 11기 chip 회원 — 두 cycle 모두 있어야
+if (isset($s11) && $s11) {
+    $hist11 = getMemberCoinHistory($db, (int)$s11['id']);
+    $names = [];
+    foreach ($hist11 as $g) {
+        foreach (($g['cycles'] ?? []) as $c) $names[] = $c['cycle_name'];
+    }
+    t('11기 chip 회원 history 에 11기·12기 cycle 둘 다',
+        in_array('11기', $names) && in_array('12기', $names),
+        'names=' . json_encode($names));
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail === 0 ? 0 : 1);

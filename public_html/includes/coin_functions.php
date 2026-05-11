@@ -755,16 +755,31 @@ function coinPayoutMessage($cycleName, $cycleStatus, $isFutureGroup = false) {
  * 스펙 5.1 참조.
  */
 function getMemberCoinHistory($db, $memberId) {
-    // 1. 회원이 코인 행을 가진 open group들
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return [];
+
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return [];
+
+    $memberIds = array_column($siblings, 'member_id');
+    $curCohortId = (int)$siblings[0]['cohort_id'];
+
+    // sibling cohort_label 빠른 조회용 map (member_id → cohort 메타)
+    $cohortMap = [];
+    foreach ($siblings as $s) {
+        $cohortMap[(int)$s['member_id']] = [
+            'cohort_id'    => (int)$s['cohort_id'],
+            'cohort_label' => (string)$s['cohort_label'],
+        ];
+    }
+
+    // 1. displayed group 메타
+    $ph = implode(',', array_fill(0, count($groupIds), '?'));
     $gStmt = $db->prepare("
-        SELECT DISTINCT rg.id, rg.name
-        FROM reward_groups rg
-        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
-        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
-        WHERE rg.status = 'open'
-        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
+        SELECT id, name FROM reward_groups WHERE id IN ($ph)
+        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = reward_groups.id) ASC
     ");
-    $gStmt->execute([$memberId]);
+    $gStmt->execute($groupIds);
     $groups = $gStmt->fetchAll();
 
     $result = [];
@@ -772,17 +787,21 @@ function getMemberCoinHistory($db, $memberId) {
         $gid = (int)$g['id'];
         $isFutureGroup = ($idx > 0);
 
-        // 2. 해당 group의 cycles + 회원의 earned/used
+        // 2. cycles + sibling-포함 earned/used 합산
+        $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
         $cStmt = $db->prepare("
             SELECT cc.id, cc.name, cc.status,
-                   COALESCE(mcc.earned_coin, 0) AS earned_coin,
-                   COALESCE(mcc.used_coin, 0)   AS used_coin
+                   COALESCE(SUM(mcc.earned_coin), 0) AS earned_coin,
+                   COALESCE(SUM(mcc.used_coin),   0) AS used_coin
             FROM coin_cycles cc
-            LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+            LEFT JOIN member_cycle_coins mcc
+              ON mcc.cycle_id = cc.id
+             AND mcc.member_id IN ($ph2)
             WHERE cc.reward_group_id = ?
+            GROUP BY cc.id
             ORDER BY cc.start_date ASC
         ");
-        $cStmt->execute([$memberId, $gid]);
+        $cStmt->execute(array_merge($memberIds, [$gid]));
         $cycles = $cStmt->fetchAll();
 
         $cycleList = [];
@@ -790,33 +809,48 @@ function getMemberCoinHistory($db, $memberId) {
             $cid = (int)$c['id'];
             $earned = (int)$c['earned_coin'] - (int)$c['used_coin'];
 
-            // 3. 해당 cycle의 해당 회원 coin_logs
+            // 3. cycle 의 logs (sibling 포함) + cohort 라벨 부착
             $lStmt = $db->prepare("
-                SELECT DATE(created_at) AS d, reason_type, coin_change
-                FROM coin_logs
-                WHERE member_id = ? AND cycle_id = ?
-                ORDER BY created_at DESC, id DESC
+                SELECT DATE(cl.created_at) AS d, cl.reason_type, cl.coin_change, cl.member_id
+                FROM coin_logs cl
+                WHERE cl.cycle_id = ? AND cl.member_id IN ($ph2)
+                ORDER BY cl.created_at DESC, cl.id DESC
             ");
-            $lStmt->execute([$memberId, $cid]);
+            $lStmt->execute(array_merge([$cid], $memberIds));
             $logRows = $lStmt->fetchAll();
 
-            $logs = [];
+            // cohort 별로 grouping
+            $byCohort = [];
             foreach ($logRows as $lr) {
-                $logs[] = [
+                $mid = (int)$lr['member_id'];
+                $meta = $cohortMap[$mid] ?? null;
+                if (!$meta) continue;
+                $cohortId = $meta['cohort_id'];
+                if (!isset($byCohort[$cohortId])) {
+                    $byCohort[$cohortId] = [
+                        'cohort_id'       => $cohortId,
+                        'cohort_label'    => $meta['cohort_label'],
+                        'is_other_cohort' => $cohortId !== $curCohortId,
+                        'logs'            => [],
+                    ];
+                }
+                $byCohort[$cohortId]['logs'][] = [
                     'date'        => $lr['d'],
                     'reason_type' => $lr['reason_type'],
                     'label'       => coinReasonLabel($lr['reason_type'], (int)$lr['coin_change']),
                     'change'      => (int)$lr['coin_change'],
                 ];
             }
+            ksort($byCohort); // cohort_id ASC
+            $logsByCohort = array_values($byCohort);
 
             $cycleList[] = [
-                'cycle_id'        => $cid,
-                'cycle_name'      => $c['name'],
-                'cycle_status'    => $c['status'],
-                'earned'          => $earned,
-                'payout_message'  => coinPayoutMessage($c['name'], $c['status'], $isFutureGroup),
-                'logs'            => $logs,
+                'cycle_id'       => $cid,
+                'cycle_name'     => $c['name'],
+                'cycle_status'   => $c['status'],
+                'earned'         => $earned,
+                'payout_message' => coinPayoutMessage($c['name'], $c['status'], $isFutureGroup),
+                'logs_by_cohort' => $logsByCohort,
             ];
         }
 
