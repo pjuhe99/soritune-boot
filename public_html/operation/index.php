@@ -34,6 +34,7 @@
     <script src="/js/cohort-chip.js<?= v('/js/cohort-chip.js') ?>"></script>
     <script src="/js/admin.js<?= v('/js/admin.js') ?>"></script>
     <script src="/js/admin-cafe.js<?= v('/js/admin-cafe.js') ?>"></script>
+    <script src="/js/admin-cafe-bulk.js<?= v('/js/admin-cafe-bulk.js') ?>"></script>
     <script src="/js/coin.js<?= v('/js/coin.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <script src="/js/admin-study.js<?= v('/js/admin-study.js') ?>"></script>
