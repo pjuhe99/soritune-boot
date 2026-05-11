@@ -944,6 +944,34 @@ case 'cafe_bulk_parse':
     jsonSuccess(['data' => ['rows' => $rowsOut, 'summary' => $summary]]);
     break;
 
+case 'cafe_bulk_apply':
+    $admin = requireAdmin(['operation']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    require_once __DIR__ . '/../includes/cafe/cafe_bulk_apply.php';
+
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $rows = $input['rows'] ?? [];
+    if (!is_array($rows) || empty($rows)) jsonError('적용할 행이 없습니다.');
+    if (count($rows) > 100) jsonError('한 번에 100행 까지만 적용 가능합니다.');
+
+    $db = getDB();
+    $out = applyCafeBulkMapping($db, $rows);
+
+    // cron.log INFO (작업 흐름 추적용)
+    $logLine = '[' . date('Y-m-d H:i:s') . '] cafe_bulk_apply: '
+             . 'applied=' . $out['summary']['applied']
+             . ' skipped=' . $out['summary']['skipped']
+             . ' failed=' . $out['summary']['failed']
+             . ' by=admin#' . ($admin['admin_id'] ?? $admin['id'] ?? '?') . "\n";
+    $logFile = dirname(__DIR__, 2) . '/logs/cron.log';
+    if (is_writable(dirname($logFile))) {
+        @file_put_contents($logFile, $logLine, FILE_APPEND);
+    }
+
+    jsonSuccess(['data' => $out]);
+    break;
+
 // ── Admin CRUD (operation only) ─────────────────────────────
 
 case 'admin_list':
