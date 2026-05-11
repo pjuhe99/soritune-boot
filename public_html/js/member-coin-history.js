@@ -46,16 +46,20 @@ const MemberCoinHistory = (() => {
     }
 
     function renderCycleCard(cycle) {
+        const groups = cycle.logs_by_cohort || [];
+        const nonEmpty = groups.filter(g => (g.logs || []).length > 0);
+        // Empty cycle ("earned=0 + logs 없음") 은 카드 자체 미렌더 (spec §5)
+        if ((parseInt(cycle.earned) || 0) === 0 && nonEmpty.length === 0) {
+            return '';
+        }
+        const hasMultipleSources = nonEmpty.length > 1;
+
         const statusBadge = cycle.cycle_status === 'active'
             ? '<span class="coin-cycle-badge coin-cycle-active">적립 중</span>'
             : '';
         const bannerClass = cycle.cycle_status === 'closed'
             ? 'coin-cycle-banner-closed'
             : 'coin-cycle-banner-active';
-
-        const groups = cycle.logs_by_cohort || [];
-        const nonEmpty = groups.filter(g => (g.logs || []).length > 0);
-        const hasMultipleSources = nonEmpty.length > 1;
 
         let body = '';
         if (nonEmpty.length === 0) {
