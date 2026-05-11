@@ -51,9 +51,7 @@ case 'login':
     $scoreRow = $scoreStmt->fetch();
     $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
-    $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
-    $coinStmt->execute([$member['id']]);
-    $coin = (int)($coinStmt->fetchColumn() ?: 0);
+    $coin = getMemberDisplayedCoinTotal($db, (int)$member['id']);
 
     $statsStmt = $db->prepare("
         SELECT COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
@@ -126,9 +124,7 @@ case 'check_session':
             $scoreRow = $scoreStmt->fetch();
             $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
-            $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
-            $coinStmt->execute([$member['id']]);
-            $coin = (int)($coinStmt->fetchColumn() ?: 0);
+            $coin = getMemberDisplayedCoinTotal($db, (int)$member['id']);
 
             jsonSuccess([
                 'logged_in' => true,
@@ -177,9 +173,7 @@ case 'dashboard':
     $scoreRow = $scoreStmt->fetch();
     $score = $scoreRow ? (int)$scoreRow['current_score'] : 0;
 
-    $coinStmt = $db->prepare('SELECT current_coin FROM member_coin_balances WHERE member_id = ?');
-    $coinStmt->execute([$s['member_id']]);
-    $coin = (int)($coinStmt->fetchColumn() ?: 0);
+    $coin = getMemberDisplayedCoinTotal($db, (int)$s['member_id']);
 
     $member['score'] = $score;
     $member['coin'] = $coin;
