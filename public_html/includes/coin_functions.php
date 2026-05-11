@@ -617,8 +617,20 @@ function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMe
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 회원의 현재 open reward group 반환 (해당 member가 member_cycle_coins row를 가진 cycle 중).
- * 여러 open group에 걸쳐있으면 cycle end_date 최신 기준으로 하나 선택.
+ * 회원의 "이번 기수" reward_group 정보 (cross-cohort aware).
+ *
+ * 선택 룰 (spec §2 "표시 group"):
+ *   - `getDisplayedRewardGroupIds` 결과 (start_date ASC) 의 첫 그룹 = 이번 기수 group.
+ *   - 이는 sibling row 의 mcc 와 무관: 표시 여부는 current member_id 의 mcc + cycle.name 매치 기준.
+ *
+ * Cycle 별 `earned` 합산은 sibling-inclusive (sibling 의 mcc 도 함께 합산) — spec §3.
+ *
+ * 12기 chip dual 회원: 12기 row 가 mcc 없어도 rg(cycle_12 보유) 가 잡혀 null 미반환.
+ * 11기 chip dual 회원: 첫 group 은 rg(cycle_11) — legacy 의 "end_date DESC" 와 의도 차이 있음
+ *   (spec 정신: chip 이 11기면 11기 리워드가 "이번 기수").
+ *
+ * 반환: ['name' => string, 'cycles' => [['name'=>string, 'earned'=>int(net), 'settled'=>bool], ...]]
+ *       또는 null (표시 group 없음)
  */
 function getCurrentRewardGroupForMember($db, $memberId) {
     $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
@@ -626,7 +638,8 @@ function getCurrentRewardGroupForMember($db, $memberId) {
     $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
     if (empty($groupIds)) return null;
 
-    // 첫 group (= 이번 기수의 group) 선택. getDisplayedRewardGroupIds 가 cycle start_date ASC 정렬.
+    // 첫 group = "이번 기수" (start_date ASC 정렬의 첫 원소). legacy 와 의도 차이:
+    // legacy = end_date DESC (가장 늦게 끝나는 cycle). new = chip 의 현재 기수에 맞는 group.
     $gid = $groupIds[0];
     $gStmt = $db->prepare("SELECT id, name, status FROM reward_groups WHERE id = ?");
     $gStmt->execute([$gid]);

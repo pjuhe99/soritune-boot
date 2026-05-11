@@ -294,5 +294,41 @@ if ($sample) {
     }
 }
 
+// 12기 chip + 11기 sibling 이 cycle_12 mcc 잔액 > 0 인 strict 표본:
+// current_reward_group 의 12기 cycle earned 가 sibling 합산 덕에 > 0 이어야
+$strict = $db->query("
+    SELECT bm.id AS member_id
+    FROM bootcamp_members bm
+    JOIN cohorts c ON c.id = bm.cohort_id
+    WHERE c.cohort = '12기'
+      AND bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        JOIN member_cycle_coins mcc2 ON mcc2.member_id = bm2.id
+        JOIN coin_cycles cc2 ON cc2.id = mcc2.cycle_id AND cc2.name = '12기'
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
+          AND (mcc2.earned_coin - mcc2.used_coin) > 0
+      )
+    LIMIT 1
+")->fetch();
+if ($strict) {
+    $rgs = getCurrentRewardGroupForMember($db, (int)$strict['member_id']);
+    if ($rgs) {
+        $cyc12 = null;
+        foreach ($rgs['cycles'] as $c) if ($c['name'] === '12기') { $cyc12 = $c; break; }
+        t('strict 표본 current group 안 12기 cycle 존재', $cyc12 !== null);
+        if ($cyc12) {
+            t('strict 표본 12기 cycle earned > 0 (sibling 합산 효과)',
+                (int)$cyc12['earned'] > 0,
+                "earned={$cyc12['earned']}");
+        }
+    } else {
+        t('strict 표본 current group != null', false, 'getCurrentRewardGroupForMember returned null');
+    }
+} else {
+    echo "SKIP  strict 표본 (DEV 에 cycle_12 mcc 잔액 보유한 11기 sibling 없음)\n";
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail === 0 ? 0 : 1);
