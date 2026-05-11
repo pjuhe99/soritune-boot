@@ -40,8 +40,17 @@ function startSessionFor(string $tier): void {
     session_save_path($cfg['save_path']);
     session_name($cfg['cookie_name']);
     // tier 전환 시 직전 세션의 session_id() 가 남아있으면 PHP 가 쿠키 값보다 그 SID 를 우선해서
-    // 새 tier 의 SID 로 재사용 → 쿠키가 잘못된 SID 로 덮어써짐. 새 tier 의 쿠키 값으로 강제 세팅.
-    session_id($_COOKIE[$cfg['cookie_name']] ?? '');
+    // 새 tier 의 SID 로 재사용 → 쿠키가 잘못된 SID 로 덮어써짐. 매번 정확한 SID 로 강제 세팅.
+    // 우선순위: 이번 요청에서 이미 emit 된 Set-Cookie (login_phone 처럼 admin→member→admin 시
+    // step 1 의 새 admin SID 를 step 3 에서 재사용해야 함) > $_COOKIE > '' (PHP 가 새로 생성).
+    $sid = '';
+    foreach (headers_list() as $h) {
+        if (preg_match('/^Set-Cookie:\s*' . preg_quote($cfg['cookie_name'], '/') . '=([^;]+)/i', $h, $m)) {
+            $sid = $m[1];
+        }
+    }
+    if ($sid === '') $sid = $_COOKIE[$cfg['cookie_name']] ?? '';
+    session_id($sid);
     ini_set('session.gc_maxlifetime', $cfg['lifetime']);
     session_set_cookie_params([
         'lifetime' => $cfg['lifetime'],
