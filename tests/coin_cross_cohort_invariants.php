@@ -279,5 +279,20 @@ if (isset($s11) && $s11) {
     }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// getCurrentRewardGroupForMember 검증
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $rg = getCurrentRewardGroupForMember($db, $cur);
+    t('12기 chip dual 회원 current reward group != null', $rg !== null);
+    if ($rg) {
+        $names = array_column($rg['cycles'], 'name');
+        t('current reward group 안에 12기 cycle 존재', in_array('12기', $names));
+    }
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail === 0 ? 0 : 1);

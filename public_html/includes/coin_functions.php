@@ -621,30 +621,33 @@ function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMe
  * 여러 open group에 걸쳐있으면 cycle end_date 최신 기준으로 하나 선택.
  */
 function getCurrentRewardGroupForMember($db, $memberId) {
-    $stmt = $db->prepare("
-        SELECT rg.id, rg.name, rg.status
-        FROM reward_groups rg
-        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
-        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
-        WHERE rg.status = 'open'
-        ORDER BY cc.end_date DESC
-        LIMIT 1
-    ");
-    $stmt->execute([$memberId]);
-    $group = $stmt->fetch();
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return null;
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return null;
+
+    // 첫 group (= 이번 기수의 group) 선택. getDisplayedRewardGroupIds 가 cycle start_date ASC 정렬.
+    $gid = $groupIds[0];
+    $gStmt = $db->prepare("SELECT id, name, status FROM reward_groups WHERE id = ?");
+    $gStmt->execute([$gid]);
+    $group = $gStmt->fetch();
     if (!$group) return null;
 
-    // 소속 cycle들 + 해당 회원의 earned, cycle status
+    $memberIds = array_column($siblings, 'member_id');
+    $ph = implode(',', array_fill(0, count($memberIds), '?'));
+
     $cStmt = $db->prepare("
         SELECT cc.id, cc.name, cc.status,
-               COALESCE(mcc.earned_coin, 0) AS earned,
-               COALESCE(mcc.used_coin, 0)   AS used
+               COALESCE(SUM(mcc.earned_coin), 0) AS earned,
+               COALESCE(SUM(mcc.used_coin), 0)   AS used
         FROM coin_cycles cc
-        LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+        LEFT JOIN member_cycle_coins mcc
+          ON mcc.cycle_id = cc.id AND mcc.member_id IN ($ph)
         WHERE cc.reward_group_id = ?
-        ORDER BY cc.start_date
+        GROUP BY cc.id
+        ORDER BY cc.start_date ASC
     ");
-    $cStmt->execute([$memberId, $group['id']]);
+    $cStmt->execute(array_merge($memberIds, [$gid]));
     $cycles = [];
     foreach ($cStmt->fetchAll() as $c) {
         $cycles[] = [
