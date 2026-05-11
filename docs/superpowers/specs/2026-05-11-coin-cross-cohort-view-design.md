@@ -99,31 +99,42 @@ WHERE user_id = :curUserId
 
 **반환 cycle 의 범위**: `getDisplayedRewardGroupIds(currentMemberId, siblings)` 결과의 rg 들 안에 있는 cycle 만 반환 (= "표시 group" 룰 일관). 12기 chip 에선 rg 3 의 cycle_11 은 반환 안 됨. 11기 chip 에선 rg 3·rg 4 모두 반환.
 
+**Source-of-truth**: 잔액(earned/used) 은 `member_cycle_coins` 합산으로 계산한다 (현행 `getMemberCoinHistory` 와 동일). `coin_logs` 는 race 상황에서 합계가 어긋날 수 있어 (2026-05-07 score-coin-transactions spec 참조) 잔액 source 로 쓰지 않고, **카드 본문 logs 표시 용도로만** 별도 쿼리.
+
 ```sql
--- cycle 별 earned/used 집계
+-- 쿼리 A: cycle 별 earned/used 집계 (mcc 합산. coin_logs 와 조인하지 않아 중복 곱 발생 안 함)
 SELECT
-  cc.id AS cycle_id, cc.name AS cycle_name,
-  SUM(CASE WHEN cl.delta > 0 THEN cl.delta ELSE 0 END) AS earned,
-  SUM(CASE WHEN cl.delta < 0 THEN -cl.delta ELSE 0 END) AS used
+  cc.id   AS cycle_id,
+  cc.name AS cycle_name,
+  COALESCE(SUM(mcc.earned_coin), 0) AS earned,
+  COALESCE(SUM(mcc.used_coin),   0) AS used
 FROM coin_cycles cc
-JOIN member_cycle_coins mcc
-  ON mcc.cycle_id = cc.id AND mcc.member_id IN (:ids)
-LEFT JOIN coin_logs cl
-  ON cl.cycle_id = cc.id AND cl.member_id IN (:ids)
+LEFT JOIN member_cycle_coins mcc
+  ON mcc.cycle_id = cc.id
+ AND mcc.member_id IN (:ids)
 WHERE cc.reward_group_id IN (:displayed_group_ids)
 GROUP BY cc.id
+-- mcc 가 한 row 도 없으면 노출 X (어디에도 mcc 없는 cycle 은 카드 자체 미렌더 — 현행과 동일)
+HAVING COUNT(mcc.member_id) > 0
 ```
 
-### coin_logs 에 cohort 라벨 부착
+### coin_logs 에 cohort 라벨 부착 (별도 쿼리)
+
+각 cycle 의 카드 본문 로그 행 (잔액 source 아님, 표시 전용):
 
 ```sql
-SELECT cl.*, bm.cohort_id, c.name AS source_cohort_label
+-- 쿼리 B: cycle 한 개의 logs + cohort 라벨 (잔액 합산과 분리)
+SELECT cl.id, cl.cycle_id, cl.member_id, cl.coin_change, cl.reason_type,
+       cl.reason_detail, cl.created_at,
+       bm.cohort_id, c.cohort AS source_cohort_label
 FROM coin_logs cl
 JOIN bootcamp_members bm ON bm.id = cl.member_id
-JOIN cohorts c ON c.id = bm.cohort_id
+JOIN cohorts c           ON c.id = bm.cohort_id
 WHERE cl.cycle_id = :cycle_id AND cl.member_id IN (:ids)
 ORDER BY cl.created_at DESC
 ```
+
+(컬럼명 주의: 실제 스키마는 `coin_logs.coin_change`, `cohorts.cohort`. `delta`/`name` 이 아님.)
 
 ### 응답 JSON (cycle 한 개)
 
@@ -135,7 +146,7 @@ ORDER BY cl.created_at DESC
   "used": 0,
   "balance": 60,
   "logs_by_cohort": [
-    { "cohort_id": 11, "cohort_label": "11기", "is_other_cohort": true, "logs": [ { "delta": 50, "...": "..." } ] },
+    { "cohort_id": 11, "cohort_label": "11기", "is_other_cohort": true,  "logs": [ { "coin_change": 50, "reason_type": "...", "created_at": "..." } ] },
     { "cohort_id": 12, "cohort_label": "12기", "is_other_cohort": false, "logs": [] }
   ]
 }
@@ -155,18 +166,19 @@ ORDER BY cl.created_at DESC
 
 ### 변경 후
 
-`member_coin_balances` 캐시 직접 read 중단. "표시 group 들의 cycle 합산" 으로 재계산:
+`member_coin_balances` 캐시 직접 read 중단. "표시 group 들의 cycle 별 `member_cycle_coins` 합산" 으로 재계산:
 
 ```sql
-SELECT GREATEST(COALESCE(SUM(cl.delta), 0), 0) AS current_coin
-FROM coin_logs cl
-JOIN coin_cycles cc      ON cc.id = cl.cycle_id
+SELECT GREATEST(COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0), 0) AS current_coin
+FROM member_cycle_coins mcc
+JOIN coin_cycles cc      ON cc.id = mcc.cycle_id
 JOIN reward_groups rg    ON rg.id = cc.reward_group_id
 WHERE rg.status = 'open'
   AND rg.id IN (:displayed_group_ids)
-  AND cl.member_id IN (:sibling_ids)
+  AND mcc.member_id IN (:sibling_ids)
 ```
 
+- **잔액 source = mcc** (race-safe). `coin_logs` 합계는 score-coin-transactions(2026-05-07) 에서 race 시 미세 어긋남 수용 → 표시 잔액은 mcc 로 통일. `member_coin_balances` 도 내부적으로 mcc 합산이므로 (`syncMemberCoinBalance` 참조) 같은 source 유지하면서 cross-cohort 만 확장.
 - "표시 group" 룰 재사용 → 12기 chip 에선 rg 4 만 sum → 11기 row 의 cycle_11(rg 3) portion **자동 제외**.
 - 11기 chip 에선 rg 3 + rg 4 → 현행과 동일.
 - `GREATEST(..., 0)` 클램프 → 음수 노출 방지.
@@ -253,10 +265,14 @@ function renderCycleCard(cycle) {
 - `margin: 12px 0 6px`. 첫 그룹은 `margin-top: 0`.
 - `⤷` 글자로 들여쓰기 신호 — preview 채택본 일치.
 
-### Empty cycle 처리
+### Empty cycle / 단일 섹션 처리
 
 - earned/used 모두 0 + logs 비어 있으면 카드 자체 미렌더 (현행과 동일).
-- 71건 케이스의 12기 chip → 11기 그룹만 logs 있음 → multipleSources=false → flat + 라벨 생략 (사용자 결정 "단일 섹션이면 라벨 생략" 일치).
+- **단일 섹션 라벨 생략 정책 (확정)**: `logs_by_cohort` 안에서 logs 가 1건 이상 있는 그룹이 **1개 이하** 인 경우 → flat 렌더 + 라벨 생략.
+  - non-dual 회원 (sibling 0): 항상 단일 그룹 → 항상 flat (현행 UI 그대로).
+  - dual-enrollment 71건 케이스 (12기 chip + 11기 row 만 logs): 단일 비어있지 않은 그룹 → flat + 출처 표기 없음. cycle 카드 헤더 = `12기 / 60 코인`, 본문 = 11기 row 의 coin_logs row 들 (출처 라벨 없이 flat).
+  - dual-enrollment + 양쪽 모두 logs 보유: multipleSources=true → cohort 별 sub-section 분리 렌더.
+- 의도: 합계 잔액은 cross-cohort 로 정확히 합산하되, UI 의 cohort 출처 표기는 "양쪽에 모두 활동이 있을 때만" 노출 (사용자 결정).
 
 ### Accessibility / 모바일
 
@@ -270,13 +286,26 @@ function renderCycleCard(cycle) {
 PROD 데이터에 대해 read-only 회귀 가드:
 
 ```
-INV-1  자기 cohort chip 시, 새 합산 잔액 ≥ old member_coin_balances.current_coin
-INV-2  sibling 0건 회원(non-dual)의 새 잔액 = old 잔액 (영향 없어야)
-INV-3  11기 chip 회원의 새 잔액 = old 잔액 (earlier sibling 없음)
-INV-4  12기 chip dual-enrollment 71건: 새 잔액 = 12기 row balance + 11기 row 의 cycle_12(rg 4) portion
+INV-1  자기 cohort chip 시, 새 잔액 ≥ "old-equivalent" 합계
+       old-equivalent = 표시 대상 displayed_group_ids 에 한정한 현재 member_id 의
+         SUM(mcc.earned_coin - mcc.used_coin) (rg.status='open' 만).
+       new = 위 + sibling row 들의 같은 displayed_group_ids 안 mcc 합산.
+       → 새 잔액은 항상 old-equivalent 이상 (sibling 이 추가만 하지 빼지 않음).
+       (member_coin_balances.current_coin 은 모든 cycle 합산이라 closed group 포함되어
+        직접 비교 불가 — 그래서 old-equivalent 로 비교.)
+
+INV-2  sibling 0건 회원(non-dual)의 새 잔액 = old-equivalent 잔액 (영향 없어야)
+
+INV-3  11기 chip 회원의 새 잔액 = old-equivalent 잔액 (earlier sibling 없음 → siblings 배열에 자기만)
+
+INV-4  12기 chip dual-enrollment 71건: 새 잔액 = 12기 row 의 displayed mcc 합산
+       + 11기 row 의 cycle_12(rg 4) portion (earned_coin - used_coin)
        (검증 샘플 5건 — oh_nakazawa 60, 3321876906@k 50, 3641551876@k 50 등 메모리 기록)
+
 INV-5  cycle_11(rg 3) portion 은 12기 chip 합산에 절대 포함 안 됨
-INV-6  findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환
+       (12기 chip 의 displayed_group_ids 에 rg 3 미포함 검증)
+
+INV-6  findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환 (cohort_id ≥ 현재 row 미포함)
 ```
 
 ### Smoke 시나리오 (DEV, 수동)
@@ -284,9 +313,10 @@ INV-6  findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환
 1. 11기 단일 회원 로그인 → 기존과 동일 (flat, 라벨 없음).
 2. 12기 단일 회원 로그인 → cycle_12 카드만, flat.
 3. dual-enrollment 11기 chip → rg 3 + rg 4 카드 (현행 유지).
-4. dual-enrollment 12기 chip → cycle_12 카드 하나, `⤷ 11기 때 받은 코인` + `⤷ 12기` 두 섹션 + 카드 상단 합계.
-5. dual-enrollment 12기 chip + 11기 row 잔액 0, 12기 row 잔액 30 → multipleSources=false → flat + 라벨 생략, 헤더=30.
-6. chip 토글 ↔ swap 후 즉시 반영 (reload 기준).
+4. dual-enrollment 12기 chip + **양쪽 모두 logs 보유** → cycle_12 카드 하나, `⤷ 11기 때 받은 코인` + `⤷ 12기` 두 섹션 + 카드 상단 합계.
+5. dual-enrollment 12기 chip + **11기 row 만 logs / 12기 row logs=0** (현재 71건 핵심 케이스) → cycle_12 카드 하나, flat 렌더 + 라벨 생략 (출처 표기 없음), 헤더 = 합산 잔액.
+6. dual-enrollment 12기 chip + 12기 row 만 logs (sibling 활동 없음) → flat + 라벨 생략, 헤더 = 12기 row 잔액.
+7. chip 토글 ↔ swap 후 즉시 반영 (reload 기준).
 
 ### Regression 가드 (자동)
 
@@ -313,12 +343,13 @@ INV-6  findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환
 
 | 파일 | 변경 |
 |------|------|
-| `public_html/includes/coin_functions.php` | `findCoinSiblingMemberIds`, `getDisplayedRewardGroupIds`, `getMemberDisplayedCoinTotal` 신규. `getCurrentRewardGroupForMember`(L623), `getMemberCoinHistory`(L757) sibling-aware 로 변경 |
+| `public_html/includes/coin_functions.php` | `findCoinSiblingMemberIds`, `getDisplayedRewardGroupIds`, `getMemberDisplayedCoinTotal` 신규. `getCurrentRewardGroupForMember`(L623), `getMemberCoinHistory`(L757) sibling-aware 로 변경. `getMemberCoinHistory` 의 응답 구조에 `logs_by_cohort` 추가 (API 계약 변경) |
+| `public_html/api/services/member_page.php` | `handleMyCoinHistory` 가 L451 에서 `getMemberCoinHistory($db, $memberId)` 호출 — 함수 시그니처는 유지하되 응답 구조 변경(logs_by_cohort)이 그대로 통과되어야 함. 별도 코드 수정 없음 (응답 passthrough 확인만) |
 | `public_html/api/member.php` | login(L54) / check_session(L129) / dashboard(L180) 의 `current_coin` 계산을 `getMemberDisplayedCoinTotal` 호출로 교체 |
 | `public_html/js/member-coin-history.js` | `renderCycleCard`(~L48) 가 `logs_by_cohort` 분기 렌더 + 라벨. `coin-section-label` CSS 추가 |
 | `tests/invariants/coin_cross_cohort.php` | 신규 invariants 스크립트 (INV-1~6) |
 
-마이그 없음. 새 컬럼/테이블 없음.
+마이그 없음. 새 컬럼/테이블 없음. API 계약 변경: `my_coin_history` 응답의 cycle 객체에 `logs_by_cohort` 추가 (기존 `logs` 키도 backward-compat 으로 남길지는 implementation plan 에서 결정 — JS 가 단일 호출지 이므로 제거 가능).
 
 ## 검증 데이터 (PROD 2026-05-08 기준)
 
