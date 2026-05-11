@@ -23,7 +23,9 @@ $db = getDB();
 // INV-6: findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환
 // ══════════════════════════════════════════════════════════════
 
-// 12기 dual-enrollment 회원 1명 표본 (user_id 기준)
+// 12기 dual-enrollment 회원 1명 표본 (user_id 기준).
+// 11기 sibling 이 cycle_11 mcc 를 실제로 보유한 회원으로 한정 — 그렇지 않으면
+// "widened mcc branch" 버그가 invariant 에 검출되지 않음.
 $sample = $db->query("
     SELECT bm.user_id, bm.cohort_id, bm.id AS member_id
     FROM bootcamp_members bm
@@ -34,8 +36,19 @@ $sample = $db->query("
         WHERE bm2.user_id = bm.user_id
           AND bm2.cohort_id < bm.cohort_id
       )
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        JOIN member_cycle_coins mcc2 ON mcc2.member_id = bm2.id
+        JOIN coin_cycles cc2 ON cc2.id = mcc2.cycle_id
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
+          AND cc2.name = '11기'
+      )
     LIMIT 1
 ")->fetch();
+if (!$sample) {
+    echo "SKIP  INV-6/-5 (12기 dual + 11기 sibling cycle_11 mcc 없음)\n";
+}
 
 if ($sample) {
     $siblings = findCoinSiblingMemberIds($db, (int)$sample['member_id']);

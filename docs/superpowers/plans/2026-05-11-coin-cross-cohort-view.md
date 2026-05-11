@@ -217,7 +217,7 @@ git commit -m "feat(coin): findCoinSiblingMemberIds helper + invariant"
 - Modify: `/root/boot-dev/public_html/includes/coin_functions.php`
 - Test: `/root/boot-dev/tests/coin_cross_cohort_invariants.php`
 
-표시 group 룰: rg.status='open' AND (현재+sibling 어느 row 든 mcc 보유  OR  rg 안에 cc.name = "<현재 chip cohort label>" 인 cycle 존재).
+표시 group 룰 (spec §2): rg.status='open' AND (현재 member_id 가 rg 안의 어느 cycle 에든 mcc 보유  OR  rg 안에 cc.name = "<현재 chip cohort label>" 인 cycle 존재). sibling mcc 는 표시 여부 판단에 쓰지 않음.
 
 - [ ] **Step 1: 인보리언트 케이스 추가**
 
@@ -302,19 +302,23 @@ Append to `coin_functions.php` (Task 1 의 함수 바로 뒤):
 
 /**
  * 회원 view 에 표시할 reward_group id 목록.
- * 룰: rg.status='open' AND (
- *   현재+sibling member 중 어느 row 든 mcc 보유
- *   OR rg 안에 cc.name = '<현재 chip cohort label>' 인 cycle 존재
- * )
+ * 룰 (spec §2):
+ *   rg.status='open' AND (
+ *     현재 member_id 가 rg 안의 어느 cycle 에든 mcc 보유   -- 기존 룰 (current only)
+ *     OR
+ *     rg 안에 cc.name = '<현재 chip cohort label>' 인 cycle 존재
+ *   )
+ *
+ * sibling member_id 는 mcc 합산(history/total)에서만 쓰이고, "표시 여부" 판단에는
+ * 쓰지 않는다. 그렇지 않으면 12기 chip 에서 11기 sibling 의 rg 3 mcc 때문에
+ * rg 3 (11기 전용) 가 노출되어 INV-5 위반.
  *
  * @param array<int, array{member_id:int, cohort_id:int, cohort_label:string}> $siblings findCoinSiblingMemberIds 결과
- * @return array<int> rg id 목록 (정렬: 첫 cycle start_date ASC — 현행 순서 유지)
+ * @return array<int> rg id 목록 (정렬: 첫 cycle start_date ASC)
  */
 function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
     if (empty($siblings)) return [];
-    $curLabel = $siblings[0]['cohort_label']; // 첫 원소 = 현재
-    $ids = array_column($siblings, 'member_id');
-    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $curLabel = $siblings[0]['cohort_label'];
 
     $sql = "
         SELECT DISTINCT rg.id
@@ -324,7 +328,7 @@ function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
             EXISTS (
               SELECT 1 FROM coin_cycles cc
               JOIN member_cycle_coins mcc
-                ON mcc.cycle_id = cc.id AND mcc.member_id IN ($placeholders)
+                ON mcc.cycle_id = cc.id AND mcc.member_id = ?
               WHERE cc.reward_group_id = rg.id
             )
             OR EXISTS (
@@ -335,8 +339,7 @@ function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
         ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
     ";
     $stmt = $db->prepare($sql);
-    $params = array_merge($ids, [$curLabel]);
-    $stmt->execute($params);
+    $stmt->execute([(int)$memberId, $curLabel]);
     $result = [];
     foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rgId) {
         $result[] = (int)$rgId;
