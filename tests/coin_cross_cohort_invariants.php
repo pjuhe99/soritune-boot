@@ -67,5 +67,66 @@ if ($noUser) {
     t('INV-6 user_id 비어 있으면 자기만', count($siblings) === 1);
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// INV-5: 12기 chip 시 cycle_11(rg 3) 미포함
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $siblings = findCoinSiblingMemberIds($db, (int)$sample['member_id']);
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$sample['member_id'], $siblings);
+
+    // 11기 rg 의 cycle 만 가진 rg 가 displayed 에 들어 있으면 안 됨
+    $rg11Only = $db->query("
+        SELECT rg.id
+        FROM reward_groups rg
+        WHERE rg.status = 'open'
+          AND NOT EXISTS (
+            SELECT 1 FROM coin_cycles cc
+            WHERE cc.reward_group_id = rg.id AND cc.name = '12기'
+          )
+          AND EXISTS (
+            SELECT 1 FROM coin_cycles cc
+            WHERE cc.reward_group_id = rg.id AND cc.name = '11기'
+          )
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    $intersect = array_intersect($groupIds, $rg11Only);
+    t('INV-5 12기 chip displayed_groups 에 rg(11기 only) 미포함',
+        empty($intersect),
+        '겹치는 rg_id: ' . json_encode(array_values($intersect)));
+
+    // 12기 rg (cycle name='12기' 보유) 는 반드시 displayed 에 있어야
+    $rg12 = $db->query("
+        SELECT DISTINCT rg.id
+        FROM reward_groups rg
+        JOIN coin_cycles cc ON cc.reward_group_id = rg.id AND cc.name = '12기'
+        WHERE rg.status = 'open'
+    ")->fetchAll(PDO::FETCH_COLUMN);
+    $missing12 = array_diff($rg12, $groupIds);
+    t('INV 12기 chip displayed_groups 에 cycle_12 보유 rg 모두 포함',
+        empty($missing12),
+        '빠진 rg_id: ' . json_encode(array_values($missing12)));
+}
+
+// 11기 chip 회원 — rg 3 + rg 4 모두 displayed
+$s11 = $db->query("
+    SELECT bm.id FROM bootcamp_members bm
+    JOIN cohorts c ON c.id = bm.cohort_id
+    JOIN member_cycle_coins mcc ON mcc.member_id = bm.id
+    JOIN coin_cycles cc ON cc.id = mcc.cycle_id
+    WHERE c.cohort = '11기'
+    GROUP BY bm.id
+    HAVING COUNT(DISTINCT cc.reward_group_id) >= 2
+    LIMIT 1
+")->fetch();
+
+if ($s11) {
+    $sib11 = findCoinSiblingMemberIds($db, (int)$s11['id']);
+    $g11 = getDisplayedRewardGroupIds($db, (int)$s11['id'], $sib11);
+    t('INV-3 11기 chip 회원 displayed 개수 ≥ 2 (mcc 보유 rg 모두)',
+        count($g11) >= 2);
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail === 0 ? 0 : 1);

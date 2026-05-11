@@ -891,3 +891,47 @@ function findCoinSiblingMemberIds($db, $memberId): array {
     }
     return $cache[$key] = $result;
 }
+
+/**
+ * 회원 view 에 표시할 reward_group id 목록.
+ * 룰: rg.status='open' AND (
+ *   현재+sibling member 중 어느 row 든 mcc 보유
+ *   OR rg 안에 cc.name = '<현재 chip cohort label>' 인 cycle 존재
+ * )
+ *
+ * @param array<int, array{member_id:int, cohort_id:int, cohort_label:string}> $siblings findCoinSiblingMemberIds 결과
+ * @return array<int> rg id 목록 (정렬: 첫 cycle start_date ASC — 현행 순서 유지)
+ */
+function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
+    if (empty($siblings)) return [];
+    $curLabel = $siblings[0]['cohort_label']; // 첫 원소 = 현재
+    $ids = array_column($siblings, 'member_id');
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+    $sql = "
+        SELECT DISTINCT rg.id
+        FROM reward_groups rg
+        WHERE rg.status = 'open'
+          AND (
+            EXISTS (
+              SELECT 1 FROM coin_cycles cc
+              JOIN member_cycle_coins mcc
+                ON mcc.cycle_id = cc.id AND mcc.member_id IN ($placeholders)
+              WHERE cc.reward_group_id = rg.id
+            )
+            OR EXISTS (
+              SELECT 1 FROM coin_cycles cc
+              WHERE cc.reward_group_id = rg.id AND cc.name = ?
+            )
+          )
+        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
+    ";
+    $stmt = $db->prepare($sql);
+    $params = array_merge($ids, [$curLabel]);
+    $stmt->execute($params);
+    $result = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rgId) {
+        $result[] = (int)$rgId;
+    }
+    return $result;
+}
