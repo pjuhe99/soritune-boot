@@ -209,8 +209,46 @@ function getAdminSession(): ?array {
     return $data;
 }
 
+/**
+ * leader/subleader 회원이 회원 세션은 살아있는데 admin 세션이 만료된 경우,
+ * 회원 세션 정보를 바탕으로 admin 세션을 자동 재발급한다.
+ *
+ * 다른 admin role (operation/head/subhead/coach 등) 은 회원 세션이 없으므로
+ * 영향 없음. 보안 수준은 회원 로그인 시 자동 loginAdmin 흐름 (member.php:login)
+ * 과 동일.
+ *
+ * @return array|null 자동 재발급 성공 시 admin session 데이터, 아니면 null
+ */
+function maybeAutoLoginAdminFromMember(): ?array {
+    $m = getMemberSession();
+    if (!$m) return null;
+
+    // 회원의 현재 role/cohort/group 재조회 (세션의 옛 값에 의존하지 않음)
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT bm.id, bm.real_name, bm.nickname, bm.member_role, bm.group_id, c.cohort
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.id = ?
+          AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+          AND c.is_active = 1
+    ");
+    $stmt->execute([(int)$m['member_id']]);
+    $row = $stmt->fetch();
+    if (!$row) return null;
+
+    $role = $row['member_role'] ?? '';
+    if (!in_array($role, ['leader', 'subleader'], true)) return null;
+
+    $displayName = $row['nickname'] ?: $row['real_name'];
+    $bcGroupId = $row['group_id'] ? (int)$row['group_id'] : null;
+    loginAdmin((int)$row['id'], $displayName, [$role], $row['cohort'], $bcGroupId);
+
+    return getAdminSession();
+}
+
 function requireAdmin(array $allowedRoles = []): array {
-    $s = getAdminSession();
+    $s = getAdminSession() ?? maybeAutoLoginAdminFromMember();
     if (!$s) jsonError('로그인이 필요합니다.', 401);
     if ($allowedRoles && !hasAnyRole($s, $allowedRoles)) {
         $needRoles = implode(', ', $allowedRoles);
