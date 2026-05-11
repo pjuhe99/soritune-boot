@@ -54,5 +54,18 @@ t('empty',    parseCafeLink(''),
 t('spaces',   parseCafeLink('  https://cafe.naver.com/themysticsoritune/321852  '),
     ['article_id' => '321852', 'error' => null]);
 
+// 모바일 ca-fe alias (영문 카페 ID)
+t('m_cafe_alias', parseCafeLink('https://m.cafe.naver.com/ca-fe/web/cafes/312edupot/articles/239692?art=foo&tc'),
+    ['article_id' => '239692', 'error' => null]);
+
+// PC ca-fe alias
+t('pc_cafe_alias', parseCafeLink('https://cafe.naver.com/ca-fe/cafes/themysticsoritune/articles/239692'),
+    ['article_id' => '239692', 'error' => null]);
+
+// 영문 alias 안의 wrong cafe — parse는 통과, 사후 검증은 fetchCafeArticleInfo 에서
+// (parse 단계에서 alias 가 우리 카페인지 알 수 없으므로 통과시킴)
+t('m_cafe_alias_unknown', parseCafeLink('https://m.cafe.naver.com/ca-fe/web/cafes/someotheralias/articles/123'),
+    ['article_id' => '123', 'error' => null]);
+
 echo "\n{$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);

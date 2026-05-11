@@ -21,8 +21,13 @@ function parseCafeLink(string $url, int $expectedClubId = 23243775): array {
     // ca-fe (PC/모바일 공통) — clubId 검증 가능
     // NOTE: host `cafe.naver.com` 를 prefix 로 요구해 attacker.com/cafes/.../articles/...
     //       처럼 임의 도메인 위장(anti-spoofing)을 차단한다. `(?:m\.)?` 는 모바일 호스트.
-    if (preg_match('#cafe\.naver\.com/(?:ca-fe/(?:web/)?)?cafes/(\d+)/(?:menus/\d+/)?articles/(\d+)#', $url, $m)) {
-        if ((int)$m[1] !== $expectedClubId) {
+    // NOTE: club ID 부분이 숫자(\d+)만이 아니라 영문 alias([\w-]+)도 허용한다.
+    //       네이버 share link 는 cafes/312edupot/articles/... 같은 alphanumeric alias 형식도 사용.
+    //       숫자면 expectedClubId 검증(anti-spoofing 유지), 영문 alias 면 fetchCafeArticleInfo
+    //       가 하드코딩된 숫자 clubId 로 Naver API 호출 시점에 사후 검증(layered defense).
+    if (preg_match('#cafe\.naver\.com/(?:ca-fe/(?:web/)?)?cafes/([\w-]+)/(?:menus/\d+/)?articles/(\d+)#', $url, $m)) {
+        // numeric clubId → 검증; 영문 alias → fetchCafeArticleInfo 가 사후 검증
+        if (ctype_digit($m[1]) && (int)$m[1] !== $expectedClubId) {
             return ['article_id' => null, 'error' => 'wrong_cafe'];
         }
         return ['article_id' => $m[2], 'error' => null];
