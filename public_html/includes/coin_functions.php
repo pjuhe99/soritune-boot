@@ -762,6 +762,7 @@ function getMemberCoinHistory($db, $memberId) {
     if (empty($groupIds)) return [];
 
     $memberIds = array_column($siblings, 'member_id');
+    // findCoinSiblingMemberIds 는 항상 self 를 첫 원소로 prepend — 빈 array 는 위 가드에서 return 됨
     $curCohortId = (int)$siblings[0]['cohort_id'];
 
     // sibling cohort_label 빠른 조회용 map (member_id → cohort 메타)
@@ -772,6 +773,9 @@ function getMemberCoinHistory($db, $memberId) {
             'cohort_label' => (string)$s['cohort_label'],
         ];
     }
+
+    // member_id IN-list placeholder (sibling 수 변하지 않음 — 함수 내내 동일)
+    $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
 
     // 1. displayed group 메타
     $ph = implode(',', array_fill(0, count($groupIds), '?'));
@@ -788,7 +792,9 @@ function getMemberCoinHistory($db, $memberId) {
         $isFutureGroup = ($idx > 0);
 
         // 2. cycles + sibling-포함 earned/used 합산
-        $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
+        // LEFT JOIN + COALESCE 로 mcc row 가 전혀 없는 cycle 도 earned=0 으로 응답에 포함.
+        // 빈 cycle 카드는 JS (member-coin-history.js renderCycleCard) 에서
+        // earned=0 + logs 비어 있을 때 미렌더로 처리.
         $cStmt = $db->prepare("
             SELECT cc.id, cc.name, cc.status,
                    COALESCE(SUM(mcc.earned_coin), 0) AS earned_coin,

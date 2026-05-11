@@ -258,6 +258,25 @@ if (isset($s11) && $s11) {
     t('11기 chip 회원 history 에 11기·12기 cycle 둘 다',
         in_array('11기', $names) && in_array('12기', $names),
         'names=' . json_encode($names));
+
+    // logs_by_cohort 내부 엔트리 형태 검증 (logs 가 있는 cycle 1개 골라서)
+    $sampleEntry = null;
+    foreach ($hist11 as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            foreach (($c['logs_by_cohort'] ?? []) as $bc) {
+                if (!empty($bc['logs'])) { $sampleEntry = $bc; break 3; }
+            }
+        }
+    }
+    if ($sampleEntry !== null) {
+        t('logs_by_cohort 엔트리에 cohort_id/cohort_label/is_other_cohort/logs 모두 존재',
+            isset($sampleEntry['cohort_id'], $sampleEntry['cohort_label'], $sampleEntry['is_other_cohort'], $sampleEntry['logs']));
+        t('logs_by_cohort.is_other_cohort 가 bool',
+            is_bool($sampleEntry['is_other_cohort']));
+        $log0 = $sampleEntry['logs'][0] ?? null;
+        t('logs_by_cohort.logs[0] 에 date/reason_type/label/change 모두 존재',
+            $log0 !== null && isset($log0['date'], $log0['reason_type'], $log0['label'], $log0['change']));
+    }
 }
 
 echo "\n결과: {$pass} pass, {$fail} fail\n";
