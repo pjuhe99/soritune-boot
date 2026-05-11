@@ -876,6 +876,7 @@ function findCoinSiblingMemberIds($db, $memberId): array {
         WHERE bm.user_id = ?
           AND bm.cohort_id < ?
           AND bm.id <> ?
+        -- no member_status filter: coin ownership is historical (spec §2)
         ORDER BY bm.cohort_id ASC
     ");
     $sStmt->execute([$cur['user_id'], $cur['cohort_id'], $key]);

@@ -25,14 +25,14 @@ $db = getDB();
 
 // 12기 dual-enrollment 회원 1명 표본 (user_id 기준)
 $sample = $db->query("
-    SELECT user_id, cohort_id, id AS member_id
-    FROM bootcamp_members
-    WHERE user_id IS NOT NULL AND user_id != ''
-      AND cohort_id = (SELECT id FROM cohorts WHERE cohort = '12기' LIMIT 1)
-      AND user_id IN (
-        SELECT user_id FROM bootcamp_members
-        WHERE user_id IS NOT NULL AND user_id != ''
-        GROUP BY user_id HAVING COUNT(*) >= 2
+    SELECT bm.user_id, bm.cohort_id, bm.id AS member_id
+    FROM bootcamp_members bm
+    WHERE bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND bm.cohort_id = (SELECT id FROM cohorts WHERE cohort = '12기' LIMIT 1)
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
       )
     LIMIT 1
 ")->fetch();
