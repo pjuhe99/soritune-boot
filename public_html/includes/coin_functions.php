@@ -829,3 +829,64 @@ function getMemberCoinHistory($db, $memberId) {
 
     return $result;
 }
+
+// ══════════════════════════════════════════════════════════════
+// Cross-cohort 회원 view (Option A — 쿼리 시점 user_id 합산)
+// 스펙: docs/superpowers/specs/2026-05-11-coin-cross-cohort-view-design.md
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 같은 user_id 의 earlier-cohort sibling member_id 목록 반환.
+ * 첫 원소는 항상 currentMemberId.
+ * user_id 가 비어 있으면 자기만 반환 (phone fallback 안 함 — 동명이인 위험).
+ * request-scoped static cache.
+ *
+ * @return array<int, array{member_id:int, cohort_id:int, cohort_label:string}>
+ */
+function findCoinSiblingMemberIds($db, $memberId): array {
+    static $cache = [];
+    $key = (int)$memberId;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $stmt = $db->prepare("
+        SELECT bm.id AS member_id, bm.cohort_id, c.cohort AS cohort_label,
+               bm.user_id
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.id = ?
+    ");
+    $stmt->execute([$key]);
+    $cur = $stmt->fetch();
+    if (!$cur) return $cache[$key] = [];
+
+    $self = [
+        'member_id'    => (int)$cur['member_id'],
+        'cohort_id'    => (int)$cur['cohort_id'],
+        'cohort_label' => (string)$cur['cohort_label'],
+    ];
+
+    if (empty($cur['user_id'])) {
+        return $cache[$key] = [$self];
+    }
+
+    $sStmt = $db->prepare("
+        SELECT bm.id AS member_id, bm.cohort_id, c.cohort AS cohort_label
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.user_id = ?
+          AND bm.cohort_id < ?
+          AND bm.id <> ?
+        ORDER BY bm.cohort_id ASC
+    ");
+    $sStmt->execute([$cur['user_id'], $cur['cohort_id'], $key]);
+
+    $result = [$self];
+    foreach ($sStmt->fetchAll() as $r) {
+        $result[] = [
+            'member_id'    => (int)$r['member_id'],
+            'cohort_id'    => (int)$r['cohort_id'],
+            'cohort_label' => (string)$r['cohort_label'],
+        ];
+    }
+    return $cache[$key] = $result;
+}
