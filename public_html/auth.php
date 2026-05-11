@@ -39,6 +39,9 @@ function startSessionFor(string $tier): void {
     }
     session_save_path($cfg['save_path']);
     session_name($cfg['cookie_name']);
+    // tier 전환 시 직전 세션의 session_id() 가 남아있으면 PHP 가 쿠키 값보다 그 SID 를 우선해서
+    // 새 tier 의 SID 로 재사용 → 쿠키가 잘못된 SID 로 덮어써짐. 새 tier 의 쿠키 값으로 강제 세팅.
+    session_id($_COOKIE[$cfg['cookie_name']] ?? '');
     ini_set('session.gc_maxlifetime', $cfg['lifetime']);
     session_set_cookie_params([
         'lifetime' => $cfg['lifetime'],
