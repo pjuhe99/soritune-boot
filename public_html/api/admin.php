@@ -837,6 +837,113 @@ case 'lookup_cafe_nick':
     ]);
     break;
 
+case 'cafe_bulk_parse':
+    $admin = requireAdmin(['operation']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    require_once __DIR__ . '/../includes/cafe/cafe_csv_parser.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_link_parser.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_article_fetch.php';
+    require_once __DIR__ . '/../includes/cafe/cafe_bulk_match.php';
+
+    $input = json_decode(file_get_contents('php://input'), true) ?: [];
+    $csv = (string)($input['csv'] ?? '');
+    if (trim($csv) === '') jsonError('CSV 가 비어있습니다.');
+
+    $parsed = parseCafeCsv($csv);
+    if (count($parsed['rows']) === 0 && count($parsed['errors']) === 0) {
+        jsonError('파싱 결과 행이 없습니다.');
+    }
+
+    $cohortId = resolveAdminCohortId(null, $admin, false);
+    if (!$cohortId) jsonError('cohort 컨텍스트가 없습니다. chip 으로 cohort 선택하세요.');
+
+    $db = getDB();
+
+    $rowsOut = [];
+    $rowNum = 0;
+    $seenArticle = [];
+
+    foreach ($parsed['rows'] as $r) {
+        $rowNum++;
+        $out = [
+            'row'   => $rowNum,
+            'group' => $r['group'],
+            'name'  => $r['name'],
+            'nick'  => $r['nick'],
+            'url'   => $r['url'],
+        ];
+
+        // 링크 파싱
+        $link = parseCafeLink($r['url']);
+        if ($link['error'] !== null) {
+            $out['status'] = $link['error'] === 'wrong_cafe' ? 'WRONG_CAFE' : 'INVALID_LINK';
+            $out['error']  = $link['error'];
+            $rowsOut[] = $out;
+            continue;
+        }
+        $out['article_id'] = $link['article_id'];
+
+        // batch 안 중복
+        if (isset($seenArticle[$link['article_id']])) {
+            $out['status'] = 'DUPLICATE_IN_BATCH';
+            $rowsOut[] = $out;
+            continue;
+        }
+        $seenArticle[$link['article_id']] = true;
+
+        // 카페 API
+        try {
+            $info = fetchCafeArticleInfo($link['article_id']);
+        } catch (CafeArticleFetchException $e) {
+            $out['status'] = 'CAFE_FETCH_FAIL';
+            $out['error']  = $e->getMessage();
+            $rowsOut[] = $out;
+            continue;
+        }
+        $out['member_key'] = $info['member_key'];
+        $out['cafe_nick']  = $info['nick'];
+
+        // 매칭
+        $match = matchCandidates(
+            $db, $cohortId, $info['member_key'],
+            $r['group'] !== '' ? $r['group'] : null,
+            $r['name'],
+            $r['nick']  !== '' ? $r['nick']  : null
+        );
+        $out['status']          = $match['status'];
+        $out['candidates']      = $match['candidates'];
+        $out['existing_member'] = $match['existing_member'];
+
+        $rowsOut[] = $out;
+    }
+
+    // CSV 파싱 에러 행
+    foreach ($parsed['errors'] as $err) {
+        $rowsOut[] = [
+            'row'    => $err['row'],
+            'status' => 'CSV_ERROR',
+            'error'  => $err['reason'],
+        ];
+    }
+
+    // 요약
+    $summary = ['total' => count($rowsOut), 'high' => 0, 'mid' => 0, 'low' => 0, 'fail' => 0, 'skip' => 0];
+    foreach ($rowsOut as $r) {
+        $s = $r['status'] ?? '';
+        if ($s === 'HIGH') $summary['high']++;
+        elseif (in_array($s, ['MID', 'MID_MULTI'], true)) $summary['mid']++;
+        elseif ($s === 'LOW') $summary['low']++;
+        elseif (in_array($s, ['ALREADY_MAPPED_SAME', 'DUPLICATE_IN_BATCH'], true)) $summary['skip']++;
+        elseif (in_array($s, ['INVALID_LINK', 'WRONG_CAFE', 'CAFE_FETCH_FAIL', 'CSV_ERROR', 'NO_MATCH', 'ALREADY_MAPPED_DIFF'], true)) {
+            // NO_MATCH / DIFF 는 실패 아니라 어드민 처리 대기 → fail 카운트엔 안 넣음
+            if (in_array($s, ['INVALID_LINK', 'WRONG_CAFE', 'CAFE_FETCH_FAIL', 'CSV_ERROR'], true)) $summary['fail']++;
+        }
+    }
+
+    jsonSuccess(['data' => ['rows' => $rowsOut, 'summary' => $summary]]);
+    break;
+
 // ── Admin CRUD (operation only) ─────────────────────────────
 
 case 'admin_list':
