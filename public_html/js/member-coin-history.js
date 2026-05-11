@@ -52,9 +52,27 @@ const MemberCoinHistory = (() => {
         const bannerClass = cycle.cycle_status === 'closed'
             ? 'coin-cycle-banner-closed'
             : 'coin-cycle-banner-active';
-        const logs = (cycle.logs || []).map(renderLog).join('');
-        const emptyLogs = !(cycle.logs || []).length
-            ? '<div class="coin-history-empty-logs">이 cycle에 기록이 없습니다.</div>' : '';
+
+        const groups = cycle.logs_by_cohort || [];
+        const nonEmpty = groups.filter(g => (g.logs || []).length > 0);
+        const hasMultipleSources = nonEmpty.length > 1;
+
+        let body = '';
+        if (nonEmpty.length === 0) {
+            body = '<div class="coin-history-empty-logs">이 cycle에 기록이 없습니다.</div>';
+        } else if (!hasMultipleSources) {
+            body = nonEmpty[0].logs.map(renderLog).join('');
+        } else {
+            // 양쪽에 logs 보유 — cohort 별 sub-section 분리 렌더
+            body = nonEmpty.map(g => {
+                const label = g.is_other_cohort
+                    ? `⤷ ${App.esc(g.cohort_label)} 때 받은 코인`
+                    : `⤷ ${App.esc(g.cohort_label)}`;
+                const rows = g.logs.map(renderLog).join('');
+                return `<div class="coin-section-label">${label}</div>${rows}`;
+            }).join('');
+        }
+
         return `
             <div class="coin-cycle-card">
                 <div class="coin-cycle-head">
@@ -62,7 +80,7 @@ const MemberCoinHistory = (() => {
                     <div class="coin-cycle-total">${parseInt(cycle.earned) || 0}</div>
                 </div>
                 <div class="coin-cycle-banner ${bannerClass}">${App.esc(cycle.payout_message)}</div>
-                <div class="coin-cycle-logs">${logs}${emptyLogs}</div>
+                <div class="coin-cycle-logs">${body}</div>
             </div>
         `;
     }
