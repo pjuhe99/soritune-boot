@@ -777,53 +777,26 @@ case 'member_set_status':
 
 case 'fetch_cafe_info':
     $admin = requireAdmin(['operation']);
+    require_once __DIR__ . '/../includes/cafe/cafe_article_fetch.php';
     $articleId = $_GET['article_id'] ?? '';
     if (!$articleId) jsonError('게시글 번호가 필요합니다.');
-    
-    $cafeId = 23243775;
-    $buid = 'a968c143-ebd4-46bb-82ff-5f11230389c5';
-    $url = "https://article.cafe.naver.com/gw/v4/cafes/{$cafeId}/articles/{$articleId}?fromList=true&menuId=292&tc=cafe_article_list&useCafeId=true&buid={$buid}";
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($httpCode !== 200) {
-        jsonError("HTTP 오류: {$httpCode}");
+
+    try {
+        $info = fetchCafeArticleInfo($articleId);
+    } catch (CafeArticleFetchException $e) {
+        jsonError($e->getMessage());
     }
-    
-    $data = json_decode($response, true);
-    if (isset($data['result']['errorCode'])) {
-        jsonError($data['result']['message'] ?? '게시글 접근 불가');
-    }
-    
-    if (!isset($data['result']['article']['writer'])) {
-        jsonError('작성자 정보를 찾을 수 없습니다.');
-    }
-    
-    $writer = $data['result']['article']['writer'];
-    $memberKey = $writer['memberKey'] ?? '';
-    $nick = $writer['nick'] ?? '';
-    
-    if (!$memberKey) {
-        jsonError('memberKey를 추출할 수 없습니다.');
-    }
-    
+
     $db = getDB();
     $stmt = $db->prepare('SELECT id, real_name FROM bootcamp_members WHERE cafe_member_key = ?');
-    $stmt->execute([$memberKey]);
+    $stmt->execute([$info['member_key']]);
     $existingMember = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     jsonSuccess([
         'data' => [
-            'memberKey' => $memberKey,
-            'nick' => $nick,
-            'existingMember' => $existingMember ?: null
+            'memberKey'      => $info['member_key'],
+            'nick'           => $info['nick'],
+            'existingMember' => $existingMember ?: null,
         ]
     ]);
     break;
