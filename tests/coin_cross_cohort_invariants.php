@@ -153,7 +153,8 @@ function oldEquivalentTotal(PDO $db, int $memberId, array $groupIds): int {
     $stmt = $db->prepare("
         SELECT COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0)
         FROM member_cycle_coins mcc
-        JOIN coin_cycles cc ON cc.id = mcc.cycle_id
+        JOIN coin_cycles cc   ON cc.id = mcc.cycle_id
+        JOIN reward_groups rg ON rg.id = cc.reward_group_id AND rg.status = 'open'
         WHERE cc.reward_group_id IN ($ph) AND mcc.member_id = ?
     ");
     $stmt->execute(array_merge($groupIds, [$memberId]));
@@ -212,6 +213,9 @@ if ($sample) {
     t('INV-4 12기 chip dual 새 잔액 = 자기 displayed mcc + sibling displayed mcc',
         $newTotal === $expected,
         "new={$newTotal} expected={$expected} (self={$oldEq} sib={$sibTotals})");
+    if ($sibTotals === 0 && $oldEq === 0) {
+        echo "WARN  INV-4 실효성 없음: 표본의 self·sibling displayed mcc 모두 0 (PROD 에서 재검증 필요)\n";
+    }
 }
 
 echo "\n결과: {$pass} pass, {$fail} fail\n";
