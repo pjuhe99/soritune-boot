@@ -1,0 +1,334 @@
+<?php
+/**
+ * 코인 cross-cohort view 인보리언트
+ * 사용: php tests/coin_cross_cohort_invariants.php
+ *
+ * read-only. PROD/DEV 어디서 돌려도 데이터 변경 없음.
+ */
+if (php_sapi_name() !== 'cli') exit('CLI only');
+
+require_once __DIR__ . '/../public_html/config.php';
+require_once __DIR__ . '/../public_html/includes/coin_functions.php';
+
+$pass = 0; $fail = 0;
+function t(string $name, bool $cond, string $detail = ''): void {
+    global $pass, $fail;
+    if ($cond) { $pass++; echo "PASS  {$name}\n"; }
+    else { $fail++; echo "FAIL  {$name}" . ($detail ? "  ({$detail})" : '') . "\n"; }
+}
+
+$db = getDB();
+
+// ══════════════════════════════════════════════════════════════
+// INV-6: findCoinSiblingMemberIds 가 cohort_id < 현재 만 반환
+// ══════════════════════════════════════════════════════════════
+
+// 12기 dual-enrollment 회원 1명 표본 (user_id 기준).
+// 11기 sibling 이 cycle_11 mcc 를 실제로 보유한 회원으로 한정 — 그렇지 않으면
+// "widened mcc branch" 버그가 invariant 에 검출되지 않음.
+$sample = $db->query("
+    SELECT bm.user_id, bm.cohort_id, bm.id AS member_id
+    FROM bootcamp_members bm
+    WHERE bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND bm.cohort_id = (SELECT id FROM cohorts WHERE cohort = '12기' LIMIT 1)
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
+      )
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        JOIN member_cycle_coins mcc2 ON mcc2.member_id = bm2.id
+        JOIN coin_cycles cc2 ON cc2.id = mcc2.cycle_id
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
+          AND cc2.name = '11기'
+      )
+    LIMIT 1
+")->fetch();
+if (!$sample) {
+    echo "SKIP  INV-6/-5 (12기 dual + 11기 sibling cycle_11 mcc 없음)\n";
+}
+
+if ($sample) {
+    $siblings = findCoinSiblingMemberIds($db, (int)$sample['member_id']);
+
+    t('INV-6 첫 원소가 currentMemberId',
+        !empty($siblings) && (int)$siblings[0]['member_id'] === (int)$sample['member_id']);
+
+    $earlierOnly = true;
+    foreach ($siblings as $s) {
+        if ((int)$s['member_id'] === (int)$sample['member_id']) continue;
+        if ((int)$s['cohort_id'] >= (int)$sample['cohort_id']) { $earlierOnly = false; break; }
+    }
+    t('INV-6 siblings 는 cohort_id < 현재 만', $earlierOnly);
+
+    t('INV-6 dual-enrollment 회원은 sibling ≥ 1건 (자기 외)',
+        count($siblings) >= 2);
+} else {
+    echo "SKIP  INV-6 (dual-enrollment 12기 회원 없음)\n";
+}
+
+// user_id 없는 회원 → 자기만 반환
+$noUser = $db->query("
+    SELECT id FROM bootcamp_members
+    WHERE user_id IS NULL OR user_id = ''
+    LIMIT 1
+")->fetch();
+if ($noUser) {
+    $siblings = findCoinSiblingMemberIds($db, (int)$noUser['id']);
+    t('INV-6 user_id 비어 있으면 자기만', count($siblings) === 1);
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// INV-5: 12기 chip 시 cycle_11(rg 3) 미포함
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $siblings = findCoinSiblingMemberIds($db, (int)$sample['member_id']);
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$sample['member_id'], $siblings);
+
+    // 11기 rg 의 cycle 만 가진 rg 가 displayed 에 들어 있으면 안 됨
+    $rg11Only = $db->query("
+        SELECT rg.id
+        FROM reward_groups rg
+        WHERE rg.status = 'open'
+          AND NOT EXISTS (
+            SELECT 1 FROM coin_cycles cc
+            WHERE cc.reward_group_id = rg.id AND cc.name = '12기'
+          )
+          AND EXISTS (
+            SELECT 1 FROM coin_cycles cc
+            WHERE cc.reward_group_id = rg.id AND cc.name = '11기'
+          )
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    $intersect = array_intersect($groupIds, $rg11Only);
+    t('INV-5 12기 chip displayed_groups 에 rg(11기 only) 미포함',
+        empty($intersect),
+        '겹치는 rg_id: ' . json_encode(array_values($intersect)));
+
+    // 12기 rg (cycle name='12기' 보유) 는 반드시 displayed 에 있어야
+    $rg12 = $db->query("
+        SELECT DISTINCT rg.id
+        FROM reward_groups rg
+        JOIN coin_cycles cc ON cc.reward_group_id = rg.id AND cc.name = '12기'
+        WHERE rg.status = 'open'
+    ")->fetchAll(PDO::FETCH_COLUMN);
+    $missing12 = array_diff($rg12, $groupIds);
+    t('INV 12기 chip displayed_groups 에 cycle_12 보유 rg 모두 포함',
+        empty($missing12),
+        '빠진 rg_id: ' . json_encode(array_values($missing12)));
+}
+
+// 11기 chip 회원 — rg 3 + rg 4 모두 displayed
+$s11 = $db->query("
+    SELECT bm.id FROM bootcamp_members bm
+    JOIN cohorts c ON c.id = bm.cohort_id
+    JOIN member_cycle_coins mcc ON mcc.member_id = bm.id
+    JOIN coin_cycles cc ON cc.id = mcc.cycle_id
+    WHERE c.cohort = '11기'
+    GROUP BY bm.id
+    HAVING COUNT(DISTINCT cc.reward_group_id) >= 2
+    LIMIT 1
+")->fetch();
+
+if ($s11) {
+    $sib11 = findCoinSiblingMemberIds($db, (int)$s11['id']);
+    $g11 = getDisplayedRewardGroupIds($db, (int)$s11['id'], $sib11);
+    t('INV-3 11기 chip 회원 displayed 개수 ≥ 2 (mcc 보유 rg 모두)',
+        count($g11) >= 2);
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// INV-1~4: getMemberDisplayedCoinTotal 합산 검증
+// ══════════════════════════════════════════════════════════════
+
+// helper: old-equivalent (displayed_groups 한정 + currentMemberId 만) 의 mcc 합산
+function oldEquivalentTotal(PDO $db, int $memberId, array $groupIds): int {
+    if (empty($groupIds)) return 0;
+    $ph = implode(',', array_fill(0, count($groupIds), '?'));
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0)
+        FROM member_cycle_coins mcc
+        JOIN coin_cycles cc   ON cc.id = mcc.cycle_id
+        JOIN reward_groups rg ON rg.id = cc.reward_group_id AND rg.status = 'open'
+        WHERE cc.reward_group_id IN ($ph) AND mcc.member_id = ?
+    ");
+    $stmt->execute(array_merge($groupIds, [$memberId]));
+    return max(0, (int)$stmt->fetchColumn());
+}
+
+// INV-2: sibling 0건 회원 (non-dual) → 새 잔액 = old-equivalent
+$nonDual = $db->query("
+    SELECT bm.id, bm.user_id, bm.cohort_id
+    FROM bootcamp_members bm
+    WHERE bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        WHERE bm2.user_id = bm.user_id AND bm2.id <> bm.id
+      )
+    LIMIT 1
+")->fetch();
+if ($nonDual) {
+    $sib = findCoinSiblingMemberIds($db, (int)$nonDual['id']);
+    $gids = getDisplayedRewardGroupIds($db, (int)$nonDual['id'], $sib);
+    $newTotal = getMemberDisplayedCoinTotal($db, (int)$nonDual['id']);
+    $oldEq = oldEquivalentTotal($db, (int)$nonDual['id'], $gids);
+    t('INV-2 sibling 0 회원 새 잔액 = old-equivalent',
+        $newTotal === $oldEq,
+        "new={$newTotal} old={$oldEq}");
+}
+
+// INV-3: 11기 chip 회원 새 잔액 = old-equivalent
+if (isset($s11) && $s11) {
+    $newTotal = getMemberDisplayedCoinTotal($db, (int)$s11['id']);
+    $sib = findCoinSiblingMemberIds($db, (int)$s11['id']);
+    $gids = getDisplayedRewardGroupIds($db, (int)$s11['id'], $sib);
+    $oldEq = oldEquivalentTotal($db, (int)$s11['id'], $gids);
+    t('INV-3 11기 chip 회원 새 잔액 = old-equivalent',
+        $newTotal === $oldEq,
+        "new={$newTotal} old={$oldEq}");
+}
+
+// INV-1 + INV-4: 12기 chip dual-enrollment
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $newTotal = getMemberDisplayedCoinTotal($db, $cur);
+    $sib = findCoinSiblingMemberIds($db, $cur);
+    $gids = getDisplayedRewardGroupIds($db, $cur, $sib);
+    $oldEq = oldEquivalentTotal($db, $cur, $gids);
+    t('INV-1 12기 chip 새 잔액 ≥ old-equivalent', $newTotal >= $oldEq,
+        "new={$newTotal} old={$oldEq}");
+
+    // INV-4: 새 잔액 = 자기 mcc 합산(displayed 안) + sibling mcc 합산(displayed 안)
+    $sibTotals = 0;
+    foreach ($sib as $s) {
+        if ((int)$s['member_id'] === $cur) continue;
+        $sibTotals += oldEquivalentTotal($db, (int)$s['member_id'], $gids);
+    }
+    $expected = max(0, $oldEq + $sibTotals);
+    t('INV-4 12기 chip dual 새 잔액 = 자기 displayed mcc + sibling displayed mcc',
+        $newTotal === $expected,
+        "new={$newTotal} expected={$expected} (self={$oldEq} sib={$sibTotals})");
+    if ($sibTotals === 0 && $oldEq === 0) {
+        echo "WARN  INV-4 실효성 없음: 표본의 self·sibling displayed mcc 모두 0 (PROD 에서 재검증 필요)\n";
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// getMemberCoinHistory 응답 구조 검증
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $hist = getMemberCoinHistory($db, $cur);
+    t('history 응답이 array',  is_array($hist));
+
+    // 12기 chip dual 회원: 12기 cycle 카드가 반드시 1개 이상
+    $has12 = false;
+    foreach ($hist as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            if ($c['cycle_name'] === '12기') $has12 = true;
+            t("cycle.logs_by_cohort 존재 ({$c['cycle_name']})", isset($c['logs_by_cohort']) && is_array($c['logs_by_cohort']));
+        }
+    }
+    t('12기 cycle 카드 존재 (12기 chip)', $has12);
+
+    // 11기 rg only (cycle_11) 카드는 12기 chip 에서 안 나와야
+    $has11Only = false;
+    foreach ($hist as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            if ($c['cycle_name'] === '11기') $has11Only = true;
+        }
+    }
+    t('11기 cycle 카드 미포함 (12기 chip, rg_11only)', !$has11Only);
+}
+
+// 11기 chip 회원 — 두 cycle 모두 있어야
+if (isset($s11) && $s11) {
+    $hist11 = getMemberCoinHistory($db, (int)$s11['id']);
+    $names = [];
+    foreach ($hist11 as $g) {
+        foreach (($g['cycles'] ?? []) as $c) $names[] = $c['cycle_name'];
+    }
+    t('11기 chip 회원 history 에 11기·12기 cycle 둘 다',
+        in_array('11기', $names) && in_array('12기', $names),
+        'names=' . json_encode($names));
+
+    // logs_by_cohort 내부 엔트리 형태 검증 (logs 가 있는 cycle 1개 골라서)
+    $sampleEntry = null;
+    foreach ($hist11 as $g) {
+        foreach (($g['cycles'] ?? []) as $c) {
+            foreach (($c['logs_by_cohort'] ?? []) as $bc) {
+                if (!empty($bc['logs'])) { $sampleEntry = $bc; break 3; }
+            }
+        }
+    }
+    if ($sampleEntry !== null) {
+        t('logs_by_cohort 엔트리에 cohort_id/cohort_label/is_other_cohort/logs 모두 존재',
+            isset($sampleEntry['cohort_id'], $sampleEntry['cohort_label'], $sampleEntry['is_other_cohort'], $sampleEntry['logs']));
+        t('logs_by_cohort.is_other_cohort 가 bool',
+            is_bool($sampleEntry['is_other_cohort']));
+        $log0 = $sampleEntry['logs'][0] ?? null;
+        t('logs_by_cohort.logs[0] 에 date/reason_type/label/change 모두 존재',
+            $log0 !== null && isset($log0['date'], $log0['reason_type'], $log0['label'], $log0['change']));
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// getCurrentRewardGroupForMember 검증
+// ══════════════════════════════════════════════════════════════
+
+if ($sample) {
+    $cur = (int)$sample['member_id'];
+    $rg = getCurrentRewardGroupForMember($db, $cur);
+    t('12기 chip dual 회원 current reward group != null', $rg !== null);
+    if ($rg) {
+        $names = array_column($rg['cycles'], 'name');
+        t('current reward group 안에 12기 cycle 존재', in_array('12기', $names));
+    }
+}
+
+// 12기 chip + 11기 sibling 이 cycle_12 mcc 잔액 > 0 인 strict 표본:
+// current_reward_group 의 12기 cycle earned 가 sibling 합산 덕에 > 0 이어야
+$strict = $db->query("
+    SELECT bm.id AS member_id
+    FROM bootcamp_members bm
+    JOIN cohorts c ON c.id = bm.cohort_id
+    WHERE c.cohort = '12기'
+      AND bm.user_id IS NOT NULL AND bm.user_id != ''
+      AND EXISTS (
+        SELECT 1 FROM bootcamp_members bm2
+        JOIN member_cycle_coins mcc2 ON mcc2.member_id = bm2.id
+        JOIN coin_cycles cc2 ON cc2.id = mcc2.cycle_id AND cc2.name = '12기'
+        WHERE bm2.user_id = bm.user_id
+          AND bm2.cohort_id < bm.cohort_id
+          AND (mcc2.earned_coin - mcc2.used_coin) > 0
+      )
+    LIMIT 1
+")->fetch();
+if ($strict) {
+    $rgs = getCurrentRewardGroupForMember($db, (int)$strict['member_id']);
+    if ($rgs) {
+        $cyc12 = null;
+        foreach ($rgs['cycles'] as $c) if ($c['name'] === '12기') { $cyc12 = $c; break; }
+        t('strict 표본 current group 안 12기 cycle 존재', $cyc12 !== null);
+        if ($cyc12) {
+            t('strict 표본 12기 cycle earned > 0 (sibling 합산 효과)',
+                (int)$cyc12['earned'] > 0,
+                "earned={$cyc12['earned']}");
+        }
+    } else {
+        t('strict 표본 current group != null', false, 'getCurrentRewardGroupForMember returned null');
+    }
+} else {
+    echo "SKIP  strict 표본 (DEV 에 cycle_12 mcc 잔액 보유한 11기 sibling 없음)\n";
+}
+
+echo "\n결과: {$pass} pass, {$fail} fail\n";
+exit($fail === 0 ? 0 : 1);

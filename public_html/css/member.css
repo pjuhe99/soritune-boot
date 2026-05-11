@@ -686,3 +686,13 @@
     display: block; color: #2563EB; font-size: 13px; word-break: break-all;
     text-decoration: underline;
 }
+
+.coin-section-label {
+    margin: 12px 0 6px;
+    font-size: 0.85em;
+    color: var(--text-muted, #888);
+    font-weight: 500;
+}
+.coin-cycle-logs .coin-section-label:first-child {
+    margin-top: 0;
+}

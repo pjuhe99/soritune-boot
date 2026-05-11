@@ -617,34 +617,50 @@ function grantCheerAward($db, $cycleId, $groupId, $targetMemberIds, $grantedByMe
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 회원의 현재 open reward group 반환 (해당 member가 member_cycle_coins row를 가진 cycle 중).
- * 여러 open group에 걸쳐있으면 cycle end_date 최신 기준으로 하나 선택.
+ * 회원의 "이번 기수" reward_group 정보 (cross-cohort aware).
+ *
+ * 선택 룰 (spec §2 "표시 group"):
+ *   - `getDisplayedRewardGroupIds` 결과 (start_date ASC) 의 첫 그룹 = 이번 기수 group.
+ *   - 이는 sibling row 의 mcc 와 무관: 표시 여부는 current member_id 의 mcc + cycle.name 매치 기준.
+ *
+ * Cycle 별 `earned` 합산은 sibling-inclusive (sibling 의 mcc 도 함께 합산) — spec §3.
+ *
+ * 12기 chip dual 회원: 12기 row 가 mcc 없어도 rg(cycle_12 보유) 가 잡혀 null 미반환.
+ * 11기 chip dual 회원: 첫 group 은 rg(cycle_11) — legacy 의 "end_date DESC" 와 의도 차이 있음
+ *   (spec 정신: chip 이 11기면 11기 리워드가 "이번 기수").
+ *
+ * 반환: ['name' => string, 'cycles' => [['name'=>string, 'earned'=>int(net), 'settled'=>bool], ...]]
+ *       또는 null (표시 group 없음)
  */
 function getCurrentRewardGroupForMember($db, $memberId) {
-    $stmt = $db->prepare("
-        SELECT rg.id, rg.name, rg.status
-        FROM reward_groups rg
-        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
-        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
-        WHERE rg.status = 'open'
-        ORDER BY cc.end_date DESC
-        LIMIT 1
-    ");
-    $stmt->execute([$memberId]);
-    $group = $stmt->fetch();
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return null;
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return null;
+
+    // 첫 group = "이번 기수" (start_date ASC 정렬의 첫 원소). legacy 와 의도 차이:
+    // legacy = end_date DESC (가장 늦게 끝나는 cycle). new = chip 의 현재 기수에 맞는 group.
+    $gid = $groupIds[0];
+    $gStmt = $db->prepare("SELECT id, name, status FROM reward_groups WHERE id = ?");
+    $gStmt->execute([$gid]);
+    $group = $gStmt->fetch();
     if (!$group) return null;
 
-    // 소속 cycle들 + 해당 회원의 earned, cycle status
+    $memberIds = array_column($siblings, 'member_id');
+    $ph = implode(',', array_fill(0, count($memberIds), '?'));
+
     $cStmt = $db->prepare("
         SELECT cc.id, cc.name, cc.status,
-               COALESCE(mcc.earned_coin, 0) AS earned,
-               COALESCE(mcc.used_coin, 0)   AS used
+               COALESCE(SUM(mcc.earned_coin), 0) AS earned,
+               COALESCE(SUM(mcc.used_coin), 0)   AS used
         FROM coin_cycles cc
-        LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+        LEFT JOIN member_cycle_coins mcc
+          ON mcc.cycle_id = cc.id AND mcc.member_id IN ($ph)
         WHERE cc.reward_group_id = ?
-        ORDER BY cc.start_date
+        GROUP BY cc.id
+        ORDER BY cc.start_date ASC
     ");
-    $cStmt->execute([$memberId, $group['id']]);
+    $cStmt->execute(array_merge($memberIds, [$gid]));
     $cycles = [];
     foreach ($cStmt->fetchAll() as $c) {
         $cycles[] = [
@@ -755,16 +771,35 @@ function coinPayoutMessage($cycleName, $cycleStatus, $isFutureGroup = false) {
  * 스펙 5.1 참조.
  */
 function getMemberCoinHistory($db, $memberId) {
-    // 1. 회원이 코인 행을 가진 open group들
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return [];
+
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return [];
+
+    $memberIds = array_column($siblings, 'member_id');
+    // findCoinSiblingMemberIds 는 항상 self 를 첫 원소로 prepend — 빈 array 는 위 가드에서 return 됨
+    $curCohortId = (int)$siblings[0]['cohort_id'];
+
+    // sibling cohort_label 빠른 조회용 map (member_id → cohort 메타)
+    $cohortMap = [];
+    foreach ($siblings as $s) {
+        $cohortMap[(int)$s['member_id']] = [
+            'cohort_id'    => (int)$s['cohort_id'],
+            'cohort_label' => (string)$s['cohort_label'],
+        ];
+    }
+
+    // member_id IN-list placeholder (sibling 수 변하지 않음 — 함수 내내 동일)
+    $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
+
+    // 1. displayed group 메타
+    $ph = implode(',', array_fill(0, count($groupIds), '?'));
     $gStmt = $db->prepare("
-        SELECT DISTINCT rg.id, rg.name
-        FROM reward_groups rg
-        JOIN coin_cycles cc ON cc.reward_group_id = rg.id
-        JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
-        WHERE rg.status = 'open'
-        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
+        SELECT id, name FROM reward_groups WHERE id IN ($ph)
+        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = reward_groups.id) ASC
     ");
-    $gStmt->execute([$memberId]);
+    $gStmt->execute($groupIds);
     $groups = $gStmt->fetchAll();
 
     $result = [];
@@ -772,17 +807,23 @@ function getMemberCoinHistory($db, $memberId) {
         $gid = (int)$g['id'];
         $isFutureGroup = ($idx > 0);
 
-        // 2. 해당 group의 cycles + 회원의 earned/used
+        // 2. cycles + sibling-포함 earned/used 합산
+        // LEFT JOIN + COALESCE 로 mcc row 가 전혀 없는 cycle 도 earned=0 으로 응답에 포함.
+        // 빈 cycle 카드는 JS (member-coin-history.js renderCycleCard) 에서
+        // earned=0 + logs 비어 있을 때 미렌더로 처리.
         $cStmt = $db->prepare("
             SELECT cc.id, cc.name, cc.status,
-                   COALESCE(mcc.earned_coin, 0) AS earned_coin,
-                   COALESCE(mcc.used_coin, 0)   AS used_coin
+                   COALESCE(SUM(mcc.earned_coin), 0) AS earned_coin,
+                   COALESCE(SUM(mcc.used_coin),   0) AS used_coin
             FROM coin_cycles cc
-            LEFT JOIN member_cycle_coins mcc ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+            LEFT JOIN member_cycle_coins mcc
+              ON mcc.cycle_id = cc.id
+             AND mcc.member_id IN ($ph2)
             WHERE cc.reward_group_id = ?
+            GROUP BY cc.id
             ORDER BY cc.start_date ASC
         ");
-        $cStmt->execute([$memberId, $gid]);
+        $cStmt->execute(array_merge($memberIds, [$gid]));
         $cycles = $cStmt->fetchAll();
 
         $cycleList = [];
@@ -790,33 +831,48 @@ function getMemberCoinHistory($db, $memberId) {
             $cid = (int)$c['id'];
             $earned = (int)$c['earned_coin'] - (int)$c['used_coin'];
 
-            // 3. 해당 cycle의 해당 회원 coin_logs
+            // 3. cycle 의 logs (sibling 포함) + cohort 라벨 부착
             $lStmt = $db->prepare("
-                SELECT DATE(created_at) AS d, reason_type, coin_change
-                FROM coin_logs
-                WHERE member_id = ? AND cycle_id = ?
-                ORDER BY created_at DESC, id DESC
+                SELECT DATE(cl.created_at) AS d, cl.reason_type, cl.coin_change, cl.member_id
+                FROM coin_logs cl
+                WHERE cl.cycle_id = ? AND cl.member_id IN ($ph2)
+                ORDER BY cl.created_at DESC, cl.id DESC
             ");
-            $lStmt->execute([$memberId, $cid]);
+            $lStmt->execute(array_merge([$cid], $memberIds));
             $logRows = $lStmt->fetchAll();
 
-            $logs = [];
+            // cohort 별로 grouping
+            $byCohort = [];
             foreach ($logRows as $lr) {
-                $logs[] = [
+                $mid = (int)$lr['member_id'];
+                $meta = $cohortMap[$mid] ?? null;
+                if (!$meta) continue;
+                $cohortId = $meta['cohort_id'];
+                if (!isset($byCohort[$cohortId])) {
+                    $byCohort[$cohortId] = [
+                        'cohort_id'       => $cohortId,
+                        'cohort_label'    => $meta['cohort_label'],
+                        'is_other_cohort' => $cohortId !== $curCohortId,
+                        'logs'            => [],
+                    ];
+                }
+                $byCohort[$cohortId]['logs'][] = [
                     'date'        => $lr['d'],
                     'reason_type' => $lr['reason_type'],
                     'label'       => coinReasonLabel($lr['reason_type'], (int)$lr['coin_change']),
                     'change'      => (int)$lr['coin_change'],
                 ];
             }
+            ksort($byCohort); // cohort_id ASC
+            $logsByCohort = array_values($byCohort);
 
             $cycleList[] = [
-                'cycle_id'        => $cid,
-                'cycle_name'      => $c['name'],
-                'cycle_status'    => $c['status'],
-                'earned'          => $earned,
-                'payout_message'  => coinPayoutMessage($c['name'], $c['status'], $isFutureGroup),
-                'logs'            => $logs,
+                'cycle_id'       => $cid,
+                'cycle_name'     => $c['name'],
+                'cycle_status'   => $c['status'],
+                'earned'         => $earned,
+                'payout_message' => coinPayoutMessage($c['name'], $c['status'], $isFutureGroup),
+                'logs_by_cohort' => $logsByCohort,
             ];
         }
 
@@ -828,4 +884,141 @@ function getMemberCoinHistory($db, $memberId) {
     }
 
     return $result;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Cross-cohort 회원 view (Option A — 쿼리 시점 user_id 합산)
+// 스펙: docs/superpowers/specs/2026-05-11-coin-cross-cohort-view-design.md
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 같은 user_id 의 earlier-cohort sibling member_id 목록 반환.
+ * 첫 원소는 항상 currentMemberId.
+ * user_id 가 비어 있으면 자기만 반환 (phone fallback 안 함 — 동명이인 위험).
+ * request-scoped static cache.
+ *
+ * @return array<int, array{member_id:int, cohort_id:int, cohort_label:string}>
+ */
+function findCoinSiblingMemberIds($db, $memberId): array {
+    static $cache = [];
+    $key = (int)$memberId;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $stmt = $db->prepare("
+        SELECT bm.id AS member_id, bm.cohort_id, c.cohort AS cohort_label,
+               bm.user_id
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.id = ?
+    ");
+    $stmt->execute([$key]);
+    $cur = $stmt->fetch();
+    if (!$cur) return $cache[$key] = [];
+
+    $self = [
+        'member_id'    => (int)$cur['member_id'],
+        'cohort_id'    => (int)$cur['cohort_id'],
+        'cohort_label' => (string)$cur['cohort_label'],
+    ];
+
+    if (empty($cur['user_id'])) {
+        return $cache[$key] = [$self];
+    }
+
+    $sStmt = $db->prepare("
+        SELECT bm.id AS member_id, bm.cohort_id, c.cohort AS cohort_label
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.user_id = ?
+          AND bm.cohort_id < ?
+          AND bm.id <> ?
+        -- no member_status filter: coin ownership is historical (spec §2)
+        ORDER BY bm.cohort_id ASC
+    ");
+    $sStmt->execute([$cur['user_id'], $cur['cohort_id'], $key]);
+
+    $result = [$self];
+    foreach ($sStmt->fetchAll() as $r) {
+        $result[] = [
+            'member_id'    => (int)$r['member_id'],
+            'cohort_id'    => (int)$r['cohort_id'],
+            'cohort_label' => (string)$r['cohort_label'],
+        ];
+    }
+    return $cache[$key] = $result;
+}
+
+/**
+ * 회원 view 에 표시할 reward_group id 목록.
+ * 룰 (spec §2):
+ *   rg.status='open' AND (
+ *     현재 member_id 가 rg 안의 어느 cycle 에든 mcc 보유   -- 기존 룰 (current only)
+ *     OR
+ *     rg 안에 cc.name = '<현재 chip cohort label>' 인 cycle 존재
+ *   )
+ *
+ * sibling member_id 는 mcc 합산(history/total)에서만 쓰이고, "표시 여부" 판단에는
+ * 쓰지 않는다. 그렇지 않으면 12기 chip 에서 11기 sibling 의 rg 3 mcc 때문에
+ * rg 3 (11기 전용) 가 노출되어 INV-5 위반.
+ *
+ * @param array<int, array{member_id:int, cohort_id:int, cohort_label:string}> $siblings findCoinSiblingMemberIds 결과
+ * @return array<int> rg id 목록 (정렬: 첫 cycle start_date ASC)
+ */
+function getDisplayedRewardGroupIds($db, $memberId, array $siblings): array {
+    if (empty($siblings)) return [];
+    $curLabel = $siblings[0]['cohort_label'];
+
+    $sql = "
+        SELECT DISTINCT rg.id
+        FROM reward_groups rg
+        WHERE rg.status = 'open'
+          AND (
+            EXISTS (
+              SELECT 1 FROM coin_cycles cc
+              JOIN member_cycle_coins mcc
+                ON mcc.cycle_id = cc.id AND mcc.member_id = ?
+              WHERE cc.reward_group_id = rg.id
+            )
+            OR EXISTS (
+              SELECT 1 FROM coin_cycles cc
+              WHERE cc.reward_group_id = rg.id AND cc.name = ?
+            )
+          )
+        ORDER BY (SELECT MIN(start_date) FROM coin_cycles WHERE reward_group_id = rg.id) ASC
+    ";
+    $stmt = $db->prepare($sql);
+    $stmt->execute([(int)$memberId, $curLabel]);
+    $result = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $rgId) {
+        $result[] = (int)$rgId;
+    }
+    return $result;
+}
+
+/**
+ * 대시보드 stat 카드용. 회원 view 에 표시되는 코인 합계.
+ * displayed reward groups 안의 sibling-포함 mcc 합산. coin_logs 미사용 (race-safe).
+ */
+function getMemberDisplayedCoinTotal($db, $memberId): int {
+    $siblings = findCoinSiblingMemberIds($db, (int)$memberId);
+    if (empty($siblings)) return 0;
+    $groupIds = getDisplayedRewardGroupIds($db, (int)$memberId, $siblings);
+    if (empty($groupIds)) return 0;
+
+    $memberIds = array_column($siblings, 'member_id');
+    $ph1 = implode(',', array_fill(0, count($groupIds), '?'));
+    $ph2 = implode(',', array_fill(0, count($memberIds), '?'));
+
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(mcc.earned_coin - mcc.used_coin), 0) AS total
+        FROM member_cycle_coins mcc
+        JOIN coin_cycles cc   ON cc.id = mcc.cycle_id
+        JOIN reward_groups rg ON rg.id = cc.reward_group_id
+        WHERE rg.status = 'open'
+          AND rg.id IN ($ph1)
+          AND mcc.member_id IN ($ph2)
+    ");
+    $stmt->execute(array_merge($groupIds, $memberIds));
+    $sum = (int)$stmt->fetchColumn();
+    return max(0, $sum);
 }
