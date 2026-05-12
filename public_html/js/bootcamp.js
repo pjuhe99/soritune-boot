@@ -324,11 +324,15 @@ const BootcampApp = (() => {
         `;
     }
 
-    function bindFilterEvents(onFilter) {
-        const cohortEl = document.getElementById('fl-cohort');
-        const dateEl = document.getElementById('fl-date');
-        const groupEl = document.getElementById('fl-group');
-        const stageEl = document.getElementById('fl-stage');
+    function bindFilterEvents(onFilter, container) {
+        // 여러 탭이 동일한 id="fl-*" 를 가지는 dropdown 을 동시에 렌더하므로
+        // document.getElementById 로 찾으면 다른 탭의 element 가 잡힌다.
+        // container 가 주어지면 해당 탭 안으로만 스코프한다.
+        const scope = container || document;
+        const cohortEl = scope.querySelector('#fl-cohort');
+        const dateEl = scope.querySelector('#fl-date');
+        const groupEl = scope.querySelector('#fl-group');
+        const stageEl = scope.querySelector('#fl-stage');
 
         if (cohortEl) cohortEl.onchange = async () => {
             selectedCohortId = parseInt(cohortEl.value);
@@ -343,7 +347,7 @@ const BootcampApp = (() => {
         if (dateEl) dateEl.onchange = () => { selectedDate = dateEl.value; onFilter(); };
         if (groupEl) groupEl.onchange = () => { selectedGroupId = parseInt(groupEl.value); onFilter(); };
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
-        const sortEl = document.getElementById('fl-sort');
+        const sortEl = scope.querySelector('#fl-sort');
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
     }
 
@@ -406,7 +410,7 @@ const BootcampApp = (() => {
         }
 
         const renderCurrentChecklist = checklistViewMode === 'daily' ? renderChecklist : renderChecklistByMission;
-        bindFilterEvents(renderCurrentChecklist);
+        bindFilterEvents(renderCurrentChecklist, sec);
         document.getElementById('bc-checklist-save').onclick = saveChecklist;
         renderCurrentChecklist();
     }
@@ -704,7 +708,7 @@ const BootcampApp = (() => {
             <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
-        bindFilterEvents(renderStatusBoard);
+        bindFilterEvents(renderStatusBoard, sec);
         renderStatusBoard();
     }
 
@@ -940,7 +944,7 @@ const BootcampApp = (() => {
             ${filterBarHtml({ date: false })}
             <div id="revival-list"><div class="empty-state">로딩 중...</div></div>
         `;
-        bindFilterEvents(fetchRevivalCandidates);
+        bindFilterEvents(fetchRevivalCandidates, sec);
         fetchRevivalCandidates();
     }
 
@@ -1238,7 +1242,7 @@ const BootcampApp = (() => {
             <div id="bc-coin-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
-        bindFilterEvents(renderCoinList);
+        bindFilterEvents(renderCoinList, sec);
         renderCoinList();
     }
 
@@ -1406,7 +1410,7 @@ const BootcampApp = (() => {
             <div id="bc-members-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
-        bindFilterEvents(renderMembersList);
+        bindFilterEvents(renderMembersList, sec);
         document.getElementById('bc-add-member').onclick = () => showMemberForm();
         renderMembersList();
     }
