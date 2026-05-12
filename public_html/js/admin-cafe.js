@@ -27,7 +27,7 @@ const AdminCafeApp = (() => {
         if (!r.success) { containerEl.innerHTML = '<div class="empty-state">불러오기 실패</div>'; return; }
 
         const BOARD_LABELS = {
-            speak_mission: '내맛미션',
+            speak_mission: '말까미션',
             inner33: '내맛33미션',
             daily_mission: '데일리 미션',
         };
@@ -44,7 +44,7 @@ const AdminCafeApp = (() => {
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                     <select class="form-select form-select-sm" id="cafe-filter-board" style="width:auto">
                         <option value="">전체 게시판</option>
-                        <option value="speak_mission" ${filter.board_type === 'speak_mission' ? 'selected' : ''}>내맛미션</option>
+                        <option value="speak_mission" ${filter.board_type === 'speak_mission' ? 'selected' : ''}>말까미션</option>
                         <option value="inner33" ${filter.board_type === 'inner33' ? 'selected' : ''}>내맛33미션</option>
                         <option value="daily_mission" ${filter.board_type === 'daily_mission' ? 'selected' : ''}>데일리 미션</option>
                     </select>
