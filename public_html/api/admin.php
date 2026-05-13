@@ -11,6 +11,9 @@ require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/services/member_stats.php';
 require_once __DIR__ . '/services/member_bulk.php';
 require_once __DIR__ . '/services/retention.php';
+require_once __DIR__ . '/../includes/multipass/multipass_repo.php';
+require_once __DIR__ . '/../includes/multipass/multipass_csv_parser.php';
+require_once __DIR__ . '/../includes/multipass/multipass_bulk.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -1782,6 +1785,133 @@ case 'retention_pairs':
 
 case 'retention_summary':
     handleRetentionSummary();
+    break;
+
+// ── Multipass (다회권) ──────────────────────────────────────
+
+case 'multipass_list':
+    requireAdmin(['operation']);
+    $db = getDB();
+    $filters = [];
+    if (!empty($_GET['user_id']))      $filters['user_id']      = trim($_GET['user_id']);
+    if (!empty($_GET['product_name'])) $filters['product_name'] = trim($_GET['product_name']);
+    if (!empty($_GET['cohort_id']))    $filters['cohort_id']    = (int)$_GET['cohort_id'];
+    jsonSuccess(['passes' => findPasses($db, $filters)]);
+    break;
+
+case 'multipass_get':
+    requireAdmin(['operation']);
+    $id = (int)($_GET['id'] ?? 0);
+    if ($id <= 0) jsonError('id 필수');
+    $passes = findPasses(getDB(), ['pass_id' => $id]);
+    if (!$passes) jsonError('찾을 수 없습니다.', 404);
+    jsonSuccess(['pass' => $passes[0]]);
+    break;
+
+case 'multipass_create':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $userId      = trim($input['user_id'] ?? '');
+    $productName = trim($input['product_name'] ?? '');
+    $cohortIds   = $input['cohort_ids'] ?? [];
+    $note        = $input['note'] ?? null;
+    if ($userId === '')      jsonError('user_id 필수');
+    if ($productName === '') jsonError('product_name 필수');
+    if (!is_array($cohortIds) || !$cohortIds) jsonError('cohort_ids 필수');
+    try {
+        $passId = createPass(getDB(), $userId, $productName, $cohortIds, $note, (int)$admin['admin_id']);
+        jsonSuccess(['id' => $passId], '다회권이 추가되었습니다.');
+    } catch (PDOException $e) {
+        if (str_contains($e->getMessage(), 'Duplicate')) jsonError('이미 포함된 기수가 있습니다.');
+        throw $e;
+    }
+    break;
+
+case 'multipass_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) jsonError('id 필수');
+    $patch = [];
+    foreach (['user_id', 'product_name', 'note'] as $k) {
+        if (array_key_exists($k, $input)) $patch[$k] = $input[$k];
+    }
+    if (array_key_exists('cohort_ids', $input)) {
+        if (!is_array($input['cohort_ids']) || !$input['cohort_ids']) jsonError('cohort_ids 비어있을 수 없습니다.');
+        $patch['cohort_ids'] = $input['cohort_ids'];
+    }
+    try {
+        $diff = updatePass(getDB(), $id, $patch, (int)$admin['admin_id']);
+        jsonSuccess(['ok' => true, 'removed_cohort_ids' => $diff['removed_cohort_ids'], 'added_cohort_ids' => $diff['added_cohort_ids']], '수정되었습니다.');
+    } catch (PDOException $e) {
+        if (str_contains($e->getMessage(), 'Duplicate')) jsonError('이미 포함된 기수가 있습니다.');
+        throw $e;
+    }
+    break;
+
+case 'multipass_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if ($id <= 0) jsonError('id 필수');
+    deletePass(getDB(), $id);
+    jsonSuccess(['ok' => true], '삭제되었습니다.');
+    break;
+
+case 'multipass_toggle_coupon':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $passId   = (int)($input['pass_id'] ?? 0);
+    $cohortId = (int)($input['cohort_id'] ?? 0);
+    $issued   = !empty($input['issued']);
+    if (!$passId || !$cohortId) jsonError('pass_id, cohort_id 필수');
+    $ret = toggleCoupon(getDB(), $passId, $cohortId, $issued, (int)$admin['admin_id']);
+    jsonSuccess($ret);
+    break;
+
+case 'multipass_search_member':
+    requireAdmin(['operation']);
+    $q = trim($_GET['q'] ?? '');
+    if ($q === '') jsonError('q 필수');
+    jsonSuccess(['members' => searchMembers(getDB(), $q)]);
+    break;
+
+case 'multipass_bulk_validate':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin(['operation']);
+    $input = getJsonInput();
+    $rows  = $input['rows'] ?? null;
+    // CSV 텍스트가 들어오면 서버 측 파서 사용
+    if ($rows === null && isset($input['csv'])) {
+        $parsed = parseMultipassCsv((string)$input['csv']);
+        $rows = $parsed['rows'];
+        // 파싱 에러는 ERROR_PARSE 로 동봉
+        foreach ($parsed['errors'] as $err) {
+            $rows[] = ['row' => $err['row'], 'user_id' => '', 'product_name' => '', 'cohort_labels' => [], 'status' => 'ERROR_PARSE_' . strtoupper($err['reason'])];
+        }
+    }
+    if (!is_array($rows)) jsonError('rows 또는 csv 필요');
+    if (count($rows) > MULTIPASS_BULK_MAX_ROWS) jsonError('한 번에 ' . MULTIPASS_BULK_MAX_ROWS . '행 까지만 검증 가능합니다.');
+    $result = validateMultipassBulk(getDB(), $rows);
+    jsonSuccess($result);
+    break;
+
+case 'multipass_bulk_apply':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $rows  = $input['rows'] ?? null;
+    if (!is_array($rows) || empty($rows)) jsonError('rows 필요');
+    try {
+        $result = applyMultipassBulk(getDB(), $rows, (int)$admin['admin_id']);
+        jsonSuccess($result);
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage());
+    }
     break;
 
 // ── Default ─────────────────────────────────────────────────
