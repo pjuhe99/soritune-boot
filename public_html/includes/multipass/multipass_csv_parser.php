@@ -11,7 +11,10 @@ declare(strict_types=1);
 
 const MULTIPASS_HEADER_KEYWORDS = ['user_id', '아이디', 'product_name', '상품명', 'cohorts', '기수'];
 
-function parseMultipassCsv(string $csv): array {
+/**
+ * @return array{rows: array<int, array{row:int, user_id:string, product_name:string, cohort_labels:array<int,string>, cohort_raw:array<int,string>}>, errors: array<int, array{row:int, reason:string}>}
+ */
+function parseMultipassCsv(string $csv, int $maxRows = 200): array {
     // BOM 제거
     if (str_starts_with($csv, "\xEF\xBB\xBF")) {
         $csv = substr($csv, 3);
@@ -20,6 +23,7 @@ function parseMultipassCsv(string $csv): array {
     $rows = [];
     $errors = [];
     $rowNum = 0;
+    $dataRowNo = 0;
     $headerSeen = false;
 
     // RFC 4180 파싱 — fgetcsv 가 빠르고 표준
@@ -50,6 +54,12 @@ function parseMultipassCsv(string $csv): array {
                 }
             }
             $headerSeen = true;  // 첫 행 처리 완료, 다음 행부터는 무조건 데이터
+        }
+
+        $dataRowNo++;
+        if ($dataRowNo > $maxRows) {
+            $errors[] = ['row' => $rowNum, 'reason' => 'batch_too_large'];
+            break;
         }
 
         [$userId, $productName, $cohortsStr] = [$cells[0], $cells[1], $cells[2]];

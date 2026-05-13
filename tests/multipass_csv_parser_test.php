@@ -81,5 +81,14 @@ t('trim',
     && $r['rows'][0]['user_id'] === '3937726826@k'
     && $r['rows'][0]['product_name'] === 'X');
 
+// 12. maxRows guard
+$bigCsv = '';
+for ($i = 0; $i < 250; $i++) $bigCsv .= "user{$i}@k,prod,11\n";
+$r = parseMultipassCsv($bigCsv, 200);
+t('max_rows_guard',
+    count($r['rows']) <= 200
+    && count($r['errors']) >= 1
+    && in_array('batch_too_large', array_column($r['errors'], 'reason'), true));
+
 echo "\n{$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);
