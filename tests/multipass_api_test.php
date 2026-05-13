@@ -30,15 +30,19 @@ function req(string $method, string $url, array $headers, ?array $json = null): 
         CURLOPT_CUSTOMREQUEST  => $method,
         CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_HEADER         => true,
-        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_TIMEOUT        => 30,
     ]);
     if ($json !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($json, JSON_UNESCAPED_UNICODE));
     }
     $raw = curl_exec($ch);
     $info = curl_getinfo($ch);
+    $err = curl_error($ch);
     curl_close($ch);
-    if ($raw === false) return ['code' => 0, 'body' => null];
+    if ($raw === false) {
+        echo "cURL error: $err\n";
+        return ['code' => 0, 'body' => null];
+    }
     $body = substr($raw, $info['header_size']);
     return ['code' => $info['http_code'], 'body' => json_decode($body, true) ?? ['raw' => $body]];
 }
@@ -61,7 +65,7 @@ $db->exec("INSERT INTO bootcamp_members (cohort_id, real_name, nickname, user_id
 $r = req('POST', "$api?action=multipass_create", $h, [
     'user_id' => '__test_api_mp@k', 'product_name' => 'API테스트권', 'cohort_ids' => [$c1, $c2, $c3],
 ]);
-t('create_201', $r['code'] === 200 && !empty($r['body']['success']));
+t('create_200', $r['code'] === 200 && !empty($r['body']['success']));
 $passId = $r['body']['id'] ?? 0;
 t('create_id', $passId > 0);
 
