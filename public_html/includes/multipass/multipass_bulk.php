@@ -151,6 +151,12 @@ function applyMultipassBulk(PDO $db, array $rows, int $createdBy): array {
         if ($status === 'skip' || $mode === 'skip') continue;
         if (str_starts_with($status, 'ERROR_')) continue;
 
+        // WARN_DUPLICATE_PASS* 행은 mode 명시 필수 (extend|new|skip)
+        if (($status === 'WARN_DUPLICATE_PASS' || $status === 'WARN_DUPLICATE_PASS_IN_BATCH') && $mode === null) {
+            $failed[] = ['row' => $rowNum, 'error' => "WARN 행은 mode (extend/new/skip) 를 명시해야 합니다."];
+            continue;
+        }
+
         try {
             if ($status === 'WARN_DUPLICATE_PASS' && $mode === 'extend') {
                 $passId = (int)($r['existing_pass_id'] ?? 0);
