@@ -110,6 +110,9 @@ function handleMemberChecksSummary() {
         // 말까미션: 월요일이 아니면 제외
         if ($code === 'speak_mission' && (int)date('N', strtotime($date)) !== 1) continue;
 
+        // 내맛33: 코호트 첫날은 미션 시작 전(day 2부터)이므로 제외
+        if ($code === 'inner33' && $date === $cohortStart) continue;
+
         // 데일리미션: 줌특강과 합산하므로 개별 카운트 제외
         if ($code === 'daily_mission') continue;
 
@@ -265,6 +268,9 @@ function handleMemberChecks() {
 
         // 말까미션: 월요일이 아니면 숨김
         if (in_array($code, $mondayOnlyCodes) && (int)date('N', strtotime($d)) !== 1) continue;
+
+        // 내맛33: 코호트 첫날은 미션 시작 전(day 2부터)이므로 숨김
+        if ($code === 'inner33' && $d === $cohortStart) continue;
 
         // 줌 특강 / 데일리미션 표시 필터
         // - 데일리미션 미완료(0) → 항상 숨김
