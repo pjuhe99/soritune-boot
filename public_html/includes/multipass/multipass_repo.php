@@ -23,7 +23,8 @@ function createPass(PDO $db, string $userId, string $productName, array $cohortI
     if (trim($productName) === '') throw new InvalidArgumentException('product_name 필수');
     if (empty($cohortIds)) throw new InvalidArgumentException('cohort_ids 필수');
 
-    $db->beginTransaction();
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
     try {
         $db->prepare("INSERT INTO multipass (user_id, product_name, note, created_by) VALUES (?, ?, ?, ?)")
            ->execute([$userId, $productName, $note, $createdBy]);
@@ -32,10 +33,10 @@ function createPass(PDO $db, string $userId, string $productName, array $cohortI
         foreach ($cohortIds as $cid) {
             $stmt->execute([$passId, (int)$cid]);
         }
-        $db->commit();
+        if ($startedHere) $db->commit();
         return $passId;
     } catch (Throwable $e) {
-        $db->rollBack();
+        if ($startedHere && $db->inTransaction()) $db->rollBack();
         throw $e;
     }
 }
@@ -47,7 +48,8 @@ function createPass(PDO $db, string $userId, string $productName, array $cohortI
  * @return array{removed_cohort_ids: int[], added_cohort_ids: int[]}
  */
 function updatePass(PDO $db, int $passId, array $patch, ?int $updatedBy): array {
-    $db->beginTransaction();
+    $startedHere = !$db->inTransaction();
+    if ($startedHere) $db->beginTransaction();
     try {
         // 메타 업데이트
         $sets = [];
@@ -67,7 +69,9 @@ function updatePass(PDO $db, int $passId, array $patch, ?int $updatedBy): array 
         $added = [];
         if (array_key_exists('cohort_ids', $patch)) {
             $newSet = array_map('intval', $patch['cohort_ids']);
-            $existing = array_map('intval', $db->query("SELECT cohort_id FROM multipass_cohorts WHERE pass_id = $passId")->fetchAll(PDO::FETCH_COLUMN));
+            $exStmt = $db->prepare("SELECT cohort_id FROM multipass_cohorts WHERE pass_id = ?");
+            $exStmt->execute([$passId]);
+            $existing = array_map('intval', $exStmt->fetchAll(PDO::FETCH_COLUMN));
             $removed = array_values(array_diff($existing, $newSet));
             $added = array_values(array_diff($newSet, $existing));
 
@@ -81,10 +85,10 @@ function updatePass(PDO $db, int $passId, array $patch, ?int $updatedBy): array 
                 foreach ($added as $cid) $stmt->execute([$passId, $cid]);
             }
         }
-        $db->commit();
+        if ($startedHere) $db->commit();
         return ['removed_cohort_ids' => $removed, 'added_cohort_ids' => $added];
     } catch (Throwable $e) {
-        $db->rollBack();
+        if ($startedHere && $db->inTransaction()) $db->rollBack();
         throw $e;
     }
 }
@@ -115,6 +119,9 @@ function toggleCoupon(PDO $db, int $passId, int $cohortId, bool $issued, int $ad
     ");
     $stmt->execute([$passId, $cohortId]);
     $row = $stmt->fetch();
+    if ($row === false) {
+        throw new RuntimeException("multipass_cohort row not found: pass=$passId cohort=$cohortId");
+    }
     return [
         'coupon_issued'         => (int)$row['coupon_issued'],
         'coupon_issued_at'      => $row['coupon_issued_at'],
@@ -252,7 +259,8 @@ function searchMembers(PDO $db, string $q): array {
     $q = trim($q);
     if ($q === '') return [];
 
-    $like = '%' . $q . '%';
+    $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+    $like = '%' . $escaped . '%';
 
     // 1) bootcamp_members 에서 user_id 후보 수집
     $stmt = $db->prepare("
@@ -260,7 +268,7 @@ function searchMembers(PDO $db, string $q): array {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.user_id IS NOT NULL AND bm.user_id <> ''
-          AND (bm.user_id LIKE ? OR bm.nickname LIKE ? OR bm.real_name LIKE ? OR bm.phone LIKE ?)
+          AND (bm.user_id LIKE ? ESCAPE '\\\\' OR bm.nickname LIKE ? ESCAPE '\\\\' OR bm.real_name LIKE ? ESCAPE '\\\\' OR bm.phone LIKE ? ESCAPE '\\\\')
         ORDER BY c.start_date DESC
         LIMIT 200
     ");
@@ -279,7 +287,7 @@ function searchMembers(PDO $db, string $q): array {
     }
 
     // 2) 다회권에만 있는 user_id (멤버 행 없음) — q 가 user_id 부분일치할 때만
-    $stmt = $db->prepare("SELECT DISTINCT user_id FROM multipass WHERE user_id LIKE ?");
+    $stmt = $db->prepare("SELECT DISTINCT user_id FROM multipass WHERE user_id LIKE ? ESCAPE '\\\\'");
     $stmt->execute([$like]);
     foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $uid) {
         if (!isset($byUser[$uid])) {

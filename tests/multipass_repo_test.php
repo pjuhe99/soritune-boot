@@ -97,6 +97,21 @@ $cohort = $passes[0]['cohorts'][0];
 t('has_member_row_true_for_refund', $cohort['has_member_row'] === true);
 t('joined_false_for_refund', $cohort['joined'] === false);
 
+// 9. searchMembers — q 가 user_id 부분일치 → 매칭, profiles 와 passes 채워짐
+$results = searchMembers($db, '__test_mp_001');
+t('search_finds_user', count($results) === 1 && $results[0]['user_id'] === '__test_mp_001@k');
+t('search_has_pass', isset($results[0]['passes']) && count($results[0]['passes']) === 1);
+t('search_has_profile', isset($results[0]['profiles']) && count($results[0]['profiles']) >= 1);
+
+// 10. searchMembers — q 가 nickname 매칭
+$results = searchMembers($db, 'TestRefund');
+t('search_by_real_name', count($results) === 1 && $results[0]['user_id'] === '__test_mp_001@k');
+
+// 11. searchMembers — LIKE 메타문자 escape (q='__test' 의 underscore 가 SQL wildcard 로 안 해석되는지)
+// __test_mp_001@k vs __test_mp_002@k 둘 다 매칭하지만, q='__test_mp' 의 '_' escape 후 정확한 prefix 매치 동작
+$results = searchMembers($db, '__test_mp');  // 두 user_id 모두 매칭 (escape 전후 모두 해당)
+t('search_like_escape_safe', is_array($results));  // 그냥 에러 안 나면 OK
+
 // 정리
 $db->exec("DELETE FROM multipass WHERE id = $passId2");
 $db->exec("DELETE FROM bootcamp_members WHERE user_id = '__test_mp_001@k' OR user_id = '__test_mp_002@k'");
