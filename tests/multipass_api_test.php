@@ -144,6 +144,20 @@ $r = req('POST', "$api?action=multipass_bulk_apply", $h, ['rows' => array_values
 t('bulk_apply_200', $r['code'] === 200);
 t('bulk_apply_count', ($r['body']['applied'] ?? 0) === 2);
 
+// 12. 권한 거부 — coach role 쿠키로 호출 시 403
+$coachCookie = getenv('COACH_COOKIE') ?: '';
+if ($coachCookie) {
+    $hCoach = ["Cookie: $coachCookie", "Content-Type: application/json"];
+    $r = req('GET', "$api?action=multipass_list", $hCoach);
+    t('perm_list_403', $r['code'] === 403);
+    $r = req('POST', "$api?action=multipass_create", $hCoach, ['user_id' => 'x', 'product_name' => 'x', 'cohort_ids' => [$c1]]);
+    t('perm_create_403', $r['code'] === 403);
+    $r = req('POST', "$api?action=multipass_toggle_coupon", $hCoach, ['pass_id' => 1, 'cohort_id' => $c1, 'issued' => true]);
+    t('perm_toggle_403', $r['code'] === 403);
+} else {
+    echo "SKIP perm — COACH_COOKIE 미설정\n";
+}
+
 // 정리
 $db->exec("DELETE FROM multipass WHERE user_id LIKE '__test_api_mp%' OR user_id LIKE '__test_api_mp2%' OR user_id LIKE '__test_unknown%'");
 $db->exec("DELETE FROM bootcamp_members WHERE user_id LIKE '__test_api_mp%'");
