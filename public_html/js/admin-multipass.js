@@ -428,8 +428,8 @@ const AdminMultipassApp = (() => {
                             <td>${r.row || ''}</td>
                             <td>${App.esc(r.user_id || '')}</td>
                             <td>${App.esc(r.product_name || '')}</td>
-                            <td>${(r.cohort_labels || []).join(', ')}</td>
-                            <td class="${statusClass}">${App.esc(status)}${r.unmatched_labels ? ' [' + r.unmatched_labels.join(',') + ']' : ''}</td>
+                            <td>${(r.cohort_labels || []).map(l => App.esc(l)).join(', ')}</td>
+                            <td class="${statusClass}">${App.esc(status)}${r.unmatched_labels ? ' [' + r.unmatched_labels.map(l => App.esc(l)).join(',') + ']' : ''}</td>
                             <td>${modeCtrl}</td>
                         </tr>`;
                     }).join('')}
