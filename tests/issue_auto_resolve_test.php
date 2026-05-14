@@ -143,5 +143,49 @@ function insertCheck(PDO $db, int $memberId, int $cohortId, string $missionCode,
     teardownFixture($db);
 }
 
+// ── T7: attemptAutoResolveIssue all_checked → resolved ──
+{
+    $fx = setupFixture($db);
+    $today = date('Y-m-d');
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'inner33', $today, 1);
+    $issueId = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33');
+    $r = attemptAutoResolveIssue($db, $issueId, /*adminId*/ 1);
+    t('T7 ok=true', $r['ok'] === true, json_encode($r));
+    $row = $db->query("SELECT status, admin_note, resolved_by FROM issue_reports WHERE id={$issueId}")->fetch();
+    t('T7 status=resolved', $row['status'] === 'resolved');
+    t('T7 admin_note prefix', is_string($row['admin_note']) && strpos($row['admin_note'], 'auto:') === 0);
+    t('T7 resolved_by', (int)$row['resolved_by'] === 1);
+    $logCnt = (int)$db->query("SELECT COUNT(*) FROM issue_report_logs WHERE issue_id={$issueId} AND new_status='resolved'")->fetchColumn();
+    t('T7 audit log', $logCnt === 1);
+    teardownFixture($db);
+}
+
+// ── T8: has_unchecked 거부 ──
+{
+    $fx = setupFixture($db);
+    $today = date('Y-m-d');
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'inner33', $today, 0);
+    $issueId = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33');
+    $r = attemptAutoResolveIssue($db, $issueId, 1);
+    t('T8 ok=false', $r['ok'] === false);
+    t('T8 reason=not_eligible', $r['reason'] === 'not_eligible');
+    $row = $db->query("SELECT status FROM issue_reports WHERE id={$issueId}")->fetch();
+    t('T8 status unchanged', $row['status'] === 'pending');
+    teardownFixture($db);
+}
+
+// ── T9: 이미 resolved 인 row → 거부 ──
+{
+    $fx = setupFixture($db);
+    $today = date('Y-m-d');
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'inner33', $today, 1);
+    $issueId = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33');
+    $db->exec("UPDATE issue_reports SET status='resolved' WHERE id={$issueId}");
+    $r = attemptAutoResolveIssue($db, $issueId, 1);
+    t('T9 ok=false', $r['ok'] === false);
+    t('T9 reason=not_pending', $r['reason'] === 'not_pending');
+    teardownFixture($db);
+}
+
 echo "\n{$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);

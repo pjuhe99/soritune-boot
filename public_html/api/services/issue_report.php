@@ -350,3 +350,86 @@ function inspectIssueMission(PDO $db, int $issueId): array {
         'inspected_range' => ['from' => $rangeFrom, 'to' => $rangeTo],
     ];
 }
+
+/**
+ * 한 issue 를 자동 해결 처리한다 (write).
+ *
+ * 조건:
+ *  - issue_reports.status='pending'
+ *  - inspectIssueMission()의 mission_status === 'all_checked'
+ *
+ * 반환:
+ *  - ok=true 시  ['ok'=>true, 'inspection'=>array]
+ *  - ok=false 시 ['ok'=>false, 'reason'=>'not_pending'|'not_eligible'|'not_found', 'inspection'=>array|null]
+ */
+function attemptAutoResolveIssue(PDO $db, int $issueId, int $adminId): array {
+    $row = $db->prepare("SELECT id, status FROM issue_reports WHERE id = ? FOR UPDATE");
+    $inTx = $db->inTransaction();
+    if (!$inTx) $db->beginTransaction();
+    try {
+        $row->execute([$issueId]);
+        $issue = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$issue) {
+            if (!$inTx) $db->rollBack();
+            return ['ok' => false, 'reason' => 'not_found', 'inspection' => null];
+        }
+        if ($issue['status'] !== 'pending') {
+            if (!$inTx) $db->rollBack();
+            return ['ok' => false, 'reason' => 'not_pending', 'inspection' => null];
+        }
+
+        $inspection = inspectIssueMission($db, $issueId);
+        if ($inspection['mission_status'] !== 'all_checked') {
+            if (!$inTx) $db->rollBack();
+            return ['ok' => false, 'reason' => 'not_eligible', 'inspection' => $inspection];
+        }
+
+        $rangeLabel = $inspection['inspected_range']['from'] . '~' . $inspection['inspected_range']['to'];
+        $autoNote = 'auto: 폴링 후 모두 체크 완료 확인 (' . $rangeLabel . ')';
+
+        $db->prepare("
+            UPDATE issue_reports
+            SET status = 'resolved',
+                admin_note = CASE
+                    WHEN admin_note IS NULL OR admin_note = '' THEN ?
+                    ELSE CONCAT(admin_note, ' / ', ?)
+                END,
+                resolved_by = ?,
+                resolved_at = NOW()
+            WHERE id = ? AND status = 'pending'
+        ")->execute([$autoNote, $autoNote, $adminId, $issueId]);
+
+        logIssueStatusChange($db, $issueId, 'pending', 'resolved', 'admin', $adminId, $autoNote);
+
+        if (!$inTx) $db->commit();
+        return ['ok' => true, 'inspection' => $inspection];
+    } catch (\Throwable $e) {
+        if (!$inTx && $db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 운영용: 단건 자동 해결
+// ══════════════════════════════════════════════════════════════
+
+function handleIssueAdminResolveAuto($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (int)($input['id'] ?? 0);
+    if (!$id) jsonError('id 필요');
+
+    $db = getDB();
+    $r = attemptAutoResolveIssue($db, $id, (int)$admin['admin_id']);
+    if (!$r['ok']) {
+        $msg = match ($r['reason']) {
+            'not_found'    => '문의를 찾을 수 없습니다.',
+            'not_pending'  => '이미 처리된 문의입니다.',
+            'not_eligible' => '자동 해결 조건을 충족하지 않습니다 (미체크 일자 존재).',
+            default        => '자동 해결 실패',
+        };
+        jsonError($msg, 409);
+    }
+    jsonSuccess(['inspection' => $r['inspection']], '자동 해결되었습니다.');
+}
