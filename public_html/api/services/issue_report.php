@@ -257,3 +257,103 @@ function logIssueStatusChange($db, $issueId, $oldStatus, $newStatus, $changedByT
         error_log("logIssueStatusChange failed: " . $e->getMessage());
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// Auto resolve: 미션 체크 상태 검사 (read-only)
+// ══════════════════════════════════════════════════════════════
+
+const ISSUE_MISSION_MAP = [
+    'naemat33' => 'inner33',
+    'malkka'   => 'speak_mission',
+    'zoom'     => 'zoom_daily',
+    'daily'    => 'daily_mission',
+];
+const ISSUE_INSPECT_RANGE_DAYS = 7;
+
+/**
+ * 한 issue 의 미션 체크 상태를 검사한다 (read-only).
+ *
+ * 반환:
+ *   mission_status    'all_checked' | 'has_unchecked' | 'no_data' | 'unsupported'
+ *   unchecked_dates   ['YYYY-MM-DD', ...]
+ *   checked_dates     ['YYYY-MM-DD', ...]
+ *   inspected_range   ['from' => 'YYYY-MM-DD', 'to' => 'YYYY-MM-DD']  ※ unsupported 시 null
+ */
+function inspectIssueMission(PDO $db, int $issueId): array {
+    $stmt = $db->prepare("SELECT member_id, cohort_id, issue_type, created_at FROM issue_reports WHERE id = ?");
+    $stmt->execute([$issueId]);
+    $issue = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$issue) {
+        return [
+            'mission_status' => 'unsupported',
+            'unchecked_dates' => [],
+            'checked_dates' => [],
+            'inspected_range' => null,
+        ];
+    }
+
+    if (!isset(ISSUE_MISSION_MAP[$issue['issue_type']])) {
+        return [
+            'mission_status' => 'unsupported',
+            'unchecked_dates' => [],
+            'checked_dates' => [],
+            'inspected_range' => null,
+        ];
+    }
+
+    $missionCode = ISSUE_MISSION_MAP[$issue['issue_type']];
+
+    // 검사 범위 (KST). DB time_zone = +09:00 이므로 created_at, NOW() 모두 KST.
+    $createdDate = substr($issue['created_at'], 0, 10);
+    $rangeFrom = date('Y-m-d', strtotime($createdDate . ' -' . ISSUE_INSPECT_RANGE_DAYS . ' days'));
+
+    // cohort.start_date 하한 적용
+    $cs = $db->prepare("SELECT start_date FROM cohorts WHERE id = ?");
+    $cs->execute([(int)$issue['cohort_id']]);
+    $cohortStart = $cs->fetchColumn();
+    if ($cohortStart && $cohortStart > $rangeFrom) {
+        $rangeFrom = $cohortStart;
+    }
+    $rangeTo = $createdDate;
+
+    $checkStmt = $db->prepare("
+        SELECT mmc.check_date, mmc.status
+        FROM member_mission_checks mmc
+        JOIN mission_types mt ON mmc.mission_type_id = mt.id
+        WHERE mmc.member_id = ?
+          AND mmc.cohort_id = ?
+          AND mt.code = ?
+          AND mmc.check_date BETWEEN ? AND ?
+        ORDER BY mmc.check_date ASC
+    ");
+    $checkStmt->execute([
+        (int)$issue['member_id'],
+        (int)$issue['cohort_id'],
+        $missionCode,
+        $rangeFrom,
+        $rangeTo,
+    ]);
+    $rows = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $checked = [];
+    $unchecked = [];
+    foreach ($rows as $r) {
+        if ((int)$r['status'] === 1) $checked[] = $r['check_date'];
+        else $unchecked[] = $r['check_date'];
+    }
+
+    if (empty($rows)) {
+        $status = 'no_data';
+    } elseif (empty($unchecked)) {
+        $status = 'all_checked';
+    } else {
+        $status = 'has_unchecked';
+    }
+
+    return [
+        'mission_status' => $status,
+        'unchecked_dates' => $unchecked,
+        'checked_dates' => $checked,
+        'inspected_range' => ['from' => $rangeFrom, 'to' => $rangeTo],
+    ];
+}
