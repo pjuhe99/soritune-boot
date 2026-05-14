@@ -397,7 +397,8 @@ const AdminIssues = (() => {
         const autoBtn = document.getElementById('adm-auto-resolve');
         if (autoBtn) {
             autoBtn.onclick = async () => {
-                if (!confirm('이 문의를 자동 해결로 처리하시겠습니까?\n(회원에게는 알림이 가지 않습니다)')) return;
+                const ok = await App.confirm('이 문의를 자동 해결로 처리하시겠습니까?\n(회원에게는 알림이 가지 않습니다)');
+                if (!ok) return;
                 const r = await App.post(API + 'issue_admin_resolve_auto', { id: issue.id });
                 if (r.success) {
                     Toast.success('자동 해결되었습니다.');
