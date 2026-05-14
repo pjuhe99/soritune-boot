@@ -594,3 +594,69 @@
 .ar-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #2563EB; }
 .ar-toggle input[type="checkbox"]:disabled { cursor: wait; opacity: 0.5; }
 .ar-settings-hint { font-size: 12px; color: #888; }
+
+/* ── Multipass (다회권) ───────────────────────────────────── */
+.multipass { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.multipass-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.multipass-subtabs { display: flex; gap: 4px; }
+.multipass-subtab { padding: 6px 14px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; border-radius: 6px; }
+.multipass-subtab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.multipass-actions { display: flex; gap: 6px; }
+
+.mp-search { margin-bottom: 12px; }
+.mp-search input { width: 100%; max-width: 480px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; }
+
+.mp-member-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #fff; }
+.mp-member-header { font-size: 16px; margin-bottom: 8px; }
+.mp-profile { color: #6b7280; font-size: 13px; margin-left: 8px; }
+.mp-passes-label { color: #6b7280; font-size: 13px; margin: 8px 0; }
+
+.mp-pass-card { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+.mp-pass-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mp-pass-meta { color: #9ca3af; font-size: 12px; }
+.mp-pass-actions { display: flex; gap: 4px; }
+.mp-pass-summary { color: #6b7280; font-size: 13px; margin: 6px 0; }
+.mp-pass-cohorts { display: flex; flex-direction: column; gap: 4px; }
+
+.mp-cohort-row { display: grid; grid-template-columns: 24px 1fr 80px auto; gap: 8px; align-items: center; padding: 4px 0; }
+.mp-cohort-badge { font-size: 16px; }
+.mp-cohort-name { font-weight: 500; }
+.mp-cohort-status { color: #6b7280; font-size: 13px; }
+.mp-inactive { color: #9ca3af; font-size: 11px; margin-left: 4px; }
+.mp-pending { color: #2563eb; font-size: 11px; margin-left: 4px; }
+.mp-coupon-toggle { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
+.mp-coupon-meta { grid-column: 2 / -1; color: #FF5E00; font-size: 11px; padding-left: 8px; }
+
+/* 모달 폼 */
+.mp-modal-body { padding: 16px; }
+.mp-form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.mp-form-row label { width: 110px; font-weight: 500; }
+.mp-form-row input[type="text"], .mp-form-row textarea { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; }
+.mp-cohort-checks { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.mp-cohort-check { display: inline-flex; align-items: center; gap: 4px; }
+.mp-cohort-inactive { opacity: 0.5; }
+.mp-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.mp-profile-ok { color: #16a34a; font-size: 13px; }
+.mp-profile-warn { color: #f59e0b; font-size: 13px; }
+
+/* CSV 일괄 모달 */
+.mp-bulk-section { margin-bottom: 16px; }
+.mp-bulk-step { font-weight: 600; margin-bottom: 8px; }
+.mp-bulk-template { background: #f3f4f6; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: pre; overflow-x: auto; }
+.mp-bulk-note { color: #6b7280; font-size: 12px; }
+.mp-bulk textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-family: monospace; font-size: 12px; }
+.mp-bulk-table th, .mp-bulk-table td { padding: 4px 8px; font-size: 12px; }
+.mp-status-ok { color: #16a34a; font-weight: 500; }
+.mp-status-warn { color: #f59e0b; font-weight: 500; }
+.mp-status-err { color: #dc2626; font-weight: 500; }
+
+/* 상품별 보기 */
+.mp-product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.mp-product-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fff; cursor: pointer; transition: box-shadow .15s; }
+.mp-product-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.mp-product-name { font-weight: 600; margin-bottom: 6px; }
+.mp-product-stats { color: #6b7280; font-size: 13px; }
+.mp-product-table th, .mp-product-table td { padding: 4px 8px; text-align: center; }
+.mp-product-row { cursor: pointer; }
+.mp-product-row:hover { background: #f9fafb; }
+.btn-xs { padding: 3px 8px; font-size: 12px; border-radius: 4px; }
