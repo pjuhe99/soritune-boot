@@ -187,5 +187,38 @@ function insertCheck(PDO $db, int $memberId, int $cohortId, string $missionCode,
     teardownFixture($db);
 }
 
+// ── T10: bulk — 섞여 있는 pending 중 all_checked 만 resolve ──
+{
+    $fx = setupFixture($db);
+    $today = date('Y-m-d');
+    $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+    // A: naemat33 + all_checked
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'inner33', $today, 1);
+    $idA = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33');
+
+    // B: zoom + has_unchecked (mission 다름)
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'zoom_daily', $today, 1);
+    insertCheck($db, $fx['member_id'], $fx['cohort_id'], 'zoom_daily', $yesterday, 0);
+    $idB = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'zoom');
+
+    // C: study_create + unsupported
+    $idC = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'study_create');
+
+    // D: malkka + no_data
+    $idD = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'malkka');
+
+    $r = bulkAutoResolveIssues($db, [$idA, $idB, $idC, $idD], /*adminId*/ 1);
+    t('T10 resolved A only', $r['resolved_ids'] === [$idA], json_encode($r));
+    t('T10 skipped 3', count($r['skipped']) === 3);
+
+    $statuses = $db->query("SELECT id, status FROM issue_reports WHERE id IN ({$idA},{$idB},{$idC},{$idD}) ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR);
+    t('T10 A resolved', $statuses[$idA] === 'resolved');
+    t('T10 B pending',  $statuses[$idB] === 'pending');
+    t('T10 C pending',  $statuses[$idC] === 'pending');
+    t('T10 D pending',  $statuses[$idD] === 'pending');
+    teardownFixture($db);
+}
+
 echo "\n{$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);

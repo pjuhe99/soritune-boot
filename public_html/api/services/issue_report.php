@@ -433,3 +433,47 @@ function handleIssueAdminResolveAuto($method) {
     }
     jsonSuccess(['inspection' => $r['inspection']], '자동 해결되었습니다.');
 }
+
+/**
+ * 여러 issue 를 일괄 자동 해결. 각 row 마다 attemptAutoResolveIssue 호출.
+ * 한 건 실패해도 나머지는 진행.
+ *
+ * 반환: ['resolved_ids' => [...], 'skipped' => [['id'=>..., 'reason'=>...], ...]]
+ */
+function bulkAutoResolveIssues(PDO $db, array $issueIds, int $adminId): array {
+    $resolved = [];
+    $skipped  = [];
+    foreach ($issueIds as $rawId) {
+        $id = (int)$rawId;
+        if (!$id) continue;
+        try {
+            $r = attemptAutoResolveIssue($db, $id, $adminId);
+            if ($r['ok']) {
+                $resolved[] = $id;
+            } else {
+                $skipped[] = ['id' => $id, 'reason' => $r['reason']];
+            }
+        } catch (\Throwable $e) {
+            error_log("bulkAutoResolveIssues id=$id failed: " . $e->getMessage());
+            $skipped[] = ['id' => $id, 'reason' => 'exception'];
+        }
+    }
+    return ['resolved_ids' => $resolved, 'skipped' => $skipped];
+}
+
+// ══════════════════════════════════════════════════════════════
+// 운영용: 일괄 자동 해결
+// ══════════════════════════════════════════════════════════════
+
+function handleIssueAdminResolveAutoBulk($method) {
+    if ($method !== 'POST') jsonError('POST only', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $ids = $input['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) jsonError('ids 배열 필요');
+    if (count($ids) > 200) jsonError('일괄 처리는 200건 이내', 400);
+
+    $db = getDB();
+    $r = bulkAutoResolveIssues($db, $ids, (int)$admin['admin_id']);
+    jsonSuccess($r, count($r['resolved_ids']) . '건 자동 해결되었습니다.');
+}
