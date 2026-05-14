@@ -11,20 +11,36 @@ function handleDashboardStats() {
     if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
     $db = getDB();
 
-    // 1. 기수 정보
     $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
     $stmt->execute([$cohortId]);
     $cohort = $stmt->fetch();
     if (!$cohort) jsonError('기수를 찾을 수 없습니다.');
 
-    $adaptationEnd = date('Y-m-d', strtotime($cohort['start_date'] . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'));
-    $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
-    $yesterday = date('Y-m-d', strtotime('-1 day'));
-    $scoringEnd = ($cohort['end_date'] && $cohort['end_date'] < $yesterday) ? $cohort['end_date'] : $yesterday;
+    $todayKST = date('Y-m-d');
+    jsonSuccess(computeDashboardStats($db, $cohortId, $cohort['start_date'], $cohort['end_date'] ?? null, $todayKST));
+}
 
-    // 채점 기간이 아직 시작 안 됐으면
-    if ($scoringStart > $scoringEnd) {
-        jsonSuccess([
+/**
+ * 대시보드 통계 산출 (테스트 가능한 결정적 함수).
+ *
+ * @param PDO     $db
+ * @param int     $cohortId
+ * @param string  $cohortStart  YYYY-MM-DD
+ * @param ?string $cohortEnd    YYYY-MM-DD or null
+ * @param string  $todayKST     YYYY-MM-DD (오늘, KST)
+ * @return array  jsonSuccess 의 data 부분
+ */
+function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?string $cohortEnd, string $todayKST): array {
+    $adaptationEnd = date('Y-m-d', strtotime($cohortStart . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'));
+    $scoringStart  = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
+    $yesterday     = date('Y-m-d', strtotime($todayKST . ' -1 day'));
+    $scoringEnd    = ($cohortEnd && $cohortEnd < $yesterday) ? $cohortEnd : $yesterday;
+
+    // Task 2 에서 변경됨: 현재는 기존 동작 보존을 위해 $scoringStart 사용
+    $aggStart = $scoringStart;
+
+    if ($aggStart > $scoringEnd) {
+        return [
             'scoring_start' => $scoringStart,
             'scoring_end' => $scoringEnd,
             'total_days' => 0,
@@ -34,24 +50,20 @@ function handleDashboardStats() {
             'members' => [],
             'score_distribution' => [],
             'score_warnings' => ['approaching' => [], 'revival_eligible' => [], 'out' => []],
-        ]);
-        return;
+        ];
     }
 
-    // 2. 날짜 계산
     $totalDays = 0;
     $totalMondays = 0;
-    $current = $scoringStart;
+    $current = $aggStart;
     while ($current <= $scoringEnd) {
         $totalDays++;
         if ((int)date('w', strtotime($current)) === 1) $totalMondays++;
         $current = date('Y-m-d', strtotime($current . ' +1 day'));
     }
 
-    // 2.5. stale 점수 갱신
     ensureScoresFresh($db, $cohortId);
 
-    // 3. 멤버 조회
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
                bm.group_id, bm.member_status, bg.name AS group_name,
@@ -67,7 +79,7 @@ function handleDashboardStats() {
     $memberIds = array_column($members, 'id');
 
     if (empty($memberIds)) {
-        jsonSuccess([
+        return [
             'scoring_start' => $scoringStart,
             'scoring_end' => $scoringEnd,
             'total_days' => $totalDays,
@@ -77,11 +89,9 @@ function handleDashboardStats() {
             'members' => [],
             'score_distribution' => [],
             'score_warnings' => ['approaching' => [], 'revival_eligible' => [], 'out' => []],
-        ]);
-        return;
+        ];
     }
 
-    // 4. 미션 타입 코드→ID 매핑
     $codeToId = getMissionCodeToIdMap($db);
     $zoomId = $codeToId['zoom_daily'] ?? null;
     $dailyId = $codeToId['daily_mission'] ?? null;
@@ -91,7 +101,6 @@ function handleDashboardStats() {
     $bookJoinId = $codeToId['bookclub_join'] ?? null;
     $hamemmalId = $codeToId['hamemmal'] ?? null;
 
-    // 5. 해당 기간의 모든 체크 데이터 조회
     $ph = implode(',', array_fill(0, count($memberIds), '?'));
     $stmt = $db->prepare("
         SELECT member_id, check_date, mission_type_id, status
@@ -99,51 +108,40 @@ function handleDashboardStats() {
         WHERE member_id IN ({$ph})
           AND check_date BETWEEN ? AND ?
     ");
-    $stmt->execute(array_merge($memberIds, [$scoringStart, $scoringEnd]));
+    $stmt->execute(array_merge($memberIds, [$aggStart, $scoringEnd]));
 
-    // member_id → date → mission_type_id → status
     $checkData = [];
     foreach ($stmt->fetchAll() as $c) {
         $checkData[(int)$c['member_id']][$c['check_date']][(int)$c['mission_type_id']] = (int)$c['status'];
     }
 
-    // 6. 멤버별 집계
     $memberResults = [];
-    $groupAgg = []; // group_id => aggregated data
+    $groupAgg = [];
 
     foreach ($members as $m) {
         $mid = (int)$m['id'];
         $gid = $m['group_id'] ? (int)$m['group_id'] : 0;
         $byDate = $checkData[$mid] ?? [];
 
-        // 필수 과제 집계
         $zoomDone = 0;
         $inner33Done = 0;
         $speakDone = 0;
-
-        // 선택 참여 집계
         $bookOpenCount = 0;
         $bookJoinCount = 0;
         $hamemmalCount = 0;
 
-        $cur = $scoringStart;
+        $cur = $aggStart;
         while ($cur <= $scoringEnd) {
             $missions = $byDate[$cur] ?? [];
             $dow = (int)date('w', strtotime($cur));
 
-            // zoom_daily OR daily_mission
             $zoomPass = false;
             if ($zoomId && ($missions[$zoomId] ?? 0) === 1) $zoomPass = true;
             if ($dailyId && ($missions[$dailyId] ?? 0) === 1) $zoomPass = true;
             if ($zoomPass) $zoomDone++;
 
-            // inner33
             if ($inner33Id && ($missions[$inner33Id] ?? 0) === 1) $inner33Done++;
-
-            // speak_mission (월요일만)
             if ($dow === 1 && $speakId && ($missions[$speakId] ?? 0) === 1) $speakDone++;
-
-            // 선택 참여 (모든 날짜)
             if ($bookOpenId && ($missions[$bookOpenId] ?? 0) === 1) $bookOpenCount++;
             if ($bookJoinId && ($missions[$bookJoinId] ?? 0) === 1) $bookJoinCount++;
             if ($hamemmalId && ($missions[$hamemmalId] ?? 0) === 1) $hamemmalCount++;
@@ -179,7 +177,6 @@ function handleDashboardStats() {
         ];
         $memberResults[] = $memberResult;
 
-        // 조별 집계 누적
         if (!isset($groupAgg[$gid])) {
             $groupAgg[$gid] = [
                 'id' => $gid,
@@ -198,9 +195,8 @@ function handleDashboardStats() {
         $groupAgg[$gid]['hamemmal_sum'] += $hamemmalCount;
     }
 
-    // 6.5. 조별 코치 조회
     $groupIds = array_keys($groupAgg);
-    $coachMap = []; // group_id => "코치1, 코치2"
+    $coachMap = [];
     if ($groupIds) {
         $gph = implode(',', array_fill(0, count($groupIds), '?'));
         $stmt = $db->prepare("
@@ -217,7 +213,6 @@ function handleDashboardStats() {
         }
     }
 
-    // 7. 조별 비율 계산
     $groupResults = [];
     foreach ($groupAgg as $g) {
         $mc = $g['member_count'];
@@ -237,10 +232,8 @@ function handleDashboardStats() {
             ],
         ];
     }
-    // 조 이름 순 정렬
     usort($groupResults, fn($a, $b) => strcmp($a['name'], $b['name']));
 
-    // 8. 기수 전체 요약
     $totalMembers = count($members);
     $cohortZoomSum = array_sum(array_column($groupAgg, 'zoom_sum'));
     $cohortInner33Sum = array_sum(array_column($groupAgg, 'inner33_sum'));
@@ -262,7 +255,6 @@ function handleDashboardStats() {
         ],
     ];
 
-    // 9. 점수 분포
     $scoreBuckets = [
         ['range' => '0 ~ -4', 'min' => -4, 'max' => 0, 'count' => 0],
         ['range' => '-5 ~ -9', 'min' => -9, 'max' => -5, 'count' => 0],
@@ -283,7 +275,6 @@ function handleDashboardStats() {
     }
     $scoreDistribution = array_map(fn($b) => ['range' => $b['range'], 'count' => $b['count']], $scoreBuckets);
 
-    // 10. 경고 멤버
     $approaching = [];
     $revivalEligible = [];
     $out = [];
@@ -299,7 +290,7 @@ function handleDashboardStats() {
         }
     }
 
-    jsonSuccess([
+    return [
         'scoring_start' => $scoringStart,
         'scoring_end' => $scoringEnd,
         'total_days' => $totalDays,
@@ -313,5 +304,5 @@ function handleDashboardStats() {
             'revival_eligible' => $revivalEligible,
             'out' => $out,
         ],
-    ]);
+    ];
 }
