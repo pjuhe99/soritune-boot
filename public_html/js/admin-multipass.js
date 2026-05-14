@@ -5,6 +5,7 @@ const AdminMultipassApp = (() => {
     let cohorts = [];        // cohort_list 응답 cohort_details
     let activeSubTab = 'members';
     let searchTimer = null;
+    let searchSeq = 0;
 
     async function init(adminSession, containerId) {
         admin = adminSession;
@@ -70,12 +71,14 @@ const AdminMultipassApp = (() => {
     }
 
     async function doSearch(q) {
+        const mySeq = ++searchSeq;
         const results = document.getElementById('mp-results');
         q = q.trim();
         if (!q) { results.innerHTML = ''; return; }
         results.innerHTML = '<p>검색 중...</p>';
         try {
             const r = await App.get('/api/admin.php?action=multipass_search_member&q=' + encodeURIComponent(q));
+            if (mySeq !== searchSeq) return;  // stale response, newer search in flight
             const members = r.members || [];
             if (!members.length) {
                 results.innerHTML = `
@@ -87,6 +90,7 @@ const AdminMultipassApp = (() => {
             results.innerHTML = members.map(m => renderMemberCard(m)).join('');
             attachCardHandlers();
         } catch (e) {
+            if (mySeq !== searchSeq) return;  // stale
             results.innerHTML = `<p class="text-danger">검색 실패: ${App.esc(e.message || e)}</p>`;
         }
     }
@@ -163,7 +167,7 @@ const AdminMultipassApp = (() => {
                 const issued   = cb.checked;
                 try {
                     await App.post('/api/admin.php?action=multipass_toggle_coupon', { pass_id: passId, cohort_id: cohortId, issued });
-                    // 옵티미스틱 — 결과 재로드 대신 카드의 메타 부분만 갱신
+                    // 토글 성공 후 전체 재검색으로 최신 발급 상태 반영
                     doSearch(document.getElementById('mp-search-input').value);
                 } catch (e) {
                     cb.checked = !issued;
