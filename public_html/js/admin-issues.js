@@ -251,6 +251,8 @@ const AdminIssues = (() => {
                 : `${total}건`;
         }
 
+        updateBulkAutoButton();
+
         if (total === 0) {
             listEl.innerHTML = '<div class="issue-adm-empty">해당 문의가 없습니다.</div>';
             if (pagerEl) pagerEl.innerHTML = '';
@@ -301,8 +303,6 @@ const AdminIssues = (() => {
                 });
             }
         }
-
-        updateBulkAutoButton();
     }
 
     function renderRow(issue) {
