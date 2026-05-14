@@ -98,6 +98,24 @@ function getMemberSession(): ?array {
         return null;
     }
 
+    // 세션의 member_id 가 여전히 활성 cohort 의 활성 회원인지 검증.
+    // 비활성 cohort 의 옛 세션(30 일 lifetime)이 살아있어 잘못된 기수 화면이 노출되는 걸 차단.
+    $stmt = getDB()->prepare("
+        SELECT 1
+        FROM bootcamp_members bm
+        JOIN cohorts c ON c.id = bm.cohort_id
+        WHERE bm.id = ?
+          AND c.is_active = 1
+          AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+        LIMIT 1
+    ");
+    $stmt->execute([(int)$_SESSION['member_id']]);
+    if (!$stmt->fetchColumn()) {
+        session_write_close();
+        destroySession('member');
+        return null;
+    }
+
     // 구버전 세션 inline 마이그레이션: accessible_cohorts 가 없으면 현재 cohort 1개로 채움
     if (!isset($_SESSION['accessible_cohorts']) || !is_array($_SESSION['accessible_cohorts'])) {
         $_SESSION['accessible_cohorts'] = [[
