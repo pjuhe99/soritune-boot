@@ -13,6 +13,26 @@ const AdminIssues = (() => {
         rejected:    { label: '반려',      cls: 'issue-badge--rejected' },
     };
 
+    // ── 미션 검사 chip ──
+    const MISSION_CHIP = {
+        all_checked:   { label: '✅ 모두 체크됨', cls: 'mission-chip mission-chip--ok' },
+        has_unchecked: { label: '❌ 미체크',      cls: 'mission-chip mission-chip--miss' },
+        no_data:       { label: '데이터 없음',     cls: 'mission-chip mission-chip--none' },
+        unsupported:   null,
+    };
+
+    function renderMissionChip(insp) {
+        if (!insp) return '';
+        const def = MISSION_CHIP[insp.mission_status];
+        if (!def) return '';
+        let extra = '';
+        if (insp.mission_status === 'has_unchecked' && insp.unchecked_dates?.length) {
+            const dates = insp.unchecked_dates.map(d => d.slice(5)).join(', ');
+            extra = ` ${dates}`;
+        }
+        return `<span class="${def.cls}">${def.label}${extra}</span>`;
+    }
+
     // "처리 전" = pending + in_progress
     const UNRESOLVED = ['pending', 'in_progress'];
     const RESOLVED   = ['resolved', 'rejected'];
@@ -206,6 +226,7 @@ const AdminIssues = (() => {
                     <tr>
                         <th>상태</th>
                         <th>유형</th>
+                        <th>미션</th>
                         <th>작성자</th>
                         <th>조</th>
                         <th>작성일</th>
@@ -255,6 +276,7 @@ const AdminIssues = (() => {
             <tr class="issue-adm-row" data-id="${issue.id}">
                 <td><span class="issue-badge ${st.cls}">${st.label}</span></td>
                 <td>${App.esc(issue.issue_type_label)}</td>
+                <td class="issue-adm-mission">${renderMissionChip(issue.mission_inspection)}</td>
                 <td>${App.esc(name)}</td>
                 <td>${App.esc(group)}</td>
                 <td class="issue-adm-date">${date}</td>
@@ -276,6 +298,28 @@ const AdminIssues = (() => {
                    <div class="issue-adm-detail-value">${App.esc(issue.description).replace(/\n/g, '<br>')}</div>
                </div>`
             : '';
+
+        const inspectionHtml = (() => {
+            const i = issue.mission_inspection;
+            if (!i) return '';
+            const chip = renderMissionChip(i);
+            const range = i.inspected_range
+                ? `${i.inspected_range.from} ~ ${i.inspected_range.to}`
+                : '';
+            const detail = [];
+            if (i.checked_dates?.length)   detail.push(`체크됨: ${i.checked_dates.join(', ')}`);
+            if (i.unchecked_dates?.length) detail.push(`미체크: ${i.unchecked_dates.join(', ')}`);
+            return `
+                <div class="issue-adm-detail-section">
+                    <div class="issue-adm-detail-label">미션 자동 검사</div>
+                    <div class="issue-adm-detail-value">
+                        ${chip}
+                        <div class="issue-adm-inspect-range">검사 범위: ${range}</div>
+                        ${detail.length ? `<div class="issue-adm-inspect-detail">${detail.join(' · ')}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        })();
 
         const noteHtml = `
             <div class="issue-adm-detail-section">
@@ -316,6 +360,7 @@ const AdminIssues = (() => {
                     <span>${formatFull(issue.resolved_at)}</span>
                 </div>` : ''}
                 ${descHtml}
+                ${inspectionHtml}
                 ${noteHtml}
                 <div class="issue-adm-detail-section">
                     <div class="issue-adm-detail-label">상태 변경</div>
