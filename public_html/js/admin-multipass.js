@@ -438,7 +438,89 @@ const AdminMultipassApp = (() => {
         `;
     }
 
-    function renderProductsView() { document.getElementById('mp-body').innerHTML = '<p>Task 12 에서 구현</p>'; }
+    async function renderProductsView() {
+        const body = document.getElementById('mp-body');
+        body.innerHTML = '<p>로딩 중...</p>';
+        try {
+            const r = await App.get('/api/admin.php?action=multipass_list');
+            const passes = r.passes || [];
+            if (!passes.length) {
+                body.innerHTML = '<p>등록된 다회권이 없습니다.</p>';
+                return;
+            }
+            // 상품명 grouping
+            const groups = {};
+            passes.forEach(p => {
+                (groups[p.product_name] ||= []).push(p);
+            });
+            const cards = Object.entries(groups).map(([name, ps]) => {
+                const buyers = ps.length;
+                const totalCohorts = ps.reduce((s, p) => s + p.cohorts.length, 0);
+                const joined = ps.reduce((s, p) => s + p.cohorts.filter(c => c.joined).length, 0);
+                const avg = (joined / buyers).toFixed(1);
+                return `
+                <div class="mp-product-card" data-name="${App.esc(name)}">
+                    <div class="mp-product-name">${App.esc(name)}</div>
+                    <div class="mp-product-stats">구매자 <strong>${buyers}</strong>명 · 평균 수강 <strong>${avg}</strong>기 / ${(totalCohorts/buyers).toFixed(0)}기</div>
+                </div>
+            `;
+            }).join('');
+            body.innerHTML = `
+            <div class="mp-product-grid">${cards}</div>
+            <div id="mp-product-detail"></div>
+        `;
+            body.querySelectorAll('.mp-product-card').forEach(card => {
+                card.addEventListener('click', () => renderProductDetail(card.dataset.name, groups[card.dataset.name]));
+            });
+        } catch (e) {
+            body.innerHTML = `<p class="text-danger">로딩 실패: ${App.esc(e.message || e)}</p>`;
+        }
+    }
+
+    function renderProductDetail(name, passes) {
+        const detail = document.getElementById('mp-product-detail');
+        // 그 상품에 포함된 cohort 합집합 (start_date 정렬은 cohorts 마스터 기준)
+        const cohortIds = new Set();
+        passes.forEach(p => p.cohorts.forEach(c => cohortIds.add(c.cohort_id)));
+        const cohortList = cohorts.filter(c => cohortIds.has(c.id))
+            .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+        const headers = cohortList.map(c => `<th>${App.esc(c.cohort)}</th>`).join('');
+        const rows = passes.map(p => {
+            const byCid = {};
+            p.cohorts.forEach(c => byCid[c.cohort_id] = c);
+            const profile = (p.user_id) ? '' : '';
+            const cells = cohortList.map(c => {
+                const r = byCid[c.id];
+                if (!r) return '<td>-</td>';
+                const badge = r.joined ? '✅' : '⚪';
+                const coupon = r.coupon_issued ? '🎟' : '';
+                return `<td>${badge}${coupon}</td>`;
+            }).join('');
+            const remain = p.cohorts.filter(c => !c.joined).length;
+            return `<tr class="mp-product-row" data-user-id="${App.esc(p.user_id)}">
+            <td>${App.esc(p.user_id)}</td>
+            ${cells}
+            <td>${remain}</td>
+        </tr>`;
+        }).join('');
+        detail.innerHTML = `
+        <h4>상품: ${App.esc(name)} · ${passes.length}명</h4>
+        <table class="data-table mp-product-table">
+            <thead>
+                <tr><th>user_id</th>${headers}<th>남은</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+        detail.querySelectorAll('.mp-product-row').forEach(tr => {
+            tr.addEventListener('click', () => {
+                // 회원별 보기로 점프
+                container.querySelector('.multipass-subtab[data-sub="members"]').click();
+                renderMembersView(tr.dataset.userId);
+            });
+        });
+    }
 
     return { init };
 })();
