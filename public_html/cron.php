@@ -234,7 +234,7 @@ function cafePoll() {
             if (cafeArticleExists($a['cafe_article_id'])) continue;
             $a['menu_id']         = $b['menu_id'];
             $a['board_type']      = $b['board_type'];
-            $a['assignment_date'] = substr($a['posted_at'], 0, 10);
+            $a['assignment_date'] = cafeAssignmentDateForPostedAt($a['posted_at']);
             $a['mission_checked'] = 1;
             $newPosts[] = $a;
         }

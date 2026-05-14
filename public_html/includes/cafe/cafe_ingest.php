@@ -13,6 +13,19 @@ require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../bootcamp_functions.php';
 
 /**
+ * posted_at(KST 'Y-m-d H:i:s') → 과제 날짜.
+ * 컷오프: 매일 07:00 KST.
+ *   00:00:00 ~ 07:00:00 → 전날
+ *   07:00:01 ~ 23:59:59 → 당일
+ * (posted_at - 7시간 - 1초) 의 KST 날짜로 환산.
+ */
+function cafeAssignmentDateForPostedAt(string $postedAt): string {
+    $dt = new DateTime($postedAt, new DateTimeZone('Asia/Seoul'));
+    $dt->modify('-7 hours -1 second');
+    return $dt->format('Y-m-d');
+}
+
+/**
  * 활성 보드 목록 (cafe_board_map.is_active=1).
  * @return array<int, array{menu_id:string, board_type:string}>
  */
