@@ -181,6 +181,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
                             <button class="tab" data-tab="#tab-members" data-hash="members">회원 관리</button>
+                            <button class="tab" data-tab="#tab-multipass" data-hash="multipass">다회권 확인</button>
                             <button class="tab" data-tab="#tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-cafe-posts" data-hash="cafe">카페 게시글</button>
                             <button class="tab" data-tab="#tab-coin-cycles" data-hash="coins">코인 Cycle</button>
@@ -204,6 +205,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-revival"></div>
                         <div class="tab-content" id="tab-members"></div>
+                        <div class="tab-content" id="tab-multipass"></div>
                         <div class="tab-content" id="tab-group-assign"></div>
                         <div class="tab-content" id="tab-cafe-posts"></div>
                         <div class="tab-content coin-cycles-container" id="tab-coin-cycles"></div>
@@ -479,6 +481,20 @@ const AdminApp = (() => {
                         }
                     });
                     retObserver.observe(retTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Multipass 탭 lazy load (operation)
+            if (typeof AdminMultipassApp !== 'undefined') {
+                const mpTab = document.getElementById('tab-multipass');
+                if (mpTab) {
+                    const mpObserver = new MutationObserver(() => {
+                        if (mpTab.classList.contains('active') && !mpTab.dataset.loaded) {
+                            mpTab.dataset.loaded = '1';
+                            AdminMultipassApp.init(admin, 'tab-multipass');
+                        }
+                    });
+                    mpObserver.observe(mpTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 
