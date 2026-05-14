@@ -329,7 +329,15 @@ const AdminIssues = (() => {
             </div>
         `;
 
-        // 상태 변경 버튼
+        // 상태 변경 버튼 (자동 해결 + 일반 4개)
+        const canAuto =
+            issue.status === 'pending' &&
+            issue.mission_inspection?.mission_status === 'all_checked';
+
+        const autoBtnHtml = canAuto
+            ? `<button class="btn btn-sm issue-adm-auto-btn" id="adm-auto-resolve">🪄 자동 해결</button>`
+            : '';
+
         const statusBtns = Object.entries(STATUS_MAP)
             .filter(([key]) => key !== issue.status)
             .map(([key, val]) =>
@@ -364,7 +372,7 @@ const AdminIssues = (() => {
                 ${noteHtml}
                 <div class="issue-adm-detail-section">
                     <div class="issue-adm-detail-label">상태 변경</div>
-                    <div class="issue-adm-status-btns" id="adm-status-btns">${statusBtns}</div>
+                    <div class="issue-adm-status-btns" id="adm-status-btns">${autoBtnHtml}${statusBtns}</div>
                 </div>
             </div>
         `;
@@ -385,6 +393,24 @@ const AdminIssues = (() => {
         document.querySelectorAll('#adm-status-btns .issue-adm-status-btn').forEach(btn => {
             btn.onclick = () => changeStatus(issue, btn.dataset.status);
         });
+
+        const autoBtn = document.getElementById('adm-auto-resolve');
+        if (autoBtn) {
+            autoBtn.onclick = async () => {
+                if (!confirm('이 문의를 자동 해결로 처리하시겠습니까?\n(회원에게는 알림이 가지 않습니다)')) return;
+                const r = await App.post(API + 'issue_admin_resolve_auto', { id: issue.id });
+                if (r.success) {
+                    Toast.success('자동 해결되었습니다.');
+                    issue.status = 'resolved';
+                    issue.resolved_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                    App.closeModal();
+                    renderStatusFilters();
+                    renderList();
+                } else {
+                    Toast.error(r.message || '자동 해결 실패');
+                }
+            };
+        }
     }
 
     // ══════════════════════════════════════════════════════════
