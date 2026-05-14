@@ -280,26 +280,19 @@ const ISSUE_INSPECT_RANGE_DAYS = 7;
  *   inspected_range   ['from' => 'YYYY-MM-DD', 'to' => 'YYYY-MM-DD']  ※ unsupported 시 null
  */
 function inspectIssueMission(PDO $db, int $issueId): array {
+    $unsupported = [
+        'mission_status' => 'unsupported',
+        'unchecked_dates' => [],
+        'checked_dates' => [],
+        'inspected_range' => null,
+    ];
+
     $stmt = $db->prepare("SELECT member_id, cohort_id, issue_type, created_at FROM issue_reports WHERE id = ?");
     $stmt->execute([$issueId]);
     $issue = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$issue) {
-        return [
-            'mission_status' => 'unsupported',
-            'unchecked_dates' => [],
-            'checked_dates' => [],
-            'inspected_range' => null,
-        ];
-    }
+    if (!$issue) return $unsupported;
 
-    if (!isset(ISSUE_MISSION_MAP[$issue['issue_type']])) {
-        return [
-            'mission_status' => 'unsupported',
-            'unchecked_dates' => [],
-            'checked_dates' => [],
-            'inspected_range' => null,
-        ];
-    }
+    if (!isset(ISSUE_MISSION_MAP[$issue['issue_type']])) return $unsupported;
 
     $missionCode = ISSUE_MISSION_MAP[$issue['issue_type']];
 

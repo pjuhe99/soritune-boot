@@ -119,11 +119,16 @@ function insertCheck(PDO $db, int $memberId, int $cohortId, string $missionCode,
 // ── T5: cohort.start_date 가 7일 전보다 더 최근이면 range.from 이 좁혀짐 ──
 {
     $fx = setupFixture($db);
-    $issueId = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33');
+    // 문의 created_at 을 cohort.start_date 당일로 강제 → 7일 lookback 은
+    // cohort 시작일 이전이라 반드시 cohort.start_date 로 clamp 되어야 한다.
+    $createdAt = $fx['cohort_start'] . ' 12:00:00';
+    $issueId = insertIssue($db, $fx['member_id'], $fx['cohort_id'], 'naemat33', $createdAt);
     $r = inspectIssueMission($db, $issueId);
-    $expectedFromMin = $fx['cohort_start'];
-    t('T5 range >= cohort.start_date', $r['inspected_range']['from'] >= $expectedFromMin,
-       "from={$r['inspected_range']['from']} cohort_start={$expectedFromMin}");
+    t('T5 range.from clamped to cohort_start',
+       $r['inspected_range']['from'] === $fx['cohort_start'],
+       "from={$r['inspected_range']['from']} cohort_start={$fx['cohort_start']}");
+    t('T5 range.to is created date',
+       $r['inspected_range']['to'] === $fx['cohort_start']);
     teardownFixture($db);
 }
 
