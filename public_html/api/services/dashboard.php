@@ -36,13 +36,16 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
     $yesterday     = date('Y-m-d', strtotime($todayKST . ' -1 day'));
     $scoringEnd    = ($cohortEnd && $cohortEnd < $yesterday) ? $cohortEnd : $yesterday;
 
-    // Task 2 에서 변경됨: 현재는 기존 동작 보존을 위해 $scoringStart 사용
-    $aggStart = $scoringStart;
+    $displayStart     = $cohortStart;
+    $adaptationActive = $todayKST < $scoringStart;
+    $aggStart         = $displayStart;
 
     if ($aggStart > $scoringEnd) {
         return [
+            'display_start' => $displayStart,
             'scoring_start' => $scoringStart,
             'scoring_end' => $scoringEnd,
+            'adaptation_active' => $adaptationActive,
             'total_days' => 0,
             'total_mondays' => 0,
             'cohort_summary' => null,
@@ -80,8 +83,10 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
 
     if (empty($memberIds)) {
         return [
+            'display_start' => $displayStart,
             'scoring_start' => $scoringStart,
             'scoring_end' => $scoringEnd,
+            'adaptation_active' => $adaptationActive,
             'total_days' => $totalDays,
             'total_mondays' => $totalMondays,
             'cohort_summary' => null,
@@ -291,8 +296,10 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
     }
 
     return [
+        'display_start' => $displayStart,
         'scoring_start' => $scoringStart,
         'scoring_end' => $scoringEnd,
+        'adaptation_active' => $adaptationActive,
         'total_days' => $totalDays,
         'total_mondays' => $totalMondays,
         'cohort_summary' => $cohortSummary,
