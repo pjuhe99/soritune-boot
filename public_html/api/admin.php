@@ -77,7 +77,8 @@ case 'login_phone':
     $normalized = normalizePhone($phone);
     $db = getDB();
 
-    // Find active bootcamp_member with leader/subleader role by phone
+    // Find active bootcamp_member with leader/subleader role by phone.
+    // 같은 휴대폰에 이전 기수 row 가 살아있는 dual 케이스: 활성 cohort 의 가장 최근 row 만 선택.
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.member_role, bm.group_id, bm.cohort_id, c.cohort,
                bg.name AS group_name
@@ -86,7 +87,9 @@ case 'login_phone':
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
         WHERE REPLACE(REPLACE(bm.phone, '-', ''), ' ', '') = ?
           AND bm.is_active = 1
+          AND c.is_active = 1
           AND bm.member_role IN ('leader', 'subleader')
+        ORDER BY bm.cohort_id DESC
         LIMIT 1
     ");
     $stmt->execute([$normalized]);
