@@ -298,7 +298,146 @@ const AdminMultipassApp = (() => {
         };
     }
 
-    function openBulkModal() { Toast.info('Task 11 에서 구현'); }
+    function openBulkModal() {
+        let parsedRows = null;
+
+        const bodyHtml = `
+            <div class="mp-modal-body mp-bulk">
+                <div class="mp-bulk-section">
+                    <div class="mp-bulk-step">1. 템플릿</div>
+                    <pre class="mp-bulk-template">user_id,product_name,cohorts
+3937726826@k,11~13기 묶음권,"11,12,13"
+4114325139@n,5~7기 패키지,"5|6|7"</pre>
+                    <p class="mp-bulk-note">cohorts 컬럼: 쉼표·파이프·슬래시 분리. "11"·"11기" 모두 인식.</p>
+                </div>
+
+                <div class="mp-bulk-section">
+                    <div class="mp-bulk-step">2. CSV 붙여넣기 또는 Excel 업로드</div>
+                    <textarea id="mp-bulk-csv" rows="6" placeholder="여기에 CSV 붙여넣기"></textarea>
+                    <div class="mp-bulk-upload">
+                        <input type="file" id="mp-bulk-file" accept=".xlsx,.xls,.csv" style="display:none">
+                        <button class="btn btn-secondary btn-sm" id="mp-bulk-file-btn">파일 선택 (Excel/CSV)</button>
+                    </div>
+                    <button class="btn btn-primary" id="mp-bulk-validate">검증</button>
+                </div>
+
+                <div class="mp-bulk-section" id="mp-bulk-result" style="display:none">
+                    <div class="mp-bulk-step">3. 검증 결과</div>
+                    <div id="mp-bulk-summary"></div>
+                    <div id="mp-bulk-table"></div>
+                    <button class="btn btn-primary" id="mp-bulk-apply">적용</button>
+                </div>
+
+                <div class="mp-form-actions">
+                    <button class="btn btn-secondary" id="mp-bulk-close">닫기</button>
+                </div>
+            </div>
+        `;
+
+        App.openModal('다회권 CSV 일괄 등록', bodyHtml);
+
+        document.querySelector('#mp-bulk-close').onclick = () => App.closeModal();
+
+        document.querySelector('#mp-bulk-file-btn').onclick = () => document.querySelector('#mp-bulk-file').click();
+        document.querySelector('#mp-bulk-file').onchange = async (ev) => {
+            const file = ev.target.files[0];
+            if (!file) return;
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext === 'csv') {
+                const text = await file.text();
+                document.querySelector('#mp-bulk-csv').value = text;
+            } else {
+                // Excel — XLSX 사용 (operation/index.php 에서 이미 로드됨)
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(buf);
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const csv = XLSX.utils.sheet_to_csv(ws);
+                document.querySelector('#mp-bulk-csv').value = csv;
+            }
+        };
+
+        document.querySelector('#mp-bulk-validate').onclick = async () => {
+            const csv = document.querySelector('#mp-bulk-csv').value;
+            if (!csv.trim()) { Toast.error('CSV 가 비어있습니다.'); return; }
+            try {
+                const r = await App.post('/api/admin.php?action=multipass_bulk_validate', { csv });
+                parsedRows = r.rows || [];
+                const summary = r.summary || { ok: 0, warn: 0, error: 0 };
+                document.querySelector('#mp-bulk-summary').innerHTML = `
+                    정상 <strong>${summary.ok}</strong>건 ·
+                    WARN <strong style="color:#f59e0b">${summary.warn}</strong>건 ·
+                    ERROR <strong style="color:#dc2626">${summary.error}</strong>건
+                `;
+                document.querySelector('#mp-bulk-table').innerHTML = renderBulkTable(parsedRows);
+                document.querySelector('#mp-bulk-result').style.display = '';
+            } catch (e) {
+                Toast.error('검증 실패: ' + (e.message || e));
+            }
+        };
+
+        document.querySelector('#mp-bulk-apply').onclick = async () => {
+            if (!parsedRows) return;
+            // 운영자 결정 (mode) 수집
+            const applyRows = parsedRows
+                .filter(r => !String(r.status || '').startsWith('ERROR_'))
+                .map((r) => {
+                    const modeSelect = document.querySelector(`select[data-row="${r.row}"]`);
+                    const mode = modeSelect ? modeSelect.value : null;
+                    return mode ? { ...r, mode } : r;
+                });
+            if (!applyRows.length) { Toast.error('적용할 행이 없습니다.'); return; }
+            try {
+                const r = await App.post('/api/admin.php?action=multipass_bulk_apply', { rows: applyRows });
+                const failedMsg = r.failed && r.failed.length ?
+                    `\n실패 ${r.failed.length}건:\n` + r.failed.map(f => `  행 ${f.row}: ${f.error}`).join('\n') : '';
+                Toast.success(`적용 완료: ${r.applied}건${failedMsg}`);
+                App.closeModal();
+                const cur = document.getElementById('mp-search-input');
+                if (cur && cur.value) doSearch(cur.value);
+            } catch (e) {
+                Toast.error('적용 실패: ' + (e.message || e));
+            }
+        };
+    }
+
+    function renderBulkTable(rows) {
+        return `
+            <table class="data-table mp-bulk-table">
+                <thead>
+                    <tr><th>#</th><th>user_id</th><th>상품명</th><th>기수</th><th>상태</th><th>처리</th></tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => {
+                        const status = r.status || '';
+                        const statusClass = status.startsWith('ERROR_') ? 'mp-status-err'
+                                          : status.startsWith('WARN_')  ? 'mp-status-warn' : 'mp-status-ok';
+                        let modeCtrl = '';
+                        if (status === 'WARN_DUPLICATE_PASS' || status === 'WARN_DUPLICATE_PASS_IN_BATCH') {
+                            const target = status === 'WARN_DUPLICATE_PASS'
+                                ? `기존 pass#${r.existing_pass_id}`
+                                : `같은 파일 행 ${r.target_pass_in_batch}`;
+                            modeCtrl = `
+                                <select data-row="${r.row}">
+                                    <option value="extend">extend (${target} 에 cohort 추가)</option>
+                                    <option value="new">new (별도 다회권)</option>
+                                    <option value="skip">skip (적용 안 함)</option>
+                                </select>
+                            `;
+                        }
+                        return `<tr>
+                            <td>${r.row || ''}</td>
+                            <td>${App.esc(r.user_id || '')}</td>
+                            <td>${App.esc(r.product_name || '')}</td>
+                            <td>${(r.cohort_labels || []).join(', ')}</td>
+                            <td class="${statusClass}">${App.esc(status)}${r.unmatched_labels ? ' [' + r.unmatched_labels.join(',') + ']' : ''}</td>
+                            <td>${modeCtrl}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
     function renderProductsView() { document.getElementById('mp-body').innerHTML = '<p>Task 12 에서 구현</p>'; }
 
     return { init };
