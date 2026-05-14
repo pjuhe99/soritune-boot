@@ -1936,8 +1936,13 @@ const BootcampApp = (() => {
         let html = '';
 
         // ── 섹션 1: 기수 전체 요약
+        // 적응기간 안내 (감점은 아직 미적용)
+        if (d.adaptation_active) {
+            html += `<div class="notice notice-warning" style="margin:0 0 var(--space-3)">⏳ 적응기간 중 — 감점은 ${d.scoring_start}부터 적용됩니다.</div>`;
+        }
+
         html += `
-            <div class="db-section-title">기수 전체 과제율 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(${d.scoring_start} ~ ${d.scoring_end}, ${cs.member_count}명)</span></div>
+            <div class="db-section-title">기수 전체 과제율 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(${d.display_start} ~ ${d.scoring_end}, ${cs.member_count}명)</span></div>
             <div class="db-metrics">
                 <div class="db-metric-card">
                     <div class="db-metric-label">줌/데일리미션</div>
