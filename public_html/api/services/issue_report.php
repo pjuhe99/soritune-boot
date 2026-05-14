@@ -173,6 +173,12 @@ function handleIssueAdminList() {
     foreach ($rows as &$r) {
         $r['issue_type_label'] = ISSUE_TYPES[$r['issue_type']] ?? $r['issue_type'];
         $r['status_label'] = ISSUE_STATUSES[$r['status']] ?? $r['status'];
+        // pending 만 검사 (resolved/rejected 는 의미 없음)
+        if ($r['status'] === 'pending') {
+            $r['mission_inspection'] = inspectIssueMission($db, (int)$r['id']);
+        } else {
+            $r['mission_inspection'] = null;
+        }
     }
     unset($r);
 
