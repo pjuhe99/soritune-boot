@@ -141,7 +141,15 @@ const AdminMultipassApp = (() => {
         if (c.joined) label = '수강함';
         else if (c.has_member_row) label = '미수강 (환불)';
         else label = '미수강';
-        const inactive = !c.is_active ? '<span class="mp-inactive">(종료)</span>' : '';
+        let inactive = '';
+        if (!c.is_active) {
+            const today = new Date().toISOString().slice(0, 10);
+            if (c.start_date && c.start_date > today) {
+                inactive = '<span class="mp-pending">(예정)</span>';
+            } else {
+                inactive = '<span class="mp-inactive">(종료)</span>';
+            }
+        }
         const issuedMeta = c.coupon_issued ? `
             <div class="mp-coupon-meta">└ ${(c.coupon_issued_at || '').slice(0, 10)} by ${App.esc(c.coupon_issued_by_name || '?')}</div>
         ` : '';

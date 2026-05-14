@@ -623,6 +623,7 @@
 .mp-cohort-name { font-weight: 500; }
 .mp-cohort-status { color: #6b7280; font-size: 13px; }
 .mp-inactive { color: #9ca3af; font-size: 11px; margin-left: 4px; }
+.mp-pending { color: #2563eb; font-size: 11px; margin-left: 4px; }
 .mp-coupon-toggle { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
 .mp-coupon-meta { grid-column: 2 / -1; color: #FF5E00; font-size: 11px; padding-left: 8px; }
 
