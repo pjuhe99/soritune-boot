@@ -13,6 +13,26 @@ const AdminIssues = (() => {
         rejected:    { label: '반려',      cls: 'issue-badge--rejected' },
     };
 
+    // ── 미션 검사 chip ──
+    const MISSION_CHIP = {
+        all_checked:   { label: '✅ 모두 체크됨', cls: 'mission-chip mission-chip--ok' },
+        has_unchecked: { label: '❌ 미체크',      cls: 'mission-chip mission-chip--miss' },
+        no_data:       { label: '데이터 없음',     cls: 'mission-chip mission-chip--none' },
+        unsupported:   null,
+    };
+
+    function renderMissionChip(insp) {
+        if (!insp) return '';
+        const def = MISSION_CHIP[insp.mission_status];
+        if (!def) return '';
+        let extra = '';
+        if (insp.mission_status === 'has_unchecked' && insp.unchecked_dates?.length) {
+            const dates = insp.unchecked_dates.map(d => d.slice(5)).join(', ');
+            extra = ` ${dates}`;
+        }
+        return `<span class="${def.cls}">${def.label}${extra}</span>`;
+    }
+
     // "처리 전" = pending + in_progress
     const UNRESOLVED = ['pending', 'in_progress'];
     const RESOLVED   = ['resolved', 'rejected'];
@@ -50,7 +70,10 @@ const AdminIssues = (() => {
             <div class="issue-adm">
                 <div class="issue-adm-toolbar">
                     <h3 class="issue-adm-title">오류 문의</h3>
-                    <button class="btn btn-secondary btn-sm" id="issue-adm-refresh">새로고침</button>
+                    <div class="issue-adm-toolbar-actions">
+                        <button class="btn btn-primary btn-sm" id="issue-adm-bulk-auto" style="display:none;">🪄 모두 체크된 <span id="issue-adm-bulk-count">0</span>건 일괄 자동 해결</button>
+                        <button class="btn btn-secondary btn-sm" id="issue-adm-refresh">새로고침</button>
+                    </div>
                 </div>
                 <div class="issue-adm-filter-bar" id="issue-adm-filter-bar">
                     <div class="issue-adm-filter-group" id="issue-adm-status-filters"></div>
@@ -175,6 +198,40 @@ const AdminIssues = (() => {
     // List + Pagination
     // ══════════════════════════════════════════════════════════
 
+    function updateBulkAutoButton() {
+        const btn = document.getElementById('issue-adm-bulk-auto');
+        const cntEl = document.getElementById('issue-adm-bulk-count');
+        if (!btn || !cntEl) return;
+
+        const eligible = getFiltered().filter(i =>
+            i.status === 'pending' &&
+            i.mission_inspection?.mission_status === 'all_checked'
+        );
+        if (eligible.length === 0) {
+            btn.style.display = 'none';
+            return;
+        }
+        cntEl.textContent = eligible.length;
+        btn.style.display = '';
+        btn.onclick = () => runBulkAuto(eligible.map(i => i.id));
+    }
+
+    async function runBulkAuto(ids) {
+        const ok = await App.confirm(`${ids.length}건을 일괄 자동 해결 처리합니다.\n진행할까요?`);
+        if (!ok) return;
+
+        const r = await App.post(API + 'issue_admin_resolve_auto_bulk', { ids });
+        if (!r.success) {
+            Toast.error(r.message || '일괄 처리 실패');
+            return;
+        }
+        const okN = r.resolved_ids?.length ?? 0;
+        const skipped = r.skipped?.length ?? 0;
+        Toast.success(`${okN}건 처리, ${skipped}건 스킵`);
+        container.dataset.loaded = '';
+        loadList();
+    }
+
     function renderList() {
         const listEl = document.getElementById('issue-adm-list');
         const countEl = document.getElementById('issue-adm-count');
@@ -194,6 +251,8 @@ const AdminIssues = (() => {
                 : `${total}건`;
         }
 
+        updateBulkAutoButton();
+
         if (total === 0) {
             listEl.innerHTML = '<div class="issue-adm-empty">해당 문의가 없습니다.</div>';
             if (pagerEl) pagerEl.innerHTML = '';
@@ -206,6 +265,7 @@ const AdminIssues = (() => {
                     <tr>
                         <th>상태</th>
                         <th>유형</th>
+                        <th>미션</th>
                         <th>작성자</th>
                         <th>조</th>
                         <th>작성일</th>
@@ -255,6 +315,7 @@ const AdminIssues = (() => {
             <tr class="issue-adm-row" data-id="${issue.id}">
                 <td><span class="issue-badge ${st.cls}">${st.label}</span></td>
                 <td>${App.esc(issue.issue_type_label)}</td>
+                <td class="issue-adm-mission">${renderMissionChip(issue.mission_inspection)}</td>
                 <td>${App.esc(name)}</td>
                 <td>${App.esc(group)}</td>
                 <td class="issue-adm-date">${date}</td>
@@ -277,6 +338,28 @@ const AdminIssues = (() => {
                </div>`
             : '';
 
+        const inspectionHtml = (() => {
+            const i = issue.mission_inspection;
+            if (!i) return '';
+            const chip = renderMissionChip(i);
+            const range = i.inspected_range
+                ? `${i.inspected_range.from} ~ ${i.inspected_range.to}`
+                : '';
+            const detail = [];
+            if (i.checked_dates?.length)   detail.push(`체크됨: ${i.checked_dates.join(', ')}`);
+            if (i.unchecked_dates?.length) detail.push(`미체크: ${i.unchecked_dates.join(', ')}`);
+            return `
+                <div class="issue-adm-detail-section">
+                    <div class="issue-adm-detail-label">미션 자동 검사</div>
+                    <div class="issue-adm-detail-value">
+                        ${chip}
+                        <div class="issue-adm-inspect-range">검사 범위: ${range}</div>
+                        ${detail.length ? `<div class="issue-adm-inspect-detail">${detail.join(' · ')}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        })();
+
         const noteHtml = `
             <div class="issue-adm-detail-section">
                 <div class="issue-adm-detail-label">운영팀 메모</div>
@@ -285,7 +368,15 @@ const AdminIssues = (() => {
             </div>
         `;
 
-        // 상태 변경 버튼
+        // 상태 변경 버튼 (자동 해결 + 일반 4개)
+        const canAuto =
+            issue.status === 'pending' &&
+            issue.mission_inspection?.mission_status === 'all_checked';
+
+        const autoBtnHtml = canAuto
+            ? `<button class="btn btn-sm issue-adm-auto-btn" id="adm-auto-resolve">🪄 자동 해결</button>`
+            : '';
+
         const statusBtns = Object.entries(STATUS_MAP)
             .filter(([key]) => key !== issue.status)
             .map(([key, val]) =>
@@ -316,10 +407,11 @@ const AdminIssues = (() => {
                     <span>${formatFull(issue.resolved_at)}</span>
                 </div>` : ''}
                 ${descHtml}
+                ${inspectionHtml}
                 ${noteHtml}
                 <div class="issue-adm-detail-section">
                     <div class="issue-adm-detail-label">상태 변경</div>
-                    <div class="issue-adm-status-btns" id="adm-status-btns">${statusBtns}</div>
+                    <div class="issue-adm-status-btns" id="adm-status-btns">${autoBtnHtml}${statusBtns}</div>
                 </div>
             </div>
         `;
@@ -340,6 +432,25 @@ const AdminIssues = (() => {
         document.querySelectorAll('#adm-status-btns .issue-adm-status-btn').forEach(btn => {
             btn.onclick = () => changeStatus(issue, btn.dataset.status);
         });
+
+        const autoBtn = document.getElementById('adm-auto-resolve');
+        if (autoBtn) {
+            autoBtn.onclick = async () => {
+                const ok = await App.confirm('이 문의를 자동 해결로 처리하시겠습니까?\n(회원에게는 알림이 가지 않습니다)');
+                if (!ok) return;
+                const r = await App.post(API + 'issue_admin_resolve_auto', { id: issue.id });
+                if (r.success) {
+                    Toast.success('자동 해결되었습니다.');
+                    issue.status = 'resolved';
+                    issue.resolved_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                    App.closeModal();
+                    renderStatusFilters();
+                    renderList();
+                } else {
+                    Toast.error(r.message || '자동 해결 실패');
+                }
+            };
+        }
     }
 
     // ══════════════════════════════════════════════════════════

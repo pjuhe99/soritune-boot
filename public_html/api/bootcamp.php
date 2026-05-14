@@ -332,6 +332,8 @@ case 'issue_detail':        handleIssueDetail(); break;
 case 'issue_admin_list':    handleIssueAdminList(); break;
 case 'issue_status_update': handleIssueStatusUpdate($method); break;
 case 'issue_admin_note':    handleIssueAdminNote($method); break;
+case 'issue_admin_resolve_auto':      handleIssueAdminResolveAuto($method); break;
+case 'issue_admin_resolve_auto_bulk': handleIssueAdminResolveAutoBulk($method); break;
 
 // ── Entrance (입장 체크) ─────────────────────────────────────
 
