@@ -194,9 +194,110 @@ const AdminMultipassApp = (() => {
         }
     }
 
-    // 후속 task 에서 채움
-    function openAddModal() { Toast.info('Task 10 에서 구현'); }
-    function openEditModal(id) { Toast.info('Task 10 에서 구현'); }
+    function openAddModal() {
+        openPassModal({ mode: 'create' });
+    }
+
+    async function openEditModal(passId) {
+        try {
+            const r = await App.get('/api/admin.php?action=multipass_get&id=' + passId);
+            openPassModal({ mode: 'edit', pass: r.pass });
+        } catch (e) {
+            Toast.error('불러오기 실패: ' + (e.message || e));
+        }
+    }
+
+    function openPassModal({ mode, pass }) {
+        const isEdit = mode === 'edit';
+        const userId      = isEdit ? pass.user_id : '';
+        const productName = isEdit ? pass.product_name : '';
+        const note        = isEdit ? (pass.note || '') : '';
+        const selectedIds = isEdit ? new Set(pass.cohorts.map(c => c.cohort_id)) : new Set();
+
+        const cohortChecks = cohorts.map(c => {
+            const checked = selectedIds.has(c.id);
+            const inactive = !c.is_active ? 'mp-cohort-inactive' : '';
+            return `<label class="mp-cohort-check ${inactive}">
+                <input type="checkbox" value="${c.id}" ${checked ? 'checked' : ''}> ${App.esc(c.cohort)}
+            </label>`;
+        }).join('');
+
+        const title = isEdit ? '다회권 수정' : '다회권 추가';
+        const bodyHtml = `
+            <div class="mp-modal-body">
+                <div class="mp-form-row">
+                    <label>구매자 user_id</label>
+                    <input type="text" id="mp-f-userid" value="${App.esc(userId)}">
+                    <button class="btn btn-secondary btn-xs" id="mp-f-lookup">회원 조회</button>
+                    <span id="mp-f-lookup-result"></span>
+                </div>
+                <div class="mp-form-row">
+                    <label>상품명</label>
+                    <input type="text" id="mp-f-product" value="${App.esc(productName)}">
+                </div>
+                <div class="mp-form-row">
+                    <label>포함 기수</label>
+                    <div class="mp-cohort-checks">${cohortChecks}</div>
+                </div>
+                <div class="mp-form-row">
+                    <label>메모(선택)</label>
+                    <textarea id="mp-f-note" rows="2">${App.esc(note)}</textarea>
+                </div>
+                <div class="mp-form-actions">
+                    <button class="btn btn-secondary" id="mp-f-cancel">취소</button>
+                    <button class="btn btn-primary" id="mp-f-save">${isEdit ? '저장' : '추가'}</button>
+                </div>
+            </div>
+        `;
+
+        App.openModal(title, bodyHtml);
+
+        document.querySelector('#mp-f-cancel').onclick = () => App.closeModal();
+        document.querySelector('#mp-f-lookup').onclick = async () => {
+            const uid = document.querySelector('#mp-f-userid').value.trim();
+            if (!uid) return;
+            try {
+                const r = await App.get('/api/admin.php?action=multipass_search_member&q=' + encodeURIComponent(uid));
+                const m = (r.members || []).find(x => x.user_id === uid);
+                const out = document.querySelector('#mp-f-lookup-result');
+                if (m && m.profiles && m.profiles.length) {
+                    const p = m.profiles[0];
+                    out.innerHTML = `<span class="mp-profile-ok">${App.esc(p.real_name || '')} / ${App.esc(p.nickname || '')}</span>`;
+                } else {
+                    out.innerHTML = `<span class="mp-profile-warn">⚠ boot 에 등록된 적 없는 user_id</span>`;
+                }
+            } catch (e) { /* swallow */ }
+        };
+        document.querySelector('#mp-f-save').onclick = async () => {
+            const newUid     = document.querySelector('#mp-f-userid').value.trim();
+            const newProduct = document.querySelector('#mp-f-product').value.trim();
+            const newNote    = document.querySelector('#mp-f-note').value.trim() || null;
+            const checkedIds = Array.from(document.querySelectorAll('.mp-cohort-checks input:checked')).map(cb => parseInt(cb.value));
+            if (!newUid)          { Toast.error('user_id 필수'); return; }
+            if (!newProduct)      { Toast.error('상품명 필수'); return; }
+            if (!checkedIds.length) { Toast.error('포함 기수 1개 이상 선택'); return; }
+            try {
+                if (isEdit) {
+                    await App.post('/api/admin.php?action=multipass_update', {
+                        id: pass.id, user_id: newUid, product_name: newProduct, note: newNote, cohort_ids: checkedIds,
+                    });
+                    Toast.success('수정되었습니다.');
+                } else {
+                    await App.post('/api/admin.php?action=multipass_create', {
+                        user_id: newUid, product_name: newProduct, note: newNote, cohort_ids: checkedIds,
+                    });
+                    Toast.success('다회권이 추가되었습니다.');
+                }
+                App.closeModal();
+                // 검색 결과 갱신
+                const cur = document.getElementById('mp-search-input');
+                if (cur && cur.value) doSearch(cur.value);
+            } catch (e) {
+                Toast.error('저장 실패: ' + (e.message || e));
+            }
+        };
+    }
+
     function openBulkModal() { Toast.info('Task 11 에서 구현'); }
     function renderProductsView() { document.getElementById('mp-body').innerHTML = '<p>Task 12 에서 구현</p>'; }
 
