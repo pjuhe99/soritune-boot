@@ -70,7 +70,10 @@ const AdminIssues = (() => {
             <div class="issue-adm">
                 <div class="issue-adm-toolbar">
                     <h3 class="issue-adm-title">오류 문의</h3>
-                    <button class="btn btn-secondary btn-sm" id="issue-adm-refresh">새로고침</button>
+                    <div class="issue-adm-toolbar-actions">
+                        <button class="btn btn-primary btn-sm" id="issue-adm-bulk-auto" style="display:none;">🪄 모두 체크된 <span id="issue-adm-bulk-count">0</span>건 일괄 자동 해결</button>
+                        <button class="btn btn-secondary btn-sm" id="issue-adm-refresh">새로고침</button>
+                    </div>
                 </div>
                 <div class="issue-adm-filter-bar" id="issue-adm-filter-bar">
                     <div class="issue-adm-filter-group" id="issue-adm-status-filters"></div>
@@ -195,6 +198,40 @@ const AdminIssues = (() => {
     // List + Pagination
     // ══════════════════════════════════════════════════════════
 
+    function updateBulkAutoButton() {
+        const btn = document.getElementById('issue-adm-bulk-auto');
+        const cntEl = document.getElementById('issue-adm-bulk-count');
+        if (!btn || !cntEl) return;
+
+        const eligible = getFiltered().filter(i =>
+            i.status === 'pending' &&
+            i.mission_inspection?.mission_status === 'all_checked'
+        );
+        if (eligible.length === 0) {
+            btn.style.display = 'none';
+            return;
+        }
+        cntEl.textContent = eligible.length;
+        btn.style.display = '';
+        btn.onclick = () => runBulkAuto(eligible.map(i => i.id));
+    }
+
+    async function runBulkAuto(ids) {
+        const ok = await App.confirm(`${ids.length}건을 일괄 자동 해결 처리합니다.\n진행할까요?`);
+        if (!ok) return;
+
+        const r = await App.post(API + 'issue_admin_resolve_auto_bulk', { ids });
+        if (!r.success) {
+            Toast.error(r.message || '일괄 처리 실패');
+            return;
+        }
+        const okN = r.resolved_ids?.length ?? 0;
+        const skipped = r.skipped?.length ?? 0;
+        Toast.success(`${okN}건 처리, ${skipped}건 스킵`);
+        container.dataset.loaded = '';
+        loadList();
+    }
+
     function renderList() {
         const listEl = document.getElementById('issue-adm-list');
         const countEl = document.getElementById('issue-adm-count');
@@ -264,6 +301,8 @@ const AdminIssues = (() => {
                 });
             }
         }
+
+        updateBulkAutoButton();
     }
 
     function renderRow(issue) {
