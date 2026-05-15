@@ -1181,6 +1181,35 @@ case 'admin_delete':
     jsonSuccess([], '관리자가 삭제되었습니다.');
     break;
 
+// ── Task Group CRUD (operation only) ─────
+// 묶음 키 = (cohort, title, role)
+
+case 'task_group_get':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort = trim($input['cohort'] ?? '');
+    $title  = trim($input['title']  ?? '');
+    $role   = trim($input['role']   ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT title, content_markdown
+          FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ?
+         ORDER BY start_date ASC
+         LIMIT 1
+    ");
+    $stmt->execute([$cohort, $title, $role]);
+    $row = $stmt->fetch();
+    if (!$row) jsonError('해당 묶음을 찾을 수 없습니다.', 404);
+    jsonSuccess([
+        'title' => $row['title'],
+        'content_markdown' => $row['content_markdown'],
+    ]);
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
