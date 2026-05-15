@@ -166,6 +166,36 @@ try {
     t('task_group_delete 모두 완료 그룹 deleted=0', (int)($r['body']['deleted_count'] ?? -1) === 0);
     t('task_group_delete 모두 완료 그룹 kept=2',    (int)($r['body']['kept_count'] ?? -1) === 2);
 
+    // ── Test: task_group_rows ──────────────────────
+    // 시드: __test_group__ 그룹은 task_group_delete 호출 후 completed=1 만 2 row 남음 (2099-01-04, 2099-01-05).
+    // 미래(2099) 날짜라 only_until_today=1 이면 0 row.
+
+    // 1) only_incomplete=0 only_until_today=0 → 2 row (남은 완료 row 모두)
+    $qsBase = "cohort=" . urlencode($cohort) . "&title=" . urlencode($titleA) . "&role=operation";
+    $r = req('GET', "$api?action=task_group_rows&{$qsBase}&only_incomplete=0&only_until_today=0", $h);
+    t('task_group_rows 200', $r['code'] === 200, "code={$r['code']}");
+    t('task_group_rows 전체 → 2 row', count($r['body']['rows'] ?? []) === 2, json_encode($r['body']));
+
+    // 2) only_incomplete=1 → 0 row (남은 row 모두 completed=1)
+    $r = req('GET', "$api?action=task_group_rows&{$qsBase}&only_incomplete=1&only_until_today=0", $h);
+    t('task_group_rows 미완료만 → 0 row', count($r['body']['rows'] ?? []) === 0);
+
+    // 3) only_until_today=1 + 미래(2099) 시드 → 0 row
+    $r = req('GET', "$api?action=task_group_rows&{$qsBase}&only_incomplete=0&only_until_today=1", $h);
+    t('task_group_rows 오늘까지 + 미래시드 → 0 row', count($r['body']['rows'] ?? []) === 0);
+
+    // 4) 응답 필드 cutoff_today 존재
+    $r = req('GET', "$api?action=task_group_rows&{$qsBase}&only_incomplete=0&only_until_today=0", $h);
+    t('task_group_rows cutoff_today 필드', !empty($r['body']['cutoff_today']),
+       'cutoff_today=' . ($r['body']['cutoff_today'] ?? 'MISSING'));
+
+    // 5) 응답 row 형식 — assignee_kind ENUM
+    $r = req('GET', "$api?action=task_group_rows&{$qsBase}&only_incomplete=0&only_until_today=0", $h);
+    $rows = $r['body']['rows'] ?? [];
+    $validKinds = ['admin', 'member', 'unassigned'];
+    $allKindsValid = !empty($rows) && count(array_filter($rows, fn($r) => in_array($r['assignee_kind'] ?? '', $validKinds))) === count($rows);
+    t('task_group_rows assignee_kind 모두 valid', $allKindsValid);
+
 } finally {
     // ── Cleanup ─────────────────────────────────────
     $db->prepare("DELETE FROM tasks WHERE title LIKE '__test_group%'")->execute();

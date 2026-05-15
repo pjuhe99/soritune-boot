@@ -1473,15 +1473,15 @@ const AdminApp = (() => {
                             const titleAttr  = encodeURIComponent(g.title);
                             const roleAttr   = encodeURIComponent(g.role);
                             return `
-                            <tr>
-                                <td>${App.esc(g.title)}</td>
+                            <tr class="group-row" data-cohort="${cohortAttr}" data-title="${titleAttr}" data-role="${roleAttr}" style="cursor:pointer">
+                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${App.esc(g.title)}</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
                                 <td>${assigneeLabel(g.assignee_count)}</td>
                                 <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
                                 <td>${progressBadge(g.done_count, g.total_count)}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
+                                    <button class="btn-icon" onclick="event.stopPropagation();AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
+                                    <button class="btn-icon danger" onclick="event.stopPropagation();AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
                                 </td>
                             </tr>
                         `;}).join('')}
@@ -1496,6 +1496,10 @@ const AdminApp = (() => {
                 taskMgmtFilter = btn.dataset.mgmtFilter;
                 loadTasksMgmt();
             };
+        });
+        // 그룹 row 클릭 → 펼침 토글
+        sec.querySelectorAll('tr.group-row').forEach(tr => {
+            tr.addEventListener('click', () => AdminApp._toggleGroupExpand(tr));
         });
     }
 
@@ -1739,6 +1743,177 @@ const AdminApp = (() => {
             loadTasksMgmt();
             loadTodayTasks();
             loadOverdueTasks();
+        }
+    }
+
+    async function _toggleGroupExpand(groupRow) {
+        const tbody = groupRow.parentElement;
+
+        // 다른 펼침 닫기
+        tbody.querySelectorAll('tr.group-expand').forEach(tr => {
+            if (tr.previousElementSibling !== groupRow) {
+                const prev = tr.previousElementSibling;
+                if (prev) {
+                    const arrow = prev.querySelector('.expand-arrow');
+                    if (arrow) arrow.textContent = '▶';
+                }
+                tr.remove();
+            }
+        });
+
+        // 자기 자신 토글
+        const next = groupRow.nextElementSibling;
+        if (next && next.classList.contains('group-expand')) {
+            next.remove();
+            const arrow = groupRow.querySelector('.expand-arrow');
+            if (arrow) arrow.textContent = '▶';
+            return;
+        }
+
+        // 새 펼침 행 삽입
+        const expandRow = document.createElement('tr');
+        expandRow.className = 'group-expand';
+        expandRow.innerHTML = `<td colspan="6" style="background:var(--gray-50,#fafafa);padding:0">
+            <div class="group-expand-body"
+                 data-cohort="${groupRow.dataset.cohort}"
+                 data-title="${groupRow.dataset.title}"
+                 data-role="${groupRow.dataset.role}"
+                 data-only-incomplete="1"
+                 data-only-until-today="1">
+                <div class="empty-state" style="padding:16px">로딩 중...</div>
+            </div>
+        </td>`;
+        groupRow.after(expandRow);
+        const arrow = groupRow.querySelector('.expand-arrow');
+        if (arrow) arrow.textContent = '▼';
+
+        // 펼침 자체 클릭은 그룹 row click 으로 전파되지 않게
+        expandRow.addEventListener('click', (e) => e.stopPropagation());
+
+        await _renderGroupExpand(expandRow.querySelector('.group-expand-body'));
+    }
+
+    async function _renderGroupExpand(body) {
+        const cohort         = decodeURIComponent(body.dataset.cohort);
+        const title          = decodeURIComponent(body.dataset.title);
+        const role           = decodeURIComponent(body.dataset.role);
+        const onlyIncomplete = body.dataset.onlyIncomplete === '1';
+        const onlyUntilToday = body.dataset.onlyUntilToday === '1';
+
+        body.innerHTML = '<div class="empty-state" style="padding:16px">로딩 중...</div>';
+        const r = await App.get('/api/admin.php?action=task_group_rows', {
+            cohort, title, role,
+            only_incomplete:  onlyIncomplete  ? '1' : '0',
+            only_until_today: onlyUntilToday  ? '1' : '0',
+        });
+        if (!r.success) {
+            body.innerHTML = '<div class="empty-state" style="padding:16px;text-align:center">불러오기 실패</div>';
+            return;
+        }
+
+        const rows   = r.rows || [];
+        const cutoff = r.cutoff_today || '';
+        const WD     = ['일','월','화','수','목','금','토'];
+
+        function rowLine(row) {
+            const d = new Date(row.start_date + 'T00:00:00');
+            const dateLabel = `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`;
+            const assignee  = row.assignee_kind === 'unassigned'
+                ? '<span class="text-muted">미배정</span>'
+                : App.esc(row.assignee_name || '?');
+            const completed = parseInt(row.completed) === 1;
+            const btnLabel  = completed ? '☑ 완료'      : '☐ 완료하기';
+            const btnClass  = completed ? 'btn btn-success btn-sm' : 'btn btn-secondary btn-sm';
+            return `<div class="group-row-line" style="display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--gray-100,#eee)">
+                <span style="font-family:monospace">${dateLabel}</span>
+                <span>${assignee}</span>
+                <button class="${btnClass}" data-task-id="${row.id}" data-completed="${completed?1:0}">${btnLabel}</button>
+            </div>`;
+        }
+
+        const empty = onlyIncomplete
+            ? '이 묶음은 오늘까지 미완료가 없습니다.'
+            : '이 묶음에 row 가 없습니다.';
+
+        body.innerHTML = `
+            <div style="padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--gray-200,#ddd)">
+                <button class="chip ${onlyIncomplete  ? 'active' : ''}" data-toggle="incomplete">${onlyIncomplete  ? '●' : '○'} 미완료만</button>
+                <button class="chip ${!onlyIncomplete ? 'active' : ''}" data-toggle="all">${!onlyIncomplete ? '●' : '○'} 전체</button>
+                ${onlyUntilToday ? `<span class="text-muted" style="font-size:0.85rem;margin-left:auto">오늘까지: end_date ≤ ${App.esc(cutoff)}</span>` : ''}
+            </div>
+            ${rows.length
+                ? rows.map(rowLine).join('')
+                : `<div class="empty-state" style="padding:16px;text-align:center">${empty}</div>`}
+        `;
+
+        // 필터 토글
+        body.querySelector('[data-toggle="incomplete"]').onclick = (e) => {
+            e.stopPropagation();
+            body.dataset.onlyIncomplete = '1';
+            _renderGroupExpand(body);
+        };
+        body.querySelector('[data-toggle="all"]').onclick = (e) => {
+            e.stopPropagation();
+            body.dataset.onlyIncomplete = '0';
+            _renderGroupExpand(body);
+        };
+
+        // row 토글 버튼 (Task 4 의 _toggleRowComplete 호출)
+        body.querySelectorAll('button[data-task-id]').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                _toggleRowComplete(parseInt(btn.dataset.taskId, 10), btn);
+            };
+        });
+    }
+
+    async function _toggleRowComplete(taskId, btn) {
+        const wasCompleted = parseInt(btn.dataset.completed, 10) === 1;
+        const newCompleted = !wasCompleted;
+
+        btn.disabled = true;
+        const r = await App.post('/api/admin.php?action=toggle_task', {
+            task_id: taskId,
+            completed: newCompleted,
+        });
+        btn.disabled = false;
+
+        if (!r.success) return; // App.post 가 실패 토스트 자동 emit
+
+        // row 버튼 상태 갱신
+        btn.dataset.completed = newCompleted ? '1' : '0';
+        btn.textContent = newCompleted ? '☑ 완료' : '☐ 완료하기';
+        btn.className   = newCompleted
+            ? 'btn btn-success btn-sm'
+            : 'btn btn-secondary btn-sm';
+
+        // 그룹 row 진행 배지 client-side ±1
+        const expandRow = btn.closest('tr.group-expand');
+        const groupRow  = expandRow ? expandRow.previousElementSibling : null;
+        if (!groupRow) return;
+        // 컬럼 순서: 0:title 1:role 2:assignee 3:period 4:progress 5:actions
+        const progressCell = groupRow.children[4];
+        if (!progressCell) return;
+        const badge = progressCell.querySelector('.badge');
+        if (!badge) return;
+
+        const match = badge.textContent.match(/(\d+)\s*\/\s*(\d+)/);
+        if (!match) return;
+        let done = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+        done += newCompleted ? 1 : -1;
+        if (done < 0)     done = 0;
+        if (done > total) done = total;
+
+        if (done === 0) {
+            badge.className = 'badge badge-warning';
+            badge.textContent = `미완료 0/${total}`;
+        } else if (done === total) {
+            badge.className = 'badge badge-success';
+            badge.textContent = `완료 ${done}/${total}`;
+        } else {
+            badge.className = 'badge badge-primary';
+            badge.textContent = `진행 ${done}/${total}`;
         }
     }
 
@@ -2075,7 +2250,7 @@ const AdminApp = (() => {
         init,
         _editMember, _deleteMember, _restoreMember, _setMemberStatus,
         _editAdmin, _deleteAdmin,
-        _editTaskGroup, _deleteTaskGroup,
+        _editTaskGroup, _deleteTaskGroup, _toggleGroupExpand,
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
         _editCohort, _deactivateCohort, _activateCohort,

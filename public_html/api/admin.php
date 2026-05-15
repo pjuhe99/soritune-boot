@@ -1328,6 +1328,54 @@ case 'task_group_delete':
     ], "{$deleted}개 삭제 / {$kept}개 보존");
     break;
 
+case 'task_group_rows':
+    $admin = requireAdmin(['operation']);
+    $cohort = trim($_GET['cohort'] ?? '');
+    $title  = trim($_GET['title']  ?? '');
+    $role   = trim($_GET['role']   ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+
+    $onlyIncomplete = ($_GET['only_incomplete']  ?? '1') === '1';
+    $onlyUntilToday = ($_GET['only_until_today'] ?? '1') === '1';
+
+    $where  = "WHERE t.cohort = ? AND t.title = ? AND t.role = ?";
+    $params = [$cohort, $title, $role];
+    if ($onlyIncomplete) $where .= " AND t.completed = 0";
+    if ($onlyUntilToday) $where .= " AND t.end_date <= CURDATE()";
+
+    $db = getDB();
+    $sql = "
+        SELECT t.id,
+               t.start_date,
+               t.end_date,
+               t.completed,
+               COALESCE(a.name, bm.real_name) AS assignee_name,
+               CASE
+                 WHEN t.assignee_admin_id  IS NOT NULL THEN 'admin'
+                 WHEN t.assignee_member_id IS NOT NULL THEN 'member'
+                 ELSE 'unassigned'
+               END AS assignee_kind
+          FROM tasks t
+          LEFT JOIN admins a            ON t.assignee_admin_id  = a.id
+          LEFT JOIN bootcamp_members bm ON t.assignee_member_id = bm.id
+          $where
+         ORDER BY t.start_date ASC, assignee_name ASC
+    ";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+
+    $today = $db->query("SELECT CURDATE() AS d")->fetch()['d'];
+
+    jsonSuccess([
+        'rows'         => $stmt->fetchAll(),
+        'cutoff_today' => $today,
+        'filters'      => [
+            'only_incomplete'  => $onlyIncomplete,
+            'only_until_today' => $onlyUntilToday,
+        ],
+    ]);
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
