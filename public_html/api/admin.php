@@ -1444,6 +1444,7 @@ case 'task_create':
     $content  = trim($input['content_markdown'] ?? '') ?: null;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $dateMode = $input['date_mode'] ?? 'direct';
+    $requiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
 
     if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
 
@@ -1516,8 +1517,8 @@ case 'task_create':
         jsonError('올바르지 않은 날짜 설정 방식입니다.');
     }
 
-    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     $createdCount = 0;
 
     // Get cohort_id for bootcamp_members lookup
@@ -1552,12 +1553,12 @@ case 'task_create':
             }
 
             if (empty($assignees)) {
-                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort]);
+                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort, $requiresSubmission]);
                 $createdCount++;
             } else {
                 $ins = $isMemberRole ? $insertMemberStmt : $insertAdminStmt;
                 foreach ($assignees as $a) {
-                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort]);
+                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort, $requiresSubmission]);
                     $createdCount++;
                 }
             }
