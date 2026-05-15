@@ -362,12 +362,38 @@ case 'toggle_task':
     $input = getJsonInput();
     $taskId = (int)($input['task_id'] ?? 0);
     $completed = !empty($input['completed']) ? 1 : 0;
+    $submissionText = isset($input['submission_text']) ? trim((string)$input['submission_text']) : null;
 
     if (!$taskId) jsonError('task_id가 필요합니다.');
 
     $db = getDB();
-    $stmt = $db->prepare('UPDATE tasks SET completed = ?, updated_at = NOW() WHERE id = ?');
-    $stmt->execute([$completed, $taskId]);
+
+    // 현재 row 의 requires_submission 조회 (검증용)
+    $check = $db->prepare('SELECT requires_submission FROM tasks WHERE id = ?');
+    $check->execute([$taskId]);
+    $row = $check->fetch();
+    if (!$row) jsonError('해당 task 를 찾을 수 없습니다.', 404);
+
+    if ($completed === 1 && (int)$row['requires_submission'] === 1) {
+        if ($submissionText === null || $submissionText === '') {
+            jsonError('결과물을 입력해주세요.', 400);
+        }
+    }
+
+    if ($completed === 1 && $submissionText !== null && $submissionText !== '') {
+        // 완료 + 텍스트 있음 → 텍스트와 시각 함께 갱신
+        $stmt = $db->prepare('
+            UPDATE tasks
+               SET completed = 1, submission_text = ?, submitted_at = NOW(), updated_at = NOW()
+             WHERE id = ?
+        ');
+        $stmt->execute([$submissionText, $taskId]);
+    } else {
+        // 미완료 또는 (완료 + 텍스트 없음 + requires_submission=0) → completed 만 갱신, 텍스트 보존
+        $stmt = $db->prepare('UPDATE tasks SET completed = ?, updated_at = NOW() WHERE id = ?');
+        $stmt->execute([$completed, $taskId]);
+    }
+
     jsonSuccess([], $completed ? '완료 처리되었습니다.' : '미완료로 변경되었습니다.');
     break;
 
