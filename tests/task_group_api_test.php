@@ -105,6 +105,43 @@ try {
     t('all_tasks_grouped max_end_date=2099-01-05', $ourGroup && $ourGroup['max_end_date'] === '2099-01-05');
     t('all_tasks_grouped assignee_count>=1', $ourGroup && (int)$ourGroup['assignee_count'] >= 1);
 
+    // ── Test: task_group_update ─────────────────────
+    $newTitle = '__test_group__v2';
+    $r = req('POST', "$api?action=task_group_update", $h, [
+        'cohort' => $cohort, 'title' => $titleA, 'role' => 'operation',
+        'new_title' => $newTitle, 'new_content_markdown' => '본문 v2',
+    ]);
+    t('task_group_update returns 200', $r['code'] === 200, "code={$r['code']}");
+    t('task_group_update affected_count=5', (int)($r['body']['affected_count'] ?? 0) === 5,
+       json_encode($r['body']));
+
+    // 모든 row 가 새 title/content 로 바뀌었는지 DB 직접 확인
+    $verify = $db->prepare("SELECT title, content_markdown FROM tasks WHERE cohort = ? AND role = 'operation' AND start_date BETWEEN '2099-01-01' AND '2099-01-05'");
+    $verify->execute([$cohort]);
+    $rows = $verify->fetchAll();
+    $allRenamed = !empty($rows) && count(array_filter($rows, fn($r) => $r['title'] === $newTitle)) === count($rows);
+    $allContent = !empty($rows) && count(array_filter($rows, fn($r) => $r['content_markdown'] === '본문 v2')) === count($rows);
+    t('task_group_update 모든 row title 변경', $allRenamed);
+    t('task_group_update 모든 row content 변경', $allContent);
+
+    // 잘못된 입력 — new_title 빈 문자
+    $r = req('POST', "$api?action=task_group_update", $h, [
+        'cohort' => $cohort, 'title' => $newTitle, 'role' => 'operation',
+        'new_title' => '', 'new_content_markdown' => 'x',
+    ]);
+    t('task_group_update 빈 new_title 거부', $r['code'] === 400);
+
+    // 옛 title 로 다시 update 시도 → 매칭 0
+    $r = req('POST', "$api?action=task_group_update", $h, [
+        'cohort' => $cohort, 'title' => $titleA, 'role' => 'operation',
+        'new_title' => '__test_group__v3', 'new_content_markdown' => 'v3',
+    ]);
+    t('task_group_update 옛 title 매칭 0', (int)($r['body']['affected_count'] ?? -1) === 0);
+
+    // 다음 단계 (delete) 테스트 위해 v2 → titleA 로 복원
+    $db->prepare("UPDATE tasks SET title = ?, content_markdown = '본문 v1' WHERE title = ?")
+       ->execute([$titleA, $newTitle]);
+
 } finally {
     // ── Cleanup ─────────────────────────────────────
     $db->prepare("DELETE FROM tasks WHERE title LIKE '__test_group%'")->execute();

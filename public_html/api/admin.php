@@ -1269,6 +1269,28 @@ case 'all_tasks_grouped':
     jsonSuccess(['groups' => $stmt->fetchAll()]);
     break;
 
+case 'task_group_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort   = trim($input['cohort'] ?? '');
+    $title    = trim($input['title']  ?? '');
+    $role     = trim($input['role']   ?? '');
+    $newTitle = trim($input['new_title'] ?? '');
+    $newContent = trim($input['new_content_markdown'] ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        UPDATE tasks
+           SET title = ?, content_markdown = ?
+         WHERE cohort = ? AND title = ? AND role = ?
+    ");
+    $stmt->execute([$newTitle, $newContent ?: null, $cohort, $title, $role]);
+    jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
