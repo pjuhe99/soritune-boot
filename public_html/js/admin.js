@@ -1423,8 +1423,8 @@ const AdminApp = (() => {
         const sec = document.getElementById('tab-tasks-mgmt');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
 
-        const r = await App.get('/api/admin.php?action=all_tasks', { filter_role: taskMgmtFilter });
-        const tasks = r.success ? (r.tasks || []) : [];
+        const r = await App.get('/api/admin.php?action=all_tasks_grouped', { filter_role: taskMgmtFilter });
+        const groups = r.success ? (r.groups || []) : [];
 
         const filters = [
             { key: 'mine', label: '내 Task' },
@@ -1436,9 +1436,27 @@ const AdminApp = (() => {
             { key: 'operation', label: '운영팀' },
         ];
 
+        // 진행 배지 헬퍼
+        function progressBadge(done, total) {
+            done = parseInt(done) || 0;
+            total = parseInt(total) || 0;
+            if (total === 0) return '-';
+            if (done === 0)     return `<span class="badge badge-warning">미완료 0/${total}</span>`;
+            if (done === total) return `<span class="badge badge-success">완료 ${done}/${total}</span>`;
+            return `<span class="badge badge-primary">진행 ${done}/${total}</span>`;
+        }
+        function periodLabel(min, max) {
+            if (!min || !max) return '-';
+            return min === max ? min : `${min} ~ ${max}`;
+        }
+        function assigneeLabel(count) {
+            const n = parseInt(count) || 0;
+            return n === 0 ? '<span class="text-muted">미배정</span>' : `${n}명`;
+        }
+
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
-                <span style="font-weight:600">Task 관리 <span class="count">${tasks.length}개</span></span>
+                <span style="font-weight:600">Task 관리 <span class="count">${groups.length}개 묶음</span></span>
                 <button class="btn btn-primary btn-sm" id="btn-add-task">추가</button>
             </div>
             <div class="task-filter-chips" id="task-mgmt-filter" style="margin-bottom:var(--space-3)">
@@ -1448,26 +1466,30 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>제목</th><th>역할</th><th>담당자</th><th>기간</th><th>완료</th><th></th></tr></thead>
+                    <thead><tr><th>제목</th><th>역할</th><th>담당자</th><th>기간</th><th>진행</th><th></th></tr></thead>
                     <tbody>
-                        ${tasks.map(t => `
+                        ${groups.map(g => {
+                            const cohortAttr = encodeURIComponent(g.cohort);
+                            const titleAttr  = encodeURIComponent(g.title);
+                            const roleAttr   = encodeURIComponent(g.role);
+                            return `
                             <tr>
-                                <td>${App.esc(t.title)}</td>
-                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[t.role] || t.role)}</span></td>
-                                <td>${App.esc(t.assignee_name || '-')}</td>
-                                <td style="white-space:nowrap">${t.start_date} ~ ${t.end_date}</td>
-                                <td>${parseInt(t.completed) ? '<span class="badge badge-success">완료</span>' : '<span class="badge badge-warning">미완료</span>'}</td>
+                                <td>${App.esc(g.title)}</td>
+                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
+                                <td>${assigneeLabel(g.assignee_count)}</td>
+                                <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
+                                <td>${progressBadge(g.done_count, g.total_count)}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editTask(${t.id})">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteTask(${t.id}, '${App.esc(t.title)}')">삭제</button>
+                                    <button class="btn-icon" onclick="AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
+                                    <button class="btn-icon danger" onclick="AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
                                 </td>
                             </tr>
-                        `).join('')}
+                        `;}).join('')}
                     </tbody>
                 </table>
             </div>
         `;
-        if (!tasks.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Task가 없습니다.</td></tr>';
+        if (!groups.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Task 묶음이 없습니다.</td></tr>';
         document.getElementById('btn-add-task').onclick = () => showTaskForm();
         document.getElementById('task-mgmt-filter').querySelectorAll('.chip').forEach(btn => {
             btn.onclick = () => {

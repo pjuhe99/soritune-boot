@@ -1226,8 +1226,10 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
-                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
-                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                         END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ?
                AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
@@ -1242,8 +1244,10 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
-                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
-                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                         END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ? AND t.role = ?
              GROUP BY t.cohort, t.title, t.role
@@ -1257,8 +1261,10 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
-                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
-                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                         END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ?
              GROUP BY t.cohort, t.title, t.role

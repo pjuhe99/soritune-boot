@@ -103,7 +103,8 @@ try {
     t('all_tasks_grouped done_count=2', $ourGroup && (int)$ourGroup['done_count'] === 2);
     t('all_tasks_grouped min_start_date=2099-01-01', $ourGroup && $ourGroup['min_start_date'] === '2099-01-01');
     t('all_tasks_grouped max_end_date=2099-01-05', $ourGroup && $ourGroup['max_end_date'] === '2099-01-05');
-    t('all_tasks_grouped assignee_count>=1', $ourGroup && (int)$ourGroup['assignee_count'] >= 1);
+    t('all_tasks_grouped assignee_count=0 (전부 미배정 fixture)', $ourGroup && (int)$ourGroup['assignee_count'] === 0,
+       $ourGroup ? json_encode($ourGroup) : 'not found');
 
     // ── Test: task_group_update ─────────────────────
     $newTitle = '__test_group__v2';
