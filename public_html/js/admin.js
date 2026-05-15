@@ -1806,7 +1806,10 @@ const AdminApp = (() => {
             only_incomplete:  onlyIncomplete  ? '1' : '0',
             only_until_today: onlyUntilToday  ? '1' : '0',
         });
-        if (!r.success) return;
+        if (!r.success) {
+            body.innerHTML = '<div class="empty-state" style="padding:16px;text-align:center">불러오기 실패</div>';
+            return;
+        }
 
         const rows   = r.rows || [];
         const cutoff = r.cutoff_today || '';
@@ -1862,6 +1865,56 @@ const AdminApp = (() => {
                 _toggleRowComplete(parseInt(btn.dataset.taskId, 10), btn);
             };
         });
+    }
+
+    async function _toggleRowComplete(taskId, btn) {
+        const wasCompleted = parseInt(btn.dataset.completed, 10) === 1;
+        const newCompleted = !wasCompleted;
+
+        btn.disabled = true;
+        const r = await App.post('/api/admin.php?action=toggle_task', {
+            task_id: taskId,
+            completed: newCompleted,
+        });
+        btn.disabled = false;
+
+        if (!r.success) return; // App.post 가 실패 토스트 자동 emit
+
+        // row 버튼 상태 갱신
+        btn.dataset.completed = newCompleted ? '1' : '0';
+        btn.textContent = newCompleted ? '☑ 완료' : '☐ 완료하기';
+        btn.className   = newCompleted
+            ? 'btn btn-success btn-sm'
+            : 'btn btn-secondary btn-sm';
+
+        // 그룹 row 진행 배지 client-side ±1
+        const expandRow = btn.closest('tr.group-expand');
+        const groupRow  = expandRow ? expandRow.previousElementSibling : null;
+        if (!groupRow) return;
+        // 컬럼 순서: 0:title 1:role 2:assignee 3:period 4:progress 5:actions
+        const progressCell = groupRow.children[4];
+        if (!progressCell) return;
+        const badge = progressCell.querySelector('.badge');
+        if (!badge) return;
+
+        const match = badge.textContent.match(/(\d+)\s*\/\s*(\d+)/);
+        if (!match) return;
+        let done = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+        done += newCompleted ? 1 : -1;
+        if (done < 0)     done = 0;
+        if (done > total) done = total;
+
+        if (done === 0) {
+            badge.className = 'badge badge-warning';
+            badge.textContent = `미완료 0/${total}`;
+        } else if (done === total) {
+            badge.className = 'badge badge-success';
+            badge.textContent = `완료 ${done}/${total}`;
+        } else {
+            badge.className = 'badge badge-primary';
+            badge.textContent = `진행 ${done}/${total}`;
+        }
     }
 
     // ── Guides Management ──
