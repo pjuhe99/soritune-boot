@@ -1228,7 +1228,7 @@ case 'all_tasks_grouped':
                    MAX(t.end_date)                         AS max_end_date,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
                          END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ?
@@ -1246,7 +1246,7 @@ case 'all_tasks_grouped':
                    MAX(t.end_date)                         AS max_end_date,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
                          END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ? AND t.role = ?
@@ -1263,7 +1263,7 @@ case 'all_tasks_grouped':
                    MAX(t.end_date)                         AS max_end_date,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', t.assignee_admin_id, t.assignee_member_id)
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
                          END) AS assignee_count
               FROM tasks t
              WHERE t.cohort = ?
