@@ -1221,7 +1221,7 @@ case 'task_group_get':
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT title, content_markdown
+        SELECT title, content_markdown, requires_submission
           FROM tasks
          WHERE cohort = ? AND title = ? AND role = ?
          ORDER BY start_date ASC
@@ -1233,6 +1233,7 @@ case 'task_group_get':
     jsonSuccess([
         'title' => $row['title'],
         'content_markdown' => $row['content_markdown'],
+        'requires_submission' => (int)$row['requires_submission'],
     ]);
     break;
 
@@ -1310,16 +1311,17 @@ case 'task_group_update':
     $role     = trim($input['role']   ?? '');
     $newTitle = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
+    $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
     if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
     if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
 
     $db = getDB();
     $stmt = $db->prepare("
         UPDATE tasks
-           SET title = ?, content_markdown = ?
+           SET title = ?, content_markdown = ?, requires_submission = ?
          WHERE cohort = ? AND title = ? AND role = ?
     ");
-    $stmt->execute([$newTitle, $newContent ?: null, $cohort, $title, $role]);
+    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $role]);
     jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
     break;
 
