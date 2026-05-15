@@ -1349,6 +1349,9 @@ case 'task_group_rows':
                t.start_date,
                t.end_date,
                t.completed,
+               t.requires_submission,
+               t.submission_text,
+               t.submitted_at,
                COALESCE(a.name, bm.real_name) AS assignee_name,
                CASE
                  WHEN t.assignee_admin_id  IS NOT NULL THEN 'admin'
