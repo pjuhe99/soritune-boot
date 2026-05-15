@@ -6,6 +6,13 @@
  *   php tests/task_group_invariants.php
  *
  * (DEV DB 직접 조회 — 운영 cookie 불필요)
+ *
+ * ⚠️ SQL 동기화 주의:
+ *   이 테스트의 INV-1 UPDATE / INV-2 DELETE / INV-3 SELECT 는
+ *   public_html/api/admin.php 의 task_group_update / task_group_delete /
+ *   today_tasks case 와 동일한 SQL 패턴을 hand-write 한 것이다.
+ *   endpoint case 의 SQL 을 변경하면 이 파일도 같이 수정해야 한다
+ *   (그렇지 않으면 endpoint 회귀를 이 테스트가 잡지 못함).
  */
 if (php_sapi_name() !== 'cli') exit('CLI only');
 require_once __DIR__ . '/../public_html/config.php';
