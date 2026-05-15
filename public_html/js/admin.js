@@ -1836,7 +1836,7 @@ const AdminApp = (() => {
             : '이 묶음에 row 가 없습니다.';
 
         body.innerHTML = `
-            <div style="padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--gray-200,#ddd)">
+            <div class="task-filter-chips" style="padding:8px 12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--gray-200,#ddd)">
                 <button class="chip ${onlyIncomplete  ? 'active' : ''}" data-toggle="incomplete">${onlyIncomplete  ? '●' : '○'} 미완료만</button>
                 <button class="chip ${!onlyIncomplete ? 'active' : ''}" data-toggle="all">${!onlyIncomplete ? '●' : '○'} 전체</button>
                 ${onlyUntilToday ? `<span class="text-muted" style="font-size:0.85rem;margin-left:auto">오늘까지: end_date ≤ ${App.esc(cutoff)}</span>` : ''}
