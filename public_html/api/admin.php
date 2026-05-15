@@ -1412,7 +1412,7 @@ case 'task_submission_update':
     $taskId = (int)($input['task_id'] ?? 0);
     $submissionText = isset($input['submission_text']) ? trim((string)$input['submission_text']) : '';
 
-    if (!$taskId) jsonError('task_id가 필요합니다.');
+    if (!$taskId) jsonError('task_id가 필요합니다.', 400);
     if ($submissionText === '') jsonError('결과물을 입력해주세요.', 400);
 
     $db = getDB();
