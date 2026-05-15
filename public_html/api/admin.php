@@ -1210,6 +1210,65 @@ case 'task_group_get':
     ]);
     break;
 
+case 'all_tasks_grouped':
+    $admin = requireAdmin();
+    if (!hasRole($admin, 'operation')) jsonError('권한이 없습니다.', 403);
+    $cohort = getEffectiveCohort($admin);
+    $filterRole = $_GET['filter_role'] ?? '';
+    $adminId = $admin['admin_id'];
+
+    // 기존 all_tasks 의 필터 SQL 을 그대로 GROUP BY 로 변환
+    $db = getDB();
+    if ($filterRole === 'mine') {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
+                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ?
+               AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY t.role, MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort, $adminId, $adminId]);
+    } elseif ($filterRole && $filterRole !== 'all') {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
+                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ? AND t.role = ?
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort, $filterRole]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT COALESCE(t.assignee_admin_id, 0),
+                                  COALESCE(t.assignee_member_id, 0)) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ?
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY t.role, MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort]);
+    }
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
