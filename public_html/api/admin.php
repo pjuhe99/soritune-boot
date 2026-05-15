@@ -1405,6 +1405,34 @@ case 'task_group_rows':
     ]);
     break;
 
+case 'task_submission_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin();
+    $input = getJsonInput();
+    $taskId = (int)($input['task_id'] ?? 0);
+    $submissionText = isset($input['submission_text']) ? trim((string)$input['submission_text']) : '';
+
+    if (!$taskId) jsonError('task_id가 필요합니다.');
+    if ($submissionText === '') jsonError('결과물을 입력해주세요.', 400);
+
+    $db = getDB();
+    $check = $db->prepare('SELECT requires_submission FROM tasks WHERE id = ?');
+    $check->execute([$taskId]);
+    $row = $check->fetch();
+    if (!$row) jsonError('해당 task 를 찾을 수 없습니다.', 404);
+    if ((int)$row['requires_submission'] !== 1) {
+        jsonError('이 task 는 결과물 제출 대상이 아닙니다.', 400);
+    }
+
+    $stmt = $db->prepare('
+        UPDATE tasks
+           SET submission_text = ?, submitted_at = NOW(), updated_at = NOW()
+         WHERE id = ?
+    ');
+    $stmt->execute([$submissionText, $taskId]);
+    jsonSuccess([], '결과물이 수정되었습니다.');
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
