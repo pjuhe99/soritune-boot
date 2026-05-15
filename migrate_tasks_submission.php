@@ -16,15 +16,16 @@ if (php_sapi_name() !== 'cli') { http_response_code(403); exit('CLI only'); }
 
 require_once __DIR__ . '/public_html/config.php';
 $db = getDB();
+$dbName = $db->query("SELECT DATABASE()")->fetchColumn();
 
 echo "=== boot.soritune.com DB Migration: tasks submission ===\n\n";
 
-function colExists(\PDO $db, string $table, string $col): bool {
+function columnExists(PDO $db, string $dbName, string $table, string $col): bool {
     $stmt = $db->prepare("
-        SELECT 1 FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?
     ");
-    $stmt->execute([$table, $col]);
+    $stmt->execute([$dbName, $table, $col]);
     return (bool)$stmt->fetchColumn();
 }
 
@@ -35,7 +36,7 @@ $specs = [
 ];
 
 foreach ($specs as $col => $clause) {
-    if (colExists($db, 'tasks', $col)) {
+    if (columnExists($db, $dbName, 'tasks', $col)) {
         echo "  - tasks.$col 이미 존재 (skip)\n";
         continue;
     }
