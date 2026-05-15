@@ -142,6 +142,29 @@ try {
     $db->prepare("UPDATE tasks SET title = ?, content_markdown = '본문 v1' WHERE title = ?")
        ->execute([$titleA, $newTitle]);
 
+    // ── Test: task_group_delete (completed=0 만, completed=1 보존) ──
+    $r = req('POST', "$api?action=task_group_delete", $h, [
+        'cohort' => $cohort, 'title' => $titleA, 'role' => 'operation',
+    ]);
+    t('task_group_delete returns 200', $r['code'] === 200, "code={$r['code']}");
+    t('task_group_delete deleted_count=3', (int)($r['body']['deleted_count'] ?? -1) === 3,
+       json_encode($r['body']));
+    t('task_group_delete kept_count=2', (int)($r['body']['kept_count'] ?? -1) === 2);
+
+    // DB 검증 — completed=1 row 만 남아야 함
+    $verify = $db->prepare("SELECT completed FROM tasks WHERE cohort = ? AND title = ? AND role = 'operation'");
+    $verify->execute([$cohort, $titleA]);
+    $leftover = $verify->fetchAll();
+    $allCompleted = !empty($leftover) && count(array_filter($leftover, fn($r) => (int)$r['completed'] === 1)) === count($leftover);
+    t('task_group_delete 후 남은 row 모두 completed=1', $allCompleted, json_encode($leftover));
+
+    // 모두 완료된 그룹에 대해 다시 호출 → deleted_count=0, kept_count=2
+    $r = req('POST', "$api?action=task_group_delete", $h, [
+        'cohort' => $cohort, 'title' => $titleA, 'role' => 'operation',
+    ]);
+    t('task_group_delete 모두 완료 그룹 deleted=0', (int)($r['body']['deleted_count'] ?? -1) === 0);
+    t('task_group_delete 모두 완료 그룹 kept=2',    (int)($r['body']['kept_count'] ?? -1) === 2);
+
 } finally {
     // ── Cleanup ─────────────────────────────────────
     $db->prepare("DELETE FROM tasks WHERE title LIKE '__test_group%'")->execute();

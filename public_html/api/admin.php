@@ -1291,6 +1291,37 @@ case 'task_group_update':
     jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
     break;
 
+case 'task_group_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort = trim($input['cohort'] ?? '');
+    $title  = trim($input['title']  ?? '');
+    $role   = trim($input['role']   ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+
+    $db = getDB();
+    $del = $db->prepare("
+        DELETE FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ? AND completed = 0
+    ");
+    $del->execute([$cohort, $title, $role]);
+    $deleted = $del->rowCount();
+
+    $cnt = $db->prepare("
+        SELECT COUNT(*) AS c
+          FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ?
+    ");
+    $cnt->execute([$cohort, $title, $role]);
+    $kept = (int)$cnt->fetch()['c'];
+
+    jsonSuccess([
+        'deleted_count' => $deleted,
+        'kept_count'    => $kept,
+    ], "{$deleted}개 삭제 / {$kept}개 보존");
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
