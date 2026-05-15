@@ -1473,15 +1473,15 @@ const AdminApp = (() => {
                             const titleAttr  = encodeURIComponent(g.title);
                             const roleAttr   = encodeURIComponent(g.role);
                             return `
-                            <tr>
-                                <td>${App.esc(g.title)}</td>
+                            <tr class="group-row" data-cohort="${cohortAttr}" data-title="${titleAttr}" data-role="${roleAttr}" style="cursor:pointer">
+                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${App.esc(g.title)}</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
                                 <td>${assigneeLabel(g.assignee_count)}</td>
                                 <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
                                 <td>${progressBadge(g.done_count, g.total_count)}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
+                                    <button class="btn-icon" onclick="event.stopPropagation();AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
+                                    <button class="btn-icon danger" onclick="event.stopPropagation();AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
                                 </td>
                             </tr>
                         `;}).join('')}
@@ -1496,6 +1496,10 @@ const AdminApp = (() => {
                 taskMgmtFilter = btn.dataset.mgmtFilter;
                 loadTasksMgmt();
             };
+        });
+        // 그룹 row 클릭 → 펼침 토글
+        sec.querySelectorAll('tr.group-row').forEach(tr => {
+            tr.addEventListener('click', () => AdminApp._toggleGroupExpand(tr));
         });
     }
 
