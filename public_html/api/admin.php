@@ -1181,6 +1181,153 @@ case 'admin_delete':
     jsonSuccess([], '관리자가 삭제되었습니다.');
     break;
 
+// ── Task Group CRUD (operation only) ─────
+// 묶음 키 = (cohort, title, role)
+
+case 'task_group_get':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort = trim($input['cohort'] ?? '');
+    $title  = trim($input['title']  ?? '');
+    $role   = trim($input['role']   ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT title, content_markdown
+          FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ?
+         ORDER BY start_date ASC
+         LIMIT 1
+    ");
+    $stmt->execute([$cohort, $title, $role]);
+    $row = $stmt->fetch();
+    if (!$row) jsonError('해당 묶음을 찾을 수 없습니다.', 404);
+    jsonSuccess([
+        'title' => $row['title'],
+        'content_markdown' => $row['content_markdown'],
+    ]);
+    break;
+
+case 'all_tasks_grouped':
+    $admin = requireAdmin();
+    if (!hasRole($admin, 'operation')) jsonError('권한이 없습니다.', 403);
+    $cohort = getEffectiveCohort($admin);
+    $filterRole = $_GET['filter_role'] ?? '';
+    $adminId = $admin['admin_id'];
+
+    // 기존 all_tasks 의 필터 SQL 을 그대로 GROUP BY 로 변환
+    $db = getDB();
+    if ($filterRole === 'mine') {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
+                         END) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ?
+               AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY t.role, MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort, $adminId, $adminId]);
+    } elseif ($filterRole && $filterRole !== 'all') {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
+                         END) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ? AND t.role = ?
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort, $filterRole]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT t.cohort, t.title, t.role,
+                   COUNT(*)                                AS total_count,
+                   SUM(t.completed)                        AS done_count,
+                   MIN(t.start_date)                       AS min_start_date,
+                   MAX(t.end_date)                         AS max_end_date,
+                   COUNT(DISTINCT CASE
+                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
+                         END) AS assignee_count
+              FROM tasks t
+             WHERE t.cohort = ?
+             GROUP BY t.cohort, t.title, t.role
+             ORDER BY t.role, MIN(t.start_date) DESC, t.title
+        ");
+        $stmt->execute([$cohort]);
+    }
+    jsonSuccess(['groups' => $stmt->fetchAll()]);
+    break;
+
+case 'task_group_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort   = trim($input['cohort'] ?? '');
+    $title    = trim($input['title']  ?? '');
+    $role     = trim($input['role']   ?? '');
+    $newTitle = trim($input['new_title'] ?? '');
+    $newContent = trim($input['new_content_markdown'] ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
+
+    $db = getDB();
+    $stmt = $db->prepare("
+        UPDATE tasks
+           SET title = ?, content_markdown = ?
+         WHERE cohort = ? AND title = ? AND role = ?
+    ");
+    $stmt->execute([$newTitle, $newContent ?: null, $cohort, $title, $role]);
+    jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
+    break;
+
+case 'task_group_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $cohort = trim($input['cohort'] ?? '');
+    $title  = trim($input['title']  ?? '');
+    $role   = trim($input['role']   ?? '');
+    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+
+    $db = getDB();
+    $del = $db->prepare("
+        DELETE FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ? AND completed = 0
+    ");
+    $del->execute([$cohort, $title, $role]);
+    $deleted = $del->rowCount();
+
+    $cnt = $db->prepare("
+        SELECT COUNT(*) AS c
+          FROM tasks
+         WHERE cohort = ? AND title = ? AND role = ?
+    ");
+    $cnt->execute([$cohort, $title, $role]);
+    $kept = (int)$cnt->fetch()['c'];
+
+    jsonSuccess([
+        'deleted_count' => $deleted,
+        'kept_count'    => $kept,
+    ], "{$deleted}개 삭제 / {$kept}개 보존");
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':

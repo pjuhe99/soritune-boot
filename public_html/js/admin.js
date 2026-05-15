@@ -1423,8 +1423,8 @@ const AdminApp = (() => {
         const sec = document.getElementById('tab-tasks-mgmt');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
 
-        const r = await App.get('/api/admin.php?action=all_tasks', { filter_role: taskMgmtFilter });
-        const tasks = r.success ? (r.tasks || []) : [];
+        const r = await App.get('/api/admin.php?action=all_tasks_grouped', { filter_role: taskMgmtFilter });
+        const groups = r.success ? (r.groups || []) : [];
 
         const filters = [
             { key: 'mine', label: '내 Task' },
@@ -1436,9 +1436,27 @@ const AdminApp = (() => {
             { key: 'operation', label: '운영팀' },
         ];
 
+        // 진행 배지 헬퍼
+        function progressBadge(done, total) {
+            done = parseInt(done) || 0;
+            total = parseInt(total) || 0;
+            if (total === 0) return '-';
+            if (done === 0)     return `<span class="badge badge-warning">미완료 0/${total}</span>`;
+            if (done === total) return `<span class="badge badge-success">완료 ${done}/${total}</span>`;
+            return `<span class="badge badge-primary">진행 ${done}/${total}</span>`;
+        }
+        function periodLabel(min, max) {
+            if (!min || !max) return '-';
+            return min === max ? min : `${min} ~ ${max}`;
+        }
+        function assigneeLabel(count) {
+            const n = parseInt(count) || 0;
+            return n === 0 ? '<span class="text-muted">미배정</span>' : `${n}명`;
+        }
+
         sec.innerHTML = `
             <div class="mgmt-toolbar mt-md">
-                <span style="font-weight:600">Task 관리 <span class="count">${tasks.length}개</span></span>
+                <span style="font-weight:600">Task 관리 <span class="count">${groups.length}개 묶음</span></span>
                 <button class="btn btn-primary btn-sm" id="btn-add-task">추가</button>
             </div>
             <div class="task-filter-chips" id="task-mgmt-filter" style="margin-bottom:var(--space-3)">
@@ -1448,26 +1466,30 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>제목</th><th>역할</th><th>담당자</th><th>기간</th><th>완료</th><th></th></tr></thead>
+                    <thead><tr><th>제목</th><th>역할</th><th>담당자</th><th>기간</th><th>진행</th><th></th></tr></thead>
                     <tbody>
-                        ${tasks.map(t => `
+                        ${groups.map(g => {
+                            const cohortAttr = encodeURIComponent(g.cohort);
+                            const titleAttr  = encodeURIComponent(g.title);
+                            const roleAttr   = encodeURIComponent(g.role);
+                            return `
                             <tr>
-                                <td>${App.esc(t.title)}</td>
-                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[t.role] || t.role)}</span></td>
-                                <td>${App.esc(t.assignee_name || '-')}</td>
-                                <td style="white-space:nowrap">${t.start_date} ~ ${t.end_date}</td>
-                                <td>${parseInt(t.completed) ? '<span class="badge badge-success">완료</span>' : '<span class="badge badge-warning">미완료</span>'}</td>
+                                <td>${App.esc(g.title)}</td>
+                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
+                                <td>${assigneeLabel(g.assignee_count)}</td>
+                                <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
+                                <td>${progressBadge(g.done_count, g.total_count)}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="AdminApp._editTask(${t.id})">수정</button>
-                                    <button class="btn-icon danger" onclick="AdminApp._deleteTask(${t.id}, '${App.esc(t.title)}')">삭제</button>
+                                    <button class="btn-icon" onclick="AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
+                                    <button class="btn-icon danger" onclick="AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
                                 </td>
                             </tr>
-                        `).join('')}
+                        `;}).join('')}
                     </tbody>
                 </table>
             </div>
         `;
-        if (!tasks.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Task가 없습니다.</td></tr>';
+        if (!groups.length) sec.querySelector('tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Task 묶음이 없습니다.</td></tr>';
         document.getElementById('btn-add-task').onclick = () => showTaskForm();
         document.getElementById('task-mgmt-filter').querySelectorAll('.chip').forEach(btn => {
             btn.onclick = () => {
@@ -1480,16 +1502,20 @@ const AdminApp = (() => {
     const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
     function showTaskForm(data = {}) {
-        const isEdit = !!data.id;
+        const isEdit = !!data.groupKey; // { cohort, title, role }
 
         let roleSection;
         if (isEdit) {
             roleSection = `
                 <div class="form-group">
-                    <label class="form-label">담당 역할</label>
-                    <select class="form-select" id="tf-role">
-                        ${ALL_ROLES.map(r => `<option value="${r}" ${data.role === r ? 'selected' : ''}>${App.esc(ROLE_LABELS[r])}</option>`).join('')}
-                    </select>
+                    <label class="form-label">묶음 정보</label>
+                    <div style="background:var(--gray-50,#f5f5f5);border:1px solid var(--gray-200,#e5e5e5);border-radius:8px;padding:12px;font-size:0.9rem;line-height:1.6">
+                        <div><strong>역할</strong>: ${App.esc(ROLE_LABELS[data.groupKey.role] || data.groupKey.role)}</div>
+                        <div><strong>기수</strong>: ${App.esc(data.groupKey.cohort)}</div>
+                        <div><strong>기간</strong>: ${App.esc(data.periodLabel || '-')}</div>
+                        <div><strong>총 ${data.totalCount || 0}개</strong> (완료 ${data.doneCount || 0} / 미완료 ${(data.totalCount || 0) - (data.doneCount || 0)})</div>
+                    </div>
+                    <p class="text-muted" style="font-size:0.8rem;margin-top:6px">* 역할·기간은 묶음 식별 정보라 일괄 수정 대상이 아닙니다. 변경하려면 삭제 후 다시 만들어주세요.</p>
                 </div>
             `;
         } else {
@@ -1521,8 +1547,8 @@ const AdminApp = (() => {
             </div>
         `;
 
-        // Direct date fields
-        const directDateSection = `
+        // Direct date fields — 그룹 수정 모드에서는 비활성
+        const directDateSection = isEdit ? '' : `
             <div id="tf-mode-direct" class="tf-date-section">
                 <div class="form-group">
                     <label class="form-label">시작일 *</label>
@@ -1615,11 +1641,13 @@ const AdminApp = (() => {
             };
 
             if (isEdit) {
-                payload.id = data.id;
-                payload.role = document.getElementById('tf-role').value;
-                payload.start_date = document.getElementById('tf-start').value;
-                payload.end_date = document.getElementById('tf-end').value;
-                if (!payload.title || !payload.start_date || !payload.end_date) return Toast.warning('필수 항목을 모두 입력해주세요.');
+                if (!payload.title) return Toast.warning('제목을 입력해주세요.');
+                payload.cohort = data.groupKey.cohort;
+                payload.title  = data.groupKey.title;       // 옛 title (식별용)
+                payload.role   = data.groupKey.role;
+                payload.new_title = document.getElementById('tf-title').value.trim();
+                payload.new_content_markdown = document.getElementById('tf-content').value.trim();
+                if (!payload.new_title) return Toast.warning('제목을 입력해주세요.');
             } else {
                 payload.roles = getCheckedRoles('tf');
                 if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
@@ -1644,7 +1672,8 @@ const AdminApp = (() => {
             if (!payload.title) return Toast.warning('제목을 입력해주세요.');
 
             App.showLoading();
-            const r = await App.post(`/api/admin.php?action=${isEdit ? 'task_update' : 'task_create'}`, payload);
+            const action = isEdit ? 'task_group_update' : 'task_create';
+            const r = await App.post(`/api/admin.php?action=${action}`, payload);
             App.hideLoading();
             if (r.success) {
                 App.closeModal();
@@ -1656,21 +1685,57 @@ const AdminApp = (() => {
         };
     }
 
-    async function _editTask(id) {
-        const r = await App.get('/api/admin.php?action=all_tasks');
-        const tasks = r.success ? (r.tasks || []) : [];
-        const t = tasks.find(x => x.id == id);
-        if (t) showTaskForm(t);
-        else Toast.error('Task를 찾을 수 없습니다.');
+    async function _editTaskGroup(cohortEnc, titleEnc, roleEnc) {
+        const cohort = decodeURIComponent(cohortEnc);
+        const title  = decodeURIComponent(titleEnc);
+        const role   = decodeURIComponent(roleEnc);
+
+        // 그룹 메타 (집계) 와 prefill 값 (title/content) 둘 다 필요
+        const [grouped, single] = await Promise.all([
+            App.get('/api/admin.php?action=all_tasks_grouped', { filter_role: 'all' }),
+            App.post('/api/admin.php?action=task_group_get', { cohort, title, role }),
+        ]);
+        if (!single.success) return Toast.error(single.message || '묶음 조회 실패');
+        const g = (grouped.groups || []).find(x =>
+            x.cohort === cohort && x.title === title && x.role === role);
+        if (!g) return Toast.error('묶음 메타를 찾을 수 없습니다.');
+
+        const periodLabel = (g.min_start_date === g.max_end_date)
+            ? g.min_start_date
+            : `${g.min_start_date} ~ ${g.max_end_date}`;
+
+        showTaskForm({
+            groupKey: { cohort, title, role },
+            title: single.title,
+            content_markdown: single.content_markdown,
+            periodLabel,
+            totalCount: parseInt(g.total_count) || 0,
+            doneCount:  parseInt(g.done_count)  || 0,
+        });
     }
 
-    async function _deleteTask(id, title) {
-        if (!await App.confirm(`'${title}' Task를 삭제하시겠습니까?`)) return;
+    async function _deleteTaskGroup(cohortEnc, titleEnc, roleEnc, totalCount, doneCount) {
+        const cohort = decodeURIComponent(cohortEnc);
+        const title  = decodeURIComponent(titleEnc);
+        const role   = decodeURIComponent(roleEnc);
+        const incomplete = (totalCount || 0) - (doneCount || 0);
+
+        let msg;
+        if (incomplete === 0) {
+            Toast.info('이미 모두 완료된 묶음입니다. 삭제할 row 가 없습니다.');
+            return;
+        } else if (doneCount === 0) {
+            msg = `'${title}' 묶음 ${incomplete}개를 삭제하시겠습니까?`;
+        } else {
+            msg = `'${title}' 묶음의 미완료 ${incomplete}개를 삭제합니다.\n이력 보존을 위해 완료된 ${doneCount}개는 남깁니다.\n진행할까요?`;
+        }
+        if (!await App.confirm(msg)) return;
+
         App.showLoading();
-        const r = await App.post('/api/admin.php?action=task_delete', { id });
+        const r = await App.post('/api/admin.php?action=task_group_delete', { cohort, title, role });
         App.hideLoading();
         if (r.success) {
-            Toast.success(r.message);
+            Toast.success(r.message || `${r.deleted_count}개 삭제 / ${r.kept_count}개 보존`);
             loadTasksMgmt();
             loadTodayTasks();
             loadOverdueTasks();
@@ -2010,7 +2075,7 @@ const AdminApp = (() => {
         init,
         _editMember, _deleteMember, _restoreMember, _setMemberStatus,
         _editAdmin, _deleteAdmin,
-        _editTask, _deleteTask,
+        _editTaskGroup, _deleteTaskGroup,
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
         _editCohort, _deactivateCohort, _activateCohort,
