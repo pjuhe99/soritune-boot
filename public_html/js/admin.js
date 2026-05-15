@@ -1685,27 +1685,6 @@ const AdminApp = (() => {
         };
     }
 
-    async function _editTask(id) {
-        const r = await App.get('/api/admin.php?action=all_tasks');
-        const tasks = r.success ? (r.tasks || []) : [];
-        const t = tasks.find(x => x.id == id);
-        if (t) showTaskForm(t);
-        else Toast.error('Task를 찾을 수 없습니다.');
-    }
-
-    async function _deleteTask(id, title) {
-        if (!await App.confirm(`'${title}' Task를 삭제하시겠습니까?`)) return;
-        App.showLoading();
-        const r = await App.post('/api/admin.php?action=task_delete', { id });
-        App.hideLoading();
-        if (r.success) {
-            Toast.success(r.message);
-            loadTasksMgmt();
-            loadTodayTasks();
-            loadOverdueTasks();
-        }
-    }
-
     async function _editTaskGroup(cohortEnc, titleEnc, roleEnc) {
         const cohort = decodeURIComponent(cohortEnc);
         const title  = decodeURIComponent(titleEnc);
@@ -2096,7 +2075,7 @@ const AdminApp = (() => {
         init,
         _editMember, _deleteMember, _restoreMember, _setMemberStatus,
         _editAdmin, _deleteAdmin,
-        _editTask, _deleteTask, _editTaskGroup, _deleteTaskGroup,
+        _editTaskGroup, _deleteTaskGroup,
         _editGuide, _deleteGuide,
         _editCalendar, _deleteCalendar,
         _editCohort, _deactivateCohort, _activateCohort,
