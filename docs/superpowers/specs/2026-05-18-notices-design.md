@@ -23,20 +23,23 @@
 
 ```sql
 CREATE TABLE notices (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  cohort_id INT NOT NULL,
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  cohort_id INT UNSIGNED NOT NULL,
   title VARCHAR(255) NOT NULL,
   body_markdown TEXT NOT NULL,
   is_visible TINYINT(1) NOT NULL DEFAULT 1,
-  created_by_admin_id INT NOT NULL,
+  created_by_admin_id INT UNSIGNED NOT NULL,
   created_by_admin_name VARCHAR(100) NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
-  KEY idx_cohort_visible_created (cohort_id, is_visible, created_at DESC),
+  KEY idx_cohort_visible_created (cohort_id, is_visible, created_at),
   CONSTRAINT fk_notices_cohort  FOREIGN KEY (cohort_id) REFERENCES cohorts(id),
   CONSTRAINT fk_notices_admin   FOREIGN KEY (created_by_admin_id) REFERENCES admins(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+설계 노트 (FK 타입 매칭):
+- `cohorts.id` / `admins.id` 가 `INT UNSIGNED` 이므로 FK 컬럼도 동일하게 `INT UNSIGNED` (InnoDB 는 FK 양쪽 타입/사인 정확히 일치 요구).
 
 설계 노트:
 - `created_by_admin_name`: 등록 시점 어드민 이름 **스냅샷**. 어드민이 이름을 바꾸거나 비활성화돼도 회원이 본 표시명이 흔들리지 않게 함. footer 의 `등록자명 · 날짜` 표시용. footer 에 별도 JOIN 회피.
