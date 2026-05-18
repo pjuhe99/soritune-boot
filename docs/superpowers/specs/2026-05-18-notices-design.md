@@ -30,8 +30,8 @@ CREATE TABLE notices (
   is_visible TINYINT(1) NOT NULL DEFAULT 1,
   created_by_admin_id INT UNSIGNED NOT NULL,
   created_by_admin_name VARCHAR(100) NOT NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_cohort_visible_created (cohort_id, is_visible, created_at),
   CONSTRAINT fk_notices_cohort  FOREIGN KEY (cohort_id) REFERENCES cohorts(id),
   CONSTRAINT fk_notices_admin   FOREIGN KEY (created_by_admin_id) REFERENCES admins(id)
