@@ -933,6 +933,11 @@ const AdminApp = (() => {
         `;
     }
 
+    // 카드/펼침 row 에서 기존 submission 텍스트 추출 (T11 묶음 펼침에서도 재사용)
+    function _readSubmissionText(scope) {
+        return scope?.querySelector('.task-submission-body')?.innerText || '';
+    }
+
     // ── 결과물 제출 입력 모달 ──
     function showSubmissionModal({ taskId, prefill, title, onConfirm, onCancel }) {
         const safeTitle = App.esc(title || '');
@@ -959,6 +964,11 @@ const AdminApp = (() => {
         ta.focus();
 
         let confirmed = false;
+        const triggerCancel = () => { if (!confirmed) onCancel(); };
+        const overlay = document.getElementById('app-modal');
+        const xBtn = overlay?.querySelector('.modal-close');
+        overlay?.addEventListener('click', (e) => { if (e.target === overlay) triggerCancel(); });
+        xBtn?.addEventListener('click', triggerCancel);
 
         saveBtn.onclick = async () => {
             const text = ta.value.trim();
@@ -968,16 +978,7 @@ const AdminApp = (() => {
             saveBtn.disabled = false;
             if (ok) { confirmed = true; App.closeModal(); }
         };
-        cancelBtn.onclick = () => { App.closeModal(); };
-
-        // 모달 닫힘(취소/백드롭) 시 onCancel 호출
-        const observer = new MutationObserver(() => {
-            if (!document.querySelector('.modal-backdrop, .modal[style*="display"]')) {
-                if (!confirmed) onCancel();
-                observer.disconnect();
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
+        cancelBtn.onclick = () => { triggerCancel(); App.closeModal(); };
     }
 
     function bindTaskEvents(container) {
@@ -989,7 +990,7 @@ const AdminApp = (() => {
 
                 if (requiresSub && cb.checked) {
                     // 모달 → toggle_task with submission_text
-                    const prevText = (card.querySelector('.task-submission-body')?.innerText || '').replace(/<br\s*\/?>/gi, '\n');
+                    const prevText = _readSubmissionText(card);
                     showSubmissionModal({
                         taskId,
                         prefill: prevText,
@@ -1025,8 +1026,7 @@ const AdminApp = (() => {
         });
 
         container.querySelectorAll('.task-toggle-submission').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
+            btn.onclick = () => {
                 const wrap = document.getElementById(`task-sub-${btn.dataset.taskId}`);
                 const body = wrap?.querySelector('.task-submission-body');
                 if (body) {
@@ -1037,12 +1037,10 @@ const AdminApp = (() => {
         });
 
         container.querySelectorAll('.task-edit-submission').forEach(btn => {
-            btn.onclick = async (e) => {
-                e.stopPropagation();
+            btn.onclick = async () => {
                 const taskId = parseInt(btn.dataset.taskId);
                 const wrap = document.getElementById(`task-sub-${taskId}`);
-                const body = wrap?.querySelector('.task-submission-body');
-                const prev = body ? body.innerText : '';
+                const prev = _readSubmissionText(wrap);
                 showSubmissionModal({
                     taskId,
                     prefill: prev,
