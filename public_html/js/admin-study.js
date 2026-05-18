@@ -75,6 +75,8 @@ const AdminStudyApp = (() => {
         const groupOpts = groups.map(g => `<option value="${g.id}">${App.esc(g.name)}</option>`).join('');
         const hourOpts = Array.from({ length: 24 }, (_, i) => i)
             .map(h => `<option value="${String(h).padStart(2, '0')}">${String(h).padStart(2, '0')}시</option>`).join('');
+        const minuteOpts = Array.from({ length: 60 }, (_, i) => i)
+            .map(m => `<option value="${String(m).padStart(2, '0')}">${String(m).padStart(2, '0')}분</option>`).join('');
 
         const body = `
             <div class="form-group">
@@ -93,8 +95,7 @@ const AdminStudyApp = (() => {
                 <div style="display:flex;gap:8px">
                     <select class="form-input" id="as-hour">${hourOpts}</select>
                     <select class="form-input" id="as-minute">
-                        <option value="00">00분</option>
-                        <option value="30">30분</option>
+                        ${minuteOpts}
                     </select>
                 </div>
             </div>
