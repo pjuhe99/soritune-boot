@@ -56,5 +56,19 @@ function findMatchingLectureSession(
         if ($id !== false) return (int)$id;
     }
 
+    // ── Tier C: 시간대 단일 후보 매칭 (보수적) ────────────────
+    // Note: TIMESTAMPDIFF does not work with TIME columns (returns NULL);
+    // use TIME_TO_SEC(TIMEDIFF(...)) for correct ±60-minute filtering.
+    $stmt = $db->prepare("
+        SELECT id FROM lecture_sessions
+        WHERE lecture_date = ?
+          AND cohort_id = ?
+          AND status = 'active'
+          AND ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) / 60 <= 60
+    ");
+    $stmt->execute([$atDate, $cohortId, $atTime]);
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (count($rows) === 1) return (int)$rows[0];
+
     return null;
 }
