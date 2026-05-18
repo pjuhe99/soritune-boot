@@ -146,6 +146,85 @@ try {
     $matched = findMatchingLectureSession($db, $hyunId, $cohortId, date('Y-m-d'), '11:30:00');
     t('T2b: Tier A ORDER BY 시각 근접 (12:00 선택)', $matched === $lecLate, "expected={$lecLate}(12:00), got=" . var_export($matched, true));
 
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 6: admin_id=0 + Tier C 단일 후보 → 매칭
+    // ───────────────────────────────────────────────────────────
+    $cohortLabel3 = 'QRM3_' . bin2hex(random_bytes(3));
+    $db->prepare("INSERT INTO cohorts (cohort, code, is_active, start_date, end_date)
+                  VALUES (?, ?, 1, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))")
+       ->execute([$cohortLabel3, $cohortLabel3]);
+    $cohortId3 = (int)$db->lastInsertId();
+    $insAdmin->execute(['hyun_t6_' . bin2hex(random_bytes(2)), 'Hyun_T6', 'sub_coach']);
+    $hyunT6 = (int)$db->lastInsertId();
+    $nowTime6 = date('H:i:s');
+    $insSchedule->execute([$cohortId3, $hyunT6, 1, $nowTime6, $hyunT6]);
+    $schT6 = (int)$db->lastInsertId();
+    $insLecture->execute([$schT6, $cohortId3, $hyunT6, date('Y-m-d'), $nowTime6, $nowTime6, 1, '[T6] Hyun', 'active']);
+    $lectureId6 = (int)$db->lastInsertId();
+
+    $matched = findMatchingLectureSession($db, 0, $cohortId3);
+    t('T6: admin_id=0 + Tier C 단일 후보 매칭', $matched === $lectureId6, "expected={$lectureId6}, got=" . var_export($matched, true));
+
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 7: admin_id=0 + Tier C 후보 0건 → NULL
+    // ───────────────────────────────────────────────────────────
+    $cohortLabel4 = 'QRM4_' . bin2hex(random_bytes(3));
+    $db->prepare("INSERT INTO cohorts (cohort, code, is_active, start_date, end_date)
+                  VALUES (?, ?, 1, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))")
+       ->execute([$cohortLabel4, $cohortLabel4]);
+    $cohortId4 = (int)$db->lastInsertId();
+
+    $matched = findMatchingLectureSession($db, 0, $cohortId4);
+    t('T7: admin_id=0 후보 없음 → NULL', $matched === null, 'got=' . var_export($matched, true));
+
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 8: Tier B 동명 admin 중 한쪽이 role='operation' (Tier B 가드로 제외)
+    //   같은 이름 admin 둘, 하나는 coach 본인 (그날 강의 없음),
+    //   하나는 role='operation' 동명 (강의 등록).
+    //   → Tier B role 가드 'operation' 제외 → Tier C 단일 후보 fallback 매칭
+    //   (plan 원본은 role='member' 였으나 실제 ENUM 에 'member' 없어 'operation' 사용)
+    // ───────────────────────────────────────────────────────────
+    $cohortLabel5 = 'QRM5_' . bin2hex(random_bytes(3));
+    $db->prepare("INSERT INTO cohorts (cohort, code, is_active, start_date, end_date)
+                  VALUES (?, ?, 1, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))")
+       ->execute([$cohortLabel5, $cohortLabel5]);
+    $cohortId5 = (int)$db->lastInsertId();
+
+    $insAdmin->execute(['tina_coach_' . bin2hex(random_bytes(2)), 'Tina_T8', 'coach']);
+    $tinaCoachId = (int)$db->lastInsertId();
+    $insAdmin->execute(['tina_oper_' . bin2hex(random_bytes(2)), 'Tina_T8', 'operation']);
+    $tinaOperId = (int)$db->lastInsertId();
+    // operation 동명이인으로 강의 등록 (가드 검증용 가짜 데이터)
+    $nowTime8 = date('H:i:s');
+    $insSchedule->execute([$cohortId5, $tinaOperId, 1, $nowTime8, $tinaOperId]);
+    $schT8 = (int)$db->lastInsertId();
+    $insLecture->execute([$schT8, $cohortId5, $tinaOperId, date('Y-m-d'), $nowTime8, $nowTime8, 1, '[T8] fake', 'active']);
+    $fakeLectureId = (int)$db->lastInsertId();
+
+    $matched = findMatchingLectureSession($db, $tinaCoachId, $cohortId5);
+    // Tier A 0건 (coach 본인 강의 없음), Tier B 0건 (operation 가드), Tier C 1건 → 매칭
+    t('T8: role 가드 + Tier C fallback', $matched === $fakeLectureId, "expected={$fakeLectureId}, got=" . var_export($matched, true));
+
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 9: Tier B 후보가 모두 cancelled → 어디서도 매칭 안 됨
+    //   강의가 status='cancelled' 이면 Tier A/B/C 모두 status='active' 가드로 제외
+    // ───────────────────────────────────────────────────────────
+    $cohortLabel6 = 'QRM6_' . bin2hex(random_bytes(3));
+    $db->prepare("INSERT INTO cohorts (cohort, code, is_active, start_date, end_date)
+                  VALUES (?, ?, 1, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))")
+       ->execute([$cohortLabel6, $cohortLabel6]);
+    $cohortId6 = (int)$db->lastInsertId();
+    $insAdmin->execute(['nick_t9_' . bin2hex(random_bytes(2)), 'Nick_T9', 'coach']);
+    $nickId = (int)$db->lastInsertId();
+    // 강의는 cancelled 상태
+    $nowTime9 = date('H:i:s');
+    $insSchedule->execute([$cohortId6, $nickId, 1, $nowTime9, $nickId]);
+    $schT9 = (int)$db->lastInsertId();
+    $insLecture->execute([$schT9, $cohortId6, $nickId, date('Y-m-d'), $nowTime9, $nowTime9, 1, '[T9] cancelled', 'cancelled']);
+
+    $matched = findMatchingLectureSession($db, $nickId, $cohortId6);
+    t('T9: cancelled 강의는 매칭 X', $matched === null, 'got=' . var_export($matched, true));
+
 } finally {
     $db->rollBack();
 }
