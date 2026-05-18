@@ -893,8 +893,27 @@ const AdminApp = (() => {
     function renderTaskCard(task, isOverdue = false) {
         const completed = parseInt(task.completed);
         const hasContent = !!task.content_markdown;
+        const requiresSub = parseInt(task.requires_submission) === 1;
+        const submissionText = task.submission_text || '';
+        const submittedAt = task.submitted_at || '';
+        const hasSubmission = completed && requiresSub && submissionText !== '';
+
+        const requiresChip = requiresSub
+            ? `<span class="badge task-requires-submission-chip">📝 결과물</span>`
+            : '';
+        const submissionInline = hasSubmission ? `
+            <div class="task-submission-text" id="task-sub-${task.id}">
+                <div class="task-submission-meta">
+                    📝 ${App.esc(submittedAt)}
+                    <button class="task-toggle-submission" data-task-id="${task.id}">전체 보기</button>
+                    <button class="task-edit-submission" data-task-id="${task.id}">수정</button>
+                </div>
+                <div class="task-submission-body collapsed">${App.esc(submissionText).replace(/\n/g, '<br>')}</div>
+            </div>
+        ` : '';
+
         return `
-            <div class="task-card ${completed ? 'completed' : ''} ${isOverdue && !completed ? 'overdue' : ''}" data-id="${task.id}">
+            <div class="task-card ${completed ? 'completed' : ''} ${isOverdue && !completed ? 'overdue' : ''}" data-id="${task.id}" data-requires-submission="${requiresSub ? 1 : 0}">
                 <div class="task-top">
                     <input type="checkbox" class="task-checkbox" ${completed ? 'checked' : ''} data-task-id="${task.id}">
                     <div class="task-info">
@@ -903,19 +922,89 @@ const AdminApp = (() => {
                             <span>${task.start_date} ~ ${task.end_date}</span>
                             ${task.assignee_name ? `<span class="badge badge-primary">${App.esc(task.assignee_name)}</span>` : ''}
                             ${isOperation() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
+                            ${requiresChip}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
                         </div>
                         ${hasContent ? `<div class="task-content collapsed" id="task-content-${task.id}">${renderMarkdown(task.content_markdown)}</div>` : ''}
+                        ${submissionInline}
                     </div>
                 </div>
             </div>
         `;
     }
 
+    // ── 결과물 제출 입력 모달 ──
+    function showSubmissionModal({ taskId, prefill, title, onConfirm, onCancel }) {
+        const safeTitle = App.esc(title || '');
+        const safeText = App.esc(prefill || '');
+        const body = `
+            <div class="form-group">
+                <p class="text-muted" style="font-size:0.9rem;margin:0 0 8px">${safeTitle}</p>
+                <label class="form-label">결과물 *</label>
+                <textarea class="form-textarea" id="sub-text" rows="6" style="resize:vertical" placeholder="처리한 내용 / 결과 / 회고를 자유롭게 입력">${safeText}</textarea>
+                <p class="text-muted" style="font-size:0.8rem;margin-top:4px">* 운영자 검토용으로 저장됩니다.</p>
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" id="sub-cancel">취소</button>
+            <button class="btn btn-primary" id="sub-save">저장</button>
+        `;
+        App.openModal('결과물 제출', body, footer);
+
+        const ta = document.getElementById('sub-text');
+        const saveBtn = document.getElementById('sub-save');
+        const cancelBtn = document.getElementById('sub-cancel');
+        const update = () => { saveBtn.disabled = ta.value.trim() === ''; };
+        ta.oninput = update; update();
+        ta.focus();
+
+        let confirmed = false;
+
+        saveBtn.onclick = async () => {
+            const text = ta.value.trim();
+            if (text === '') { Toast.warning('결과물을 입력해주세요.'); return; }
+            saveBtn.disabled = true;
+            const ok = await onConfirm(text);
+            saveBtn.disabled = false;
+            if (ok) { confirmed = true; App.closeModal(); }
+        };
+        cancelBtn.onclick = () => { App.closeModal(); };
+
+        // 모달 닫힘(취소/백드롭) 시 onCancel 호출
+        const observer = new MutationObserver(() => {
+            if (!document.querySelector('.modal-backdrop, .modal[style*="display"]')) {
+                if (!confirmed) onCancel();
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
     function bindTaskEvents(container) {
         container.querySelectorAll('.task-checkbox').forEach(cb => {
             cb.onchange = async () => {
                 const taskId = parseInt(cb.dataset.taskId);
+                const card = cb.closest('.task-card');
+                const requiresSub = card && card.dataset.requiresSubmission === '1';
+
+                if (requiresSub && cb.checked) {
+                    // 모달 → toggle_task with submission_text
+                    const prevText = (card.querySelector('.task-submission-body')?.innerText || '').replace(/<br\s*\/?>/gi, '\n');
+                    showSubmissionModal({
+                        taskId,
+                        prefill: prevText,
+                        title: card.querySelector('.task-title')?.textContent || '',
+                        onConfirm: async (text) => {
+                            const r = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: true, submission_text: text });
+                            if (r.success) { Toast.success(r.message); loadTodayTasks(); loadOverdueTasks(); }
+                            return r.success;
+                        },
+                        onCancel: () => { cb.checked = false; },
+                    });
+                    return;
+                }
+
+                // 기존 즉시 toggle (requires_submission=0 또는 uncheck)
                 const r = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: cb.checked });
                 if (r.success) {
                     Toast.success(r.message);
@@ -932,6 +1021,39 @@ const AdminApp = (() => {
                     el.classList.toggle('collapsed');
                     btn.textContent = el.classList.contains('collapsed') ? '내용 보기' : '내용 접기';
                 }
+            };
+        });
+
+        container.querySelectorAll('.task-toggle-submission').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const wrap = document.getElementById(`task-sub-${btn.dataset.taskId}`);
+                const body = wrap?.querySelector('.task-submission-body');
+                if (body) {
+                    body.classList.toggle('collapsed');
+                    btn.textContent = body.classList.contains('collapsed') ? '전체 보기' : '접기';
+                }
+            };
+        });
+
+        container.querySelectorAll('.task-edit-submission').forEach(btn => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                const taskId = parseInt(btn.dataset.taskId);
+                const wrap = document.getElementById(`task-sub-${taskId}`);
+                const body = wrap?.querySelector('.task-submission-body');
+                const prev = body ? body.innerText : '';
+                showSubmissionModal({
+                    taskId,
+                    prefill: prev,
+                    title: btn.closest('.task-card')?.querySelector('.task-title')?.textContent || '',
+                    onConfirm: async (text) => {
+                        const r = await App.post('/api/admin.php?action=task_submission_update', { task_id: taskId, submission_text: text });
+                        if (r.success) { Toast.success(r.message); loadTodayTasks(); loadOverdueTasks(); }
+                        return r.success;
+                    },
+                    onCancel: () => {},
+                });
             };
         });
     }
