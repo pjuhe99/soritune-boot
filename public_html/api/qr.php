@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
+require_once __DIR__ . '/services/qr_match.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -79,25 +80,12 @@ case 'create_session':
     $expiryMinutes = (int)getSetting('qr_expiry_minutes', QR_DEFAULT_EXPIRY_MINUTES);
     $expiresAt = date('Y-m-d H:i:s', time() + $expiryMinutes * 60);
 
-    // 당일 해당 코치의 강의 자동 매칭
+    // 당일 강의 자동 매칭 (Tier A → B → C cascade, services/qr_match.php)
     $lectureSessionId = null;
-    if ($sessionType === 'attendance' && $admin['admin_id'] > 0) {
-        $today = date('Y-m-d');
-        $now = date('H:i:s');
-        $lectureStmt = $db->prepare("
-            SELECT id FROM lecture_sessions
-            WHERE coach_admin_id = ?
-              AND lecture_date = ?
-              AND cohort_id = ?
-              AND status = 'active'
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
-            LIMIT 1
-        ");
-        $lectureStmt->execute([$admin['admin_id'], $today, $cohortId, $now]);
-        $lectureRow = $lectureStmt->fetch();
-        if ($lectureRow) {
-            $lectureSessionId = (int)$lectureRow['id'];
-        }
+    if ($sessionType === 'attendance') {
+        $lectureSessionId = findMatchingLectureSession(
+            $db, (int)$admin['admin_id'], $cohortId
+        );
     }
 
     $db->prepare("
