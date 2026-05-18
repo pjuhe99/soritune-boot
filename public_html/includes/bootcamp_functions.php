@@ -80,17 +80,28 @@ function calcConsecutiveMissDays($byDate, $codeToId) {
  */
 if (!function_exists('ensureScoresFresh')) {
 function ensureScoresFresh($db, $cohortId) {
-    $stmt = $db->prepare("
-        SELECT bm.id
-        FROM bootcamp_members bm
-        LEFT JOIN member_scores ms ON bm.id = ms.member_id
-        WHERE bm.cohort_id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
-          AND (ms.last_calculated_at IS NULL OR ms.last_calculated_at < CURDATE())
-    ");
-    $stmt->execute([$cohortId]);
-    $staleIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    foreach ($staleIds as $mid) {
-        recalculateMemberScore($db, (int)$mid);
+    // 동일 cohort 동시 재계산 차단 (member_list + dashboard_stats 동시 호출 deadlock 방지).
+    // 잡힘=1 진행 / 잠김=0 캐시 점수 그대로 read. timeout=0 즉시 비결정.
+    $lockKey = "boot_ensure_scores_$cohortId";
+    $lk = $db->prepare("SELECT GET_LOCK(?, 0) AS got");
+    $lk->execute([$lockKey]);
+    if ((int)($lk->fetch()['got'] ?? 0) !== 1) return;
+    try {
+        $stmt = $db->prepare("
+            SELECT bm.id
+            FROM bootcamp_members bm
+            LEFT JOIN member_scores ms ON bm.id = ms.member_id
+            WHERE bm.cohort_id = ? AND (bm.is_active = 1 OR bm.member_status = 'leaving')
+              AND (ms.last_calculated_at IS NULL OR ms.last_calculated_at < CURDATE())
+        ");
+        $stmt->execute([$cohortId]);
+        $staleIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($staleIds as $mid) {
+            recalculateMemberScore($db, (int)$mid);
+        }
+    } finally {
+        $rel = $db->prepare("SELECT RELEASE_LOCK(?)");
+        $rel->execute([$lockKey]);
     }
 }
 }
