@@ -36,5 +36,25 @@ function findMatchingLectureSession(
         if ($id !== false) return (int)$id;
     }
 
+    // ── Tier B: 동일 이름 admin 그룹 매칭 ────────────────────
+    if ($adminId > 0) {
+        $stmt = $db->prepare("
+            SELECT id FROM lecture_sessions
+            WHERE coach_admin_id IN (
+                SELECT id FROM admins
+                WHERE name = (SELECT name FROM admins WHERE id = ?)
+                  AND role IN ('coach','sub_coach','head','subhead1','subhead2')
+              )
+              AND lecture_date = ?
+              AND cohort_id = ?
+              AND status = 'active'
+            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
+            LIMIT 1
+        ");
+        $stmt->execute([$adminId, $atDate, $cohortId, $atTime]);
+        $id = $stmt->fetchColumn();
+        if ($id !== false) return (int)$id;
+    }
+
     return null;
 }

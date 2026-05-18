@@ -66,6 +66,23 @@ try {
     }
     t('T1b: atDate/atTime half-null throws', $caught);
 
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 2: Tier B 동일 이름 매칭
+    //   Darren 옛 admin (role=sub_coach) 발급 QR
+    //   → 새 Darren (role=sub_coach) 으로 등록된 강의에 매칭
+    // ───────────────────────────────────────────────────────────
+    $insAdmin->execute(['darren_old_' . bin2hex(random_bytes(2)), 'Darren_T2', 'sub_coach']);
+    $darrenOldId = (int)$db->lastInsertId();
+    $insAdmin->execute(['darren_new_' . bin2hex(random_bytes(2)), 'Darren_T2', 'sub_coach']);
+    $darrenNewId = (int)$db->lastInsertId();
+    $insSchedule->execute([$cohortId, $darrenNewId, 2, '06:00:00', $darrenNewId]);
+    $scheduleId2 = (int)$db->lastInsertId();
+    $insLecture->execute([$scheduleId2, $cohortId, $darrenNewId, date('Y-m-d'), '06:00:00', '07:00:00', 2, '[06:00] Darren 2단계', 'active']);
+    $lectureId2 = (int)$db->lastInsertId();
+
+    $matched = findMatchingLectureSession($db, $darrenOldId, $cohortId);
+    t('T2: Tier B 동일 이름 admin 매칭', $matched === $lectureId2, "expected={$lectureId2}, got=" . var_export($matched, true));
+
 } finally {
     $db->rollBack();
 }
