@@ -134,6 +134,60 @@ if ($isDryRun) {
     exit(0);
 }
 
-// APPLY 모드는 Task 8 에서 추가
-fwrite(STDERR, "ERROR: --apply 모드는 아직 구현 안 됨 (Task 8)\n");
-exit(1);
+// ── APPLY 모드 ────────────────────────────────────────────
+$toUpdate = array_filter($plan, fn($v) => $v !== null);
+if (!$toUpdate) {
+    echo "\n[APPLY] 매칭된 row 없음. 변경 없음.\n";
+    exit(0);
+}
+
+// 1) 백업 (.db_credentials 직접 파싱, parse_ini_file 의 quote 해석 피하기)
+$ts = date('Ymd_His');
+$backupPath = "/tmp/qr_sessions_backup_{$ts}.sql";
+$creds = [];
+foreach (file(__DIR__ . '/.db_credentials', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+    if (str_contains($line, '=')) {
+        [$k, $v] = explode('=', $line, 2);
+        $creds[trim($k)] = trim($v);
+    }
+}
+$dumpCmd = sprintf(
+    "mysqldump -u %s -p%s %s qr_sessions > %s 2>/tmp/qr_dump_err_{$ts}.log",
+    escapeshellarg($creds['DB_USER']),
+    escapeshellarg($creds['DB_PASS']),
+    escapeshellarg($creds['DB_NAME']),
+    escapeshellarg($backupPath)
+);
+exec($dumpCmd, $out, $rc);
+if ($rc !== 0 || !file_exists($backupPath) || filesize($backupPath) < 100) {
+    fwrite(STDERR, "ERROR: 백업 실패 (rc={$rc}). /tmp/qr_dump_err_{$ts}.log 확인.\n");
+    exit(2);
+}
+echo "\n백업: {$backupPath} (" . filesize($backupPath) . " bytes)\n";
+
+// 2) 트랜잭션 UPDATE
+$db->beginTransaction();
+$updated = 0;
+try {
+    $upd = $db->prepare("UPDATE qr_sessions SET lecture_session_id = ?
+                         WHERE id = ? AND lecture_session_id IS NULL");
+    foreach ($toUpdate as $qsId => $lectureId) {
+        $upd->execute([$lectureId, $qsId]);
+        if ($upd->rowCount() > 0) $updated++;
+    }
+    $db->commit();
+} catch (Throwable $e) {
+    $db->rollBack();
+    fwrite(STDERR, "ERROR: UPDATE 실패, 롤백됨: " . $e->getMessage() . "\n");
+    exit(3);
+}
+
+// 3) 백필된 id 목록 저장 (롤백용)
+$logPath = "/tmp/qr_sessions_backfilled_{$ts}.txt";
+file_put_contents($logPath, implode("\n", array_keys($toUpdate)));
+echo "\nAPPLY 완료: {$updated}건 UPDATE.\n";
+echo "백필 id 목록: {$logPath}\n";
+echo "\n롤백 SQL 예시:\n";
+echo "  UPDATE qr_sessions SET lecture_session_id = NULL\n";
+echo "  WHERE id IN (" . implode(',', array_keys($toUpdate)) . ");\n";
+exit(0);
