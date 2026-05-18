@@ -73,7 +73,7 @@ const AdminStudyApp = (() => {
         await loadGroups();
 
         const groupOpts = groups.map(g => `<option value="${g.id}">${App.esc(g.name)}</option>`).join('');
-        const hourOpts = Array.from({ length: 18 }, (_, i) => i + 6)
+        const hourOpts = Array.from({ length: 24 }, (_, i) => i)
             .map(h => `<option value="${String(h).padStart(2, '0')}">${String(h).padStart(2, '0')}시</option>`).join('');
 
         const body = `

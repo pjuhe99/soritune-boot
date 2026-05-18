@@ -16,8 +16,8 @@ const StudyCreate = (() => {
         tomorrow.setDate(tomorrow.getDate() + 1);
         const defaultDate = App.formatDate(tomorrow);
 
-        const hourOpts = Array.from({ length: 18 }, (_, i) => {
-            const h = String(i + 6).padStart(2, '0');
+        const hourOpts = Array.from({ length: 24 }, (_, i) => {
+            const h = String(i).padStart(2, '0');
             return `<option value="${h}">${h}시</option>`;
         }).join('');
 
