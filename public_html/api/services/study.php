@@ -177,8 +177,8 @@ function handleStudySessionCreate($method) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) {
         jsonError('study_date 형식: YYYY-MM-DD');
     }
-    if (!preg_match('/^\d{2}:(00|30)$/', $startTime)) {
-        jsonError('start_time은 00분 또는 30분 단위만 허용됩니다.');
+    if (!preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]$/', $startTime)) {
+        jsonError('start_time 형식: HH:MM (00:00~23:59)');
     }
 
     // 과거 날짜 검증
@@ -565,7 +565,7 @@ function handleAdminStudyCreate($method, $admin) {
     if (!$studyDate || !$startTime) jsonError('study_date, start_time 필요');
     if (!in_array($level, [1, 2])) jsonError('level은 1 또는 2만 가능합니다.');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $studyDate)) jsonError('study_date 형식: YYYY-MM-DD');
-    if (!preg_match('/^\d{2}:(00|30)$/', $startTime)) jsonError('start_time은 00분 또는 30분 단위만 허용됩니다.');
+    if (!preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]$/', $startTime)) jsonError('start_time 형식: HH:MM (00:00~23:59)');
 
     // 과거 시간 체크
     $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));

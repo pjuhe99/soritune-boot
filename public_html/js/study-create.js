@@ -20,6 +20,10 @@ const StudyCreate = (() => {
             const h = String(i).padStart(2, '0');
             return `<option value="${h}">${h}시</option>`;
         }).join('');
+        const minuteOpts = Array.from({ length: 60 }, (_, i) => {
+            const m = String(i).padStart(2, '0');
+            return `<option value="${m}">${m}분</option>`;
+        }).join('');
 
         const body = `
             <div class="form-group">
@@ -40,8 +44,7 @@ const StudyCreate = (() => {
                         ${hourOpts}
                     </select>
                     <select class="form-select" id="create-minute" style="flex:1;">
-                        <option value="00">00분</option>
-                        <option value="30">30분</option>
+                        ${minuteOpts}
                     </select>
                 </div>
             </div>
