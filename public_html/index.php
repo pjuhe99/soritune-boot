@@ -22,18 +22,21 @@
     <link rel="stylesheet" href="/css/member-progress.css<?= v('/css/member-progress.css') ?>">
     <link rel="stylesheet" href="/css/member-shortcuts.css<?= v('/css/member-shortcuts.css') ?>">
     <link rel="stylesheet" href="/css/member-bootees.css<?= v('/css/member-bootees.css') ?>">
+    <link rel="stylesheet" href="/css/member-notices.css<?= v('/css/member-notices.css') ?>">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
     <div id="member-root"></div>
     <script src="/js/toast.js<?= v('/js/toast.js') ?>"></script>
     <script src="/js/common.js<?= v('/js/common.js') ?>"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
     <script src="/js/cohort-chip.js<?= v('/js/cohort-chip.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
     <script src="/js/member-utils.js<?= v('/js/member-utils.js') ?>"></script>
     <script src="/js/member-tabs.js<?= v('/js/member-tabs.js') ?>"></script>
     <script src="/js/member-home.js<?= v('/js/member-home.js') ?>"></script>
+    <script src="/js/member-notices.js<?= v('/js/member-notices.js') ?>"></script>
     <script src="/js/member-coin-history.js<?= v('/js/member-coin-history.js') ?>"></script>
     <script src="/js/member-review.js<?= v('/js/member-review.js') ?>"></script>
     <script src="/js/member-shortcuts.js<?= v('/js/member-shortcuts.js') ?>"></script>

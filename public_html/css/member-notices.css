@@ -1,0 +1,61 @@
+/* MemberNotices — 회원 메인 상단 공지 카드 */
+#member-notices {
+    display: flex; flex-direction: column;
+    gap: 12px;
+    margin: 12px 0 16px;
+    padding: 0 12px;
+}
+
+.member-notice-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.member-notice-title {
+    font-size: 1.02rem;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: #111827;
+    word-break: break-word;
+}
+.member-notice-divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 6px 0 10px;
+}
+.member-notice-body {
+    font-size: 0.94rem;
+    line-height: 1.6;
+    color: #1f2937;
+    word-break: break-word;
+}
+.member-notice-meta {
+    margin-top: 10px;
+    color: #6b7280;
+    font-size: 0.82rem;
+}
+
+/* 마크다운 reset (admin-notices.css 와 동일 — .markdown-body 클래스 재사용) */
+.markdown-body h1 { font-size: 1.25rem; font-weight: 700; margin: 8px 0 4px; }
+.markdown-body h2 { font-size: 1.12rem; font-weight: 700; margin: 8px 0 4px; }
+.markdown-body h3 { font-size: 1.00rem; font-weight: 700; margin: 8px 0 4px; }
+.markdown-body p  { margin: 4px 0; }
+.markdown-body ul, .markdown-body ol { margin: 4px 0; padding-left: 1.4em; }
+.markdown-body li { margin: 2px 0; }
+.markdown-body code {
+    background: #f3f4f6; padding: 1px 5px;
+    border-radius: 4px; font-size: 0.88em;
+}
+.markdown-body pre {
+    background: #f3f4f6; padding: 8px 10px;
+    border-radius: 6px; overflow-x: auto;
+}
+.markdown-body blockquote {
+    border-left: 3px solid #d1d5db;
+    padding: 2px 10px; margin: 6px 0;
+    color: #4b5563;
+}
+.markdown-body a { color: #2563eb; text-decoration: underline; }
+.markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 10px 0; }
