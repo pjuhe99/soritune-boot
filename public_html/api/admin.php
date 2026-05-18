@@ -1253,6 +1253,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
@@ -1271,6 +1272,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
@@ -1288,6 +1290,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))

@@ -1592,9 +1592,10 @@ const AdminApp = (() => {
                             const cohortAttr = encodeURIComponent(g.cohort);
                             const titleAttr  = encodeURIComponent(g.title);
                             const roleAttr   = encodeURIComponent(g.role);
+                            const requiresSubIcon = parseInt(g.requires_submission) === 1 ? '📝 ' : '';
                             return `
                             <tr class="group-row" data-cohort="${cohortAttr}" data-title="${titleAttr}" data-role="${roleAttr}" style="cursor:pointer">
-                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${App.esc(g.title)}</td>
+                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${requiresSubIcon}${App.esc(g.title)}</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
                                 <td>${assigneeLabel(g.assignee_count)}</td>
                                 <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
@@ -1951,12 +1952,28 @@ const AdminApp = (() => {
                 ? '<span class="text-muted">미배정</span>'
                 : App.esc(row.assignee_name || '?');
             const completed = parseInt(row.completed) === 1;
+            const requiresSub = parseInt(row.requires_submission) === 1;
+            const subText = row.submission_text || '';
+            const subAt = row.submitted_at || '';
             const btnLabel  = completed ? '☑ 완료'      : '☐ 완료하기';
             const btnClass  = completed ? 'btn btn-success btn-sm' : 'btn btn-secondary btn-sm';
-            return `<div class="group-row-line" style="display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--gray-100,#eee)">
+
+            const subInline = (requiresSub && subText !== '') ? `
+                <div class="group-row-submission" style="grid-column: 1 / -1; padding:4px 12px 8px 102px; font-size:0.88rem; color:var(--gray-700,#444)">
+                    <div class="task-submission-meta">
+                        📝 <span class="text-muted">${App.esc(subAt)}</span>
+                        <button class="link-btn group-row-toggle-sub" data-task-id="${row.id}">전체 보기</button>
+                        <button class="link-btn group-row-edit-sub" data-task-id="${row.id}">수정</button>
+                    </div>
+                    <div class="task-submission-body collapsed" id="grp-sub-${row.id}">${App.esc(subText).replace(/\n/g, '<br>')}</div>
+                </div>
+            ` : '';
+
+            return `<div class="group-row-line" style="display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--gray-100,#eee)" data-row-id="${row.id}" data-requires-submission="${requiresSub?1:0}">
                 <span style="font-family:monospace">${dateLabel}</span>
                 <span>${assignee}</span>
                 <button class="${btnClass}" data-task-id="${row.id}" data-completed="${completed?1:0}">${btnLabel}</button>
+                ${subInline}
             </div>`;
         }
 
@@ -1988,10 +2005,43 @@ const AdminApp = (() => {
         };
 
         // row 토글 버튼 (Task 4 의 _toggleRowComplete 호출)
-        body.querySelectorAll('button[data-task-id]').forEach(btn => {
+        body.querySelectorAll('button.btn[data-task-id]').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 _toggleRowComplete(parseInt(btn.dataset.taskId, 10), btn);
+            };
+        });
+
+        // 묶음 펼침 row 의 결과물 [전체 보기] 토글
+        body.querySelectorAll('.group-row-toggle-sub').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const el = document.getElementById(`grp-sub-${btn.dataset.taskId}`);
+                if (el) {
+                    el.classList.toggle('collapsed');
+                    btn.textContent = el.classList.contains('collapsed') ? '전체 보기' : '접기';
+                }
+            };
+        });
+
+        // 묶음 펼침 row 의 결과물 [수정]
+        body.querySelectorAll('.group-row-edit-sub').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const taskId = parseInt(btn.dataset.taskId, 10);
+                const bodyEl = document.getElementById(`grp-sub-${taskId}`);
+                const prev = bodyEl ? bodyEl.innerText : '';
+                showSubmissionModal({
+                    taskId,
+                    prefill: prev,
+                    title: '',
+                    onConfirm: async (text) => {
+                        const r = await App.post('/api/admin.php?action=task_submission_update', { task_id: taskId, submission_text: text });
+                        if (r.success) { Toast.success(r.message); _renderGroupExpand(body); }
+                        return r.success;
+                    },
+                    onCancel: () => {},
+                });
             };
         });
     }
@@ -1999,6 +2049,26 @@ const AdminApp = (() => {
     async function _toggleRowComplete(taskId, btn) {
         const wasCompleted = parseInt(btn.dataset.completed, 10) === 1;
         const newCompleted = !wasCompleted;
+        const rowLine = btn.closest('.group-row-line');
+        const requiresSub = rowLine && rowLine.dataset.requiresSubmission === '1';
+
+        if (requiresSub && newCompleted) {
+            const expandBody = btn.closest('.group-expand-body');
+            const existing = document.getElementById(`grp-sub-${taskId}`);
+            const prev = existing ? existing.innerText : '';
+            showSubmissionModal({
+                taskId,
+                prefill: prev,
+                title: '',
+                onConfirm: async (text) => {
+                    const rr = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: true, submission_text: text });
+                    if (rr.success) { Toast.success(rr.message); _renderGroupExpand(expandBody); }
+                    return rr.success;
+                },
+                onCancel: () => {},
+            });
+            return;
+        }
 
         btn.disabled = true;
         const r = await App.post('/api/admin.php?action=toggle_task', {
