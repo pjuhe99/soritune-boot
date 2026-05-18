@@ -20,12 +20,14 @@ const MemberNotices = (() => {
     async function render(rootEl) {
         if (!rootEl) return;
         rootEl.innerHTML = '';
+        rootEl.style.display = 'none';   // 기본은 숨김 (실패/0건 시 공간 안 차지)
         const r = await App.get(API + 'notices');
         if (!r.success) return;
 
         const notices = r.notices || [];
         if (notices.length === 0) return;
 
+        rootEl.style.display = '';  // 카드가 있을 때만 다시 보이게
         rootEl.innerHTML = notices.map(n => `
             <div class="member-notice-card">
                 <h3 class="member-notice-title">${App.esc(n.title)}</h3>
