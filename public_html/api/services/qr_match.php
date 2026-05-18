@@ -28,7 +28,7 @@ function findMatchingLectureSession(
               AND lecture_date = ?
               AND cohort_id = ?
               AND status = 'active'
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
+            ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) ASC
             LIMIT 1
         ");
         $stmt->execute([$adminId, $atDate, $cohortId, $atTime]);
@@ -48,7 +48,7 @@ function findMatchingLectureSession(
               AND lecture_date = ?
               AND cohort_id = ?
               AND status = 'active'
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
+            ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) ASC
             LIMIT 1
         ");
         $stmt->execute([$adminId, $atDate, $cohortId, $atTime]);

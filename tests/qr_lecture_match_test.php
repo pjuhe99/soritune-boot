@@ -127,6 +127,25 @@ try {
     $matched = findMatchingLectureSession($db, $ellaId, $cohortId2);
     t('T5: Tier C 후보 0건이면 NULL', $matched === null, 'got=' . var_export($matched, true));
 
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 T2b: Tier A ORDER BY 시각 근접도 (TIMEDIFF 가드)
+    //   같은 코치 같은 날 강의 2건 (06:00, 12:00). 헬퍼를 11:30 시각으로 호출.
+    //   → 12:00 강의가 더 가까우므로 그것이 매칭되어야 함 (NULL ordering이면 임의 row가 잡힘).
+    // ───────────────────────────────────────────────────────────
+    $insAdmin->execute(['hyun_t2b_' . bin2hex(random_bytes(2)), 'Hyun_T2b', 'sub_coach']);
+    $hyunId = (int)$db->lastInsertId();
+    $insSchedule->execute([$cohortId, $hyunId, 1, '06:00:00', $hyunId]);
+    $schA = (int)$db->lastInsertId();
+    $insSchedule->execute([$cohortId, $hyunId, 1, '12:00:00', $hyunId]);
+    $schB = (int)$db->lastInsertId();
+    $insLecture->execute([$schA, $cohortId, $hyunId, date('Y-m-d'), '06:00:00', '07:00:00', 1, '[T2b] 06:00', 'active']);
+    $lecEarly = (int)$db->lastInsertId();
+    $insLecture->execute([$schB, $cohortId, $hyunId, date('Y-m-d'), '12:00:00', '13:00:00', 1, '[T2b] 12:00', 'active']);
+    $lecLate = (int)$db->lastInsertId();
+
+    $matched = findMatchingLectureSession($db, $hyunId, $cohortId, date('Y-m-d'), '11:30:00');
+    t('T2b: Tier A ORDER BY 시각 근접 (12:00 선택)', $matched === $lecLate, "expected={$lecLate}(12:00), got=" . var_export($matched, true));
+
 } finally {
     $db->rollBack();
 }
