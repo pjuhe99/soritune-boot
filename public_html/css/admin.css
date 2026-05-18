@@ -660,3 +660,57 @@
 .mp-product-row { cursor: pointer; }
 .mp-product-row:hover { background: #f9fafb; }
 .btn-xs { padding: 3px 8px; font-size: 12px; border-radius: 4px; }
+
+/* ── Task 결과물 제출 ── */
+.task-requires-submission-chip {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    font-size: 0.78rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.task-submission-text {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #fffbeb;
+    border-left: 3px solid #fcd34d;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.task-submission-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--gray-600, #666);
+    margin-bottom: 4px;
+}
+
+.task-submission-meta button.link-btn,
+.task-submission-meta button.task-toggle-submission,
+.task-submission-meta button.task-edit-submission {
+    background: none;
+    border: none;
+    color: var(--primary, #3b82f6);
+    cursor: pointer;
+    font-size: 0.82rem;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.task-submission-body {
+    line-height: 1.5;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.task-submission-body.collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

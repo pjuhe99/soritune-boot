@@ -362,12 +362,38 @@ case 'toggle_task':
     $input = getJsonInput();
     $taskId = (int)($input['task_id'] ?? 0);
     $completed = !empty($input['completed']) ? 1 : 0;
+    $submissionText = isset($input['submission_text']) ? trim((string)$input['submission_text']) : null;
 
     if (!$taskId) jsonError('task_id가 필요합니다.');
 
     $db = getDB();
-    $stmt = $db->prepare('UPDATE tasks SET completed = ?, updated_at = NOW() WHERE id = ?');
-    $stmt->execute([$completed, $taskId]);
+
+    // 현재 row 의 requires_submission 조회 (검증용)
+    $check = $db->prepare('SELECT requires_submission FROM tasks WHERE id = ?');
+    $check->execute([$taskId]);
+    $row = $check->fetch();
+    if (!$row) jsonError('해당 task 를 찾을 수 없습니다.', 404);
+
+    if ($completed === 1 && (int)$row['requires_submission'] === 1) {
+        if ($submissionText === null || $submissionText === '') {
+            jsonError('결과물을 입력해주세요.', 400);
+        }
+    }
+
+    if ($completed === 1 && $submissionText !== null && $submissionText !== '') {
+        // 완료 + 텍스트 있음 → 텍스트와 시각 함께 갱신
+        $stmt = $db->prepare('
+            UPDATE tasks
+               SET completed = 1, submission_text = ?, submitted_at = NOW(), updated_at = NOW()
+             WHERE id = ?
+        ');
+        $stmt->execute([$submissionText, $taskId]);
+    } else {
+        // 미완료 또는 (완료 + 텍스트 없음 + requires_submission=0) → completed 만 갱신, 텍스트 보존
+        $stmt = $db->prepare('UPDATE tasks SET completed = ?, updated_at = NOW() WHERE id = ?');
+        $stmt->execute([$completed, $taskId]);
+    }
+
     jsonSuccess([], $completed ? '완료 처리되었습니다.' : '미완료로 변경되었습니다.');
     break;
 
@@ -1195,7 +1221,7 @@ case 'task_group_get':
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT title, content_markdown
+        SELECT title, content_markdown, requires_submission
           FROM tasks
          WHERE cohort = ? AND title = ? AND role = ?
          ORDER BY start_date ASC
@@ -1207,6 +1233,7 @@ case 'task_group_get':
     jsonSuccess([
         'title' => $row['title'],
         'content_markdown' => $row['content_markdown'],
+        'requires_submission' => (int)$row['requires_submission'],
     ]);
     break;
 
@@ -1226,6 +1253,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
@@ -1244,6 +1272,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
@@ -1261,6 +1290,7 @@ case 'all_tasks_grouped':
                    SUM(t.completed)                        AS done_count,
                    MIN(t.start_date)                       AS min_start_date,
                    MAX(t.end_date)                         AS max_end_date,
+                   MAX(t.requires_submission)              AS requires_submission,
                    COUNT(DISTINCT CASE
                            WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
                            THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
@@ -1284,16 +1314,17 @@ case 'task_group_update':
     $role     = trim($input['role']   ?? '');
     $newTitle = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
+    $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
     if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
     if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
 
     $db = getDB();
     $stmt = $db->prepare("
         UPDATE tasks
-           SET title = ?, content_markdown = ?
+           SET title = ?, content_markdown = ?, requires_submission = ?
          WHERE cohort = ? AND title = ? AND role = ?
     ");
-    $stmt->execute([$newTitle, $newContent ?: null, $cohort, $title, $role]);
+    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $role]);
     jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
     break;
 
@@ -1341,7 +1372,7 @@ case 'task_group_rows':
     $where  = "WHERE t.cohort = ? AND t.title = ? AND t.role = ?";
     $params = [$cohort, $title, $role];
     if ($onlyIncomplete) $where .= " AND t.completed = 0";
-    if ($onlyUntilToday) $where .= " AND t.end_date <= CURDATE()";
+    if ($onlyUntilToday) $where .= " AND t.start_date <= CURDATE()";
 
     $db = getDB();
     $sql = "
@@ -1349,6 +1380,9 @@ case 'task_group_rows':
                t.start_date,
                t.end_date,
                t.completed,
+               t.requires_submission,
+               t.submission_text,
+               t.submitted_at,
                COALESCE(a.name, bm.real_name) AS assignee_name,
                CASE
                  WHEN t.assignee_admin_id  IS NOT NULL THEN 'admin'
@@ -1376,6 +1410,34 @@ case 'task_group_rows':
     ]);
     break;
 
+case 'task_submission_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin();
+    $input = getJsonInput();
+    $taskId = (int)($input['task_id'] ?? 0);
+    $submissionText = isset($input['submission_text']) ? trim((string)$input['submission_text']) : '';
+
+    if (!$taskId) jsonError('task_id가 필요합니다.', 400);
+    if ($submissionText === '') jsonError('결과물을 입력해주세요.', 400);
+
+    $db = getDB();
+    $check = $db->prepare('SELECT requires_submission FROM tasks WHERE id = ?');
+    $check->execute([$taskId]);
+    $row = $check->fetch();
+    if (!$row) jsonError('해당 task 를 찾을 수 없습니다.', 404);
+    if ((int)$row['requires_submission'] !== 1) {
+        jsonError('이 task 는 결과물 제출 대상이 아닙니다.', 400);
+    }
+
+    $stmt = $db->prepare('
+        UPDATE tasks
+           SET submission_text = ?, submitted_at = NOW(), updated_at = NOW()
+         WHERE id = ?
+    ');
+    $stmt->execute([$submissionText, $taskId]);
+    jsonSuccess([], '결과물이 수정되었습니다.');
+    break;
+
 // ── Task CRUD (operation only for create/update/delete) ─────
 
 case 'task_create':
@@ -1387,6 +1449,7 @@ case 'task_create':
     $content  = trim($input['content_markdown'] ?? '') ?: null;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $dateMode = $input['date_mode'] ?? 'direct';
+    $requiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
 
     if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
 
@@ -1459,8 +1522,8 @@ case 'task_create':
         jsonError('올바르지 않은 날짜 설정 방식입니다.');
     }
 
-    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     $createdCount = 0;
 
     // Get cohort_id for bootcamp_members lookup
@@ -1495,12 +1558,12 @@ case 'task_create':
             }
 
             if (empty($assignees)) {
-                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort]);
+                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort, $requiresSubmission]);
                 $createdCount++;
             } else {
                 $ins = $isMemberRole ? $insertMemberStmt : $insertAdminStmt;
                 foreach ($assignees as $a) {
-                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort]);
+                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort, $requiresSubmission]);
                     $createdCount++;
                 }
             }

@@ -893,8 +893,27 @@ const AdminApp = (() => {
     function renderTaskCard(task, isOverdue = false) {
         const completed = parseInt(task.completed);
         const hasContent = !!task.content_markdown;
+        const requiresSub = parseInt(task.requires_submission) === 1;
+        const submissionText = task.submission_text || '';
+        const submittedAt = task.submitted_at || '';
+        const hasSubmission = completed && requiresSub && submissionText !== '';
+
+        const requiresChip = requiresSub
+            ? `<span class="badge task-requires-submission-chip">📝 결과물</span>`
+            : '';
+        const submissionInline = hasSubmission ? `
+            <div class="task-submission-text" id="task-sub-${task.id}">
+                <div class="task-submission-meta">
+                    📝 ${App.esc(submittedAt)}
+                    <button class="task-toggle-submission" data-task-id="${task.id}">전체 보기</button>
+                    <button class="task-edit-submission" data-task-id="${task.id}">수정</button>
+                </div>
+                <div class="task-submission-body collapsed">${App.esc(submissionText).replace(/\n/g, '<br>')}</div>
+            </div>
+        ` : '';
+
         return `
-            <div class="task-card ${completed ? 'completed' : ''} ${isOverdue && !completed ? 'overdue' : ''}" data-id="${task.id}">
+            <div class="task-card ${completed ? 'completed' : ''} ${isOverdue && !completed ? 'overdue' : ''}" data-id="${task.id}" data-requires-submission="${requiresSub ? 1 : 0}">
                 <div class="task-top">
                     <input type="checkbox" class="task-checkbox" ${completed ? 'checked' : ''} data-task-id="${task.id}">
                     <div class="task-info">
@@ -903,19 +922,90 @@ const AdminApp = (() => {
                             <span>${task.start_date} ~ ${task.end_date}</span>
                             ${task.assignee_name ? `<span class="badge badge-primary">${App.esc(task.assignee_name)}</span>` : ''}
                             ${isOperation() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
+                            ${requiresChip}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
                         </div>
                         ${hasContent ? `<div class="task-content collapsed" id="task-content-${task.id}">${renderMarkdown(task.content_markdown)}</div>` : ''}
+                        ${submissionInline}
                     </div>
                 </div>
             </div>
         `;
     }
 
+    // 카드/펼침 row 에서 기존 submission 텍스트 추출 (T11 묶음 펼침에서도 재사용)
+    function _readSubmissionText(scope) {
+        return scope?.querySelector('.task-submission-body')?.innerText || '';
+    }
+
+    // ── 결과물 제출 입력 모달 ──
+    function showSubmissionModal({ taskId, prefill, title, onConfirm, onCancel }) {
+        const safeTitle = App.esc(title || '');
+        const safeText = App.esc(prefill || '');
+        const body = `
+            <div class="form-group">
+                <p class="text-muted" style="font-size:0.9rem;margin:0 0 8px">${safeTitle}</p>
+                <label class="form-label">결과물 *</label>
+                <textarea class="form-textarea" id="sub-text" rows="6" style="resize:vertical" placeholder="처리한 내용 / 결과 / 회고를 자유롭게 입력">${safeText}</textarea>
+                <p class="text-muted" style="font-size:0.8rem;margin-top:4px">* 운영자 검토용으로 저장됩니다.</p>
+            </div>
+        `;
+        const footer = `
+            <button class="btn btn-secondary" id="sub-cancel">취소</button>
+            <button class="btn btn-primary" id="sub-save">저장</button>
+        `;
+        App.openModal('결과물 제출', body, footer);
+
+        const ta = document.getElementById('sub-text');
+        const saveBtn = document.getElementById('sub-save');
+        const cancelBtn = document.getElementById('sub-cancel');
+        const update = () => { saveBtn.disabled = ta.value.trim() === ''; };
+        ta.oninput = update; update();
+        ta.focus();
+
+        let confirmed = false;
+        const triggerCancel = () => { if (!confirmed) onCancel(); };
+        const overlay = document.getElementById('app-modal');
+        const xBtn = overlay?.querySelector('.modal-close');
+        overlay?.addEventListener('click', (e) => { if (e.target === overlay) triggerCancel(); });
+        xBtn?.addEventListener('click', triggerCancel);
+
+        saveBtn.onclick = async () => {
+            const text = ta.value.trim();
+            if (text === '') { Toast.warning('결과물을 입력해주세요.'); return; }
+            saveBtn.disabled = true;
+            const ok = await onConfirm(text);
+            saveBtn.disabled = false;
+            if (ok) { confirmed = true; App.closeModal(); }
+        };
+        cancelBtn.onclick = () => { triggerCancel(); App.closeModal(); };
+    }
+
     function bindTaskEvents(container) {
         container.querySelectorAll('.task-checkbox').forEach(cb => {
             cb.onchange = async () => {
                 const taskId = parseInt(cb.dataset.taskId);
+                const card = cb.closest('.task-card');
+                const requiresSub = card && card.dataset.requiresSubmission === '1';
+
+                if (requiresSub && cb.checked) {
+                    // 모달 → toggle_task with submission_text
+                    const prevText = _readSubmissionText(card);
+                    showSubmissionModal({
+                        taskId,
+                        prefill: prevText,
+                        title: card.querySelector('.task-title')?.textContent || '',
+                        onConfirm: async (text) => {
+                            const r = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: true, submission_text: text });
+                            if (r.success) { Toast.success(r.message); loadTodayTasks(); loadOverdueTasks(); }
+                            return r.success;
+                        },
+                        onCancel: () => { cb.checked = false; },
+                    });
+                    return;
+                }
+
+                // 기존 즉시 toggle (requires_submission=0 또는 uncheck)
                 const r = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: cb.checked });
                 if (r.success) {
                     Toast.success(r.message);
@@ -932,6 +1022,36 @@ const AdminApp = (() => {
                     el.classList.toggle('collapsed');
                     btn.textContent = el.classList.contains('collapsed') ? '내용 보기' : '내용 접기';
                 }
+            };
+        });
+
+        container.querySelectorAll('.task-toggle-submission').forEach(btn => {
+            btn.onclick = () => {
+                const wrap = document.getElementById(`task-sub-${btn.dataset.taskId}`);
+                const body = wrap?.querySelector('.task-submission-body');
+                if (body) {
+                    body.classList.toggle('collapsed');
+                    btn.textContent = body.classList.contains('collapsed') ? '전체 보기' : '접기';
+                }
+            };
+        });
+
+        container.querySelectorAll('.task-edit-submission').forEach(btn => {
+            btn.onclick = async () => {
+                const taskId = parseInt(btn.dataset.taskId);
+                const wrap = document.getElementById(`task-sub-${taskId}`);
+                const prev = _readSubmissionText(wrap);
+                showSubmissionModal({
+                    taskId,
+                    prefill: prev,
+                    title: btn.closest('.task-card')?.querySelector('.task-title')?.textContent || '',
+                    onConfirm: async (text) => {
+                        const r = await App.post('/api/admin.php?action=task_submission_update', { task_id: taskId, submission_text: text });
+                        if (r.success) { Toast.success(r.message); loadTodayTasks(); loadOverdueTasks(); }
+                        return r.success;
+                    },
+                    onCancel: () => {},
+                });
             };
         });
     }
@@ -1472,9 +1592,10 @@ const AdminApp = (() => {
                             const cohortAttr = encodeURIComponent(g.cohort);
                             const titleAttr  = encodeURIComponent(g.title);
                             const roleAttr   = encodeURIComponent(g.role);
+                            const requiresSubIcon = parseInt(g.requires_submission) === 1 ? '📝 ' : '';
                             return `
                             <tr class="group-row" data-cohort="${cohortAttr}" data-title="${titleAttr}" data-role="${roleAttr}" style="cursor:pointer">
-                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${App.esc(g.title)}</td>
+                                <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${requiresSubIcon}${App.esc(g.title)}</td>
                                 <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
                                 <td>${assigneeLabel(g.assignee_count)}</td>
                                 <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
@@ -1605,6 +1726,7 @@ const AdminApp = (() => {
             </div>
         `;
 
+        const reqSubChecked = data.requires_submission === 1 || data.requires_submission === '1' ? 'checked' : '';
         const body = `
             <div class="form-group">
                 <label class="form-label">제목 *</label>
@@ -1618,6 +1740,12 @@ const AdminApp = (() => {
             <div class="form-group">
                 <label class="form-label">내용</label>
                 <textarea class="form-textarea" id="tf-content" rows="4" style="resize:vertical">${App.esc(data.content_markdown || '')}</textarea>
+            </div>
+            <div class="form-group">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="tf-requires-submission" ${reqSubChecked}>
+                    <span>📝 결과물 제출 필수 (완료 체크 시 텍스트 입력 강제)</span>
+                </label>
             </div>
         `;
         const footer = `
@@ -1642,6 +1770,7 @@ const AdminApp = (() => {
             const payload = {
                 title: document.getElementById('tf-title').value.trim(),
                 content_markdown: document.getElementById('tf-content').value.trim(),
+                requires_submission: document.getElementById('tf-requires-submission').checked ? 1 : 0,
             };
 
             if (isEdit) {
@@ -1712,6 +1841,7 @@ const AdminApp = (() => {
             groupKey: { cohort, title, role },
             title: single.title,
             content_markdown: single.content_markdown,
+            requires_submission: parseInt(single.requires_submission) || 0,
             periodLabel,
             totalCount: parseInt(g.total_count) || 0,
             doneCount:  parseInt(g.done_count)  || 0,
@@ -1822,12 +1952,28 @@ const AdminApp = (() => {
                 ? '<span class="text-muted">미배정</span>'
                 : App.esc(row.assignee_name || '?');
             const completed = parseInt(row.completed) === 1;
+            const requiresSub = parseInt(row.requires_submission) === 1;
+            const subText = row.submission_text || '';
+            const subAt = row.submitted_at || '';
             const btnLabel  = completed ? '☑ 완료'      : '☐ 완료하기';
             const btnClass  = completed ? 'btn btn-success btn-sm' : 'btn btn-secondary btn-sm';
-            return `<div class="group-row-line" style="display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--gray-100,#eee)">
+
+            const subInline = (requiresSub && subText !== '') ? `
+                <div class="group-row-submission" style="grid-column: 1 / -1; padding:4px 12px 8px 102px; font-size:0.88rem; color:var(--gray-700,#444)">
+                    <div class="task-submission-meta">
+                        📝 <span class="text-muted">${App.esc(subAt)}</span>
+                        <button class="link-btn group-row-toggle-sub" data-task-id="${row.id}">전체 보기</button>
+                        <button class="link-btn group-row-edit-sub" data-task-id="${row.id}">수정</button>
+                    </div>
+                    <div class="task-submission-body collapsed" id="grp-sub-${row.id}">${App.esc(subText).replace(/\n/g, '<br>')}</div>
+                </div>
+            ` : '';
+
+            return `<div class="group-row-line" style="display:grid;grid-template-columns:90px 1fr auto;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--gray-100,#eee)" data-row-id="${row.id}" data-requires-submission="${requiresSub?1:0}">
                 <span style="font-family:monospace">${dateLabel}</span>
                 <span>${assignee}</span>
                 <button class="${btnClass}" data-task-id="${row.id}" data-completed="${completed?1:0}">${btnLabel}</button>
+                ${subInline}
             </div>`;
         }
 
@@ -1859,10 +2005,43 @@ const AdminApp = (() => {
         };
 
         // row 토글 버튼 (Task 4 의 _toggleRowComplete 호출)
-        body.querySelectorAll('button[data-task-id]').forEach(btn => {
+        body.querySelectorAll('button.btn[data-task-id]').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 _toggleRowComplete(parseInt(btn.dataset.taskId, 10), btn);
+            };
+        });
+
+        // 묶음 펼침 row 의 결과물 [전체 보기] 토글
+        body.querySelectorAll('.group-row-toggle-sub').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const el = document.getElementById(`grp-sub-${btn.dataset.taskId}`);
+                if (el) {
+                    el.classList.toggle('collapsed');
+                    btn.textContent = el.classList.contains('collapsed') ? '전체 보기' : '접기';
+                }
+            };
+        });
+
+        // 묶음 펼침 row 의 결과물 [수정]
+        body.querySelectorAll('.group-row-edit-sub').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const taskId = parseInt(btn.dataset.taskId, 10);
+                const bodyEl = document.getElementById(`grp-sub-${taskId}`);
+                const prev = bodyEl ? bodyEl.innerText : '';
+                showSubmissionModal({
+                    taskId,
+                    prefill: prev,
+                    title: '',
+                    onConfirm: async (text) => {
+                        const r = await App.post('/api/admin.php?action=task_submission_update', { task_id: taskId, submission_text: text });
+                        if (r.success) { Toast.success(r.message); _renderGroupExpand(body); }
+                        return r.success;
+                    },
+                    onCancel: () => {},
+                });
             };
         });
     }
@@ -1870,6 +2049,26 @@ const AdminApp = (() => {
     async function _toggleRowComplete(taskId, btn) {
         const wasCompleted = parseInt(btn.dataset.completed, 10) === 1;
         const newCompleted = !wasCompleted;
+        const rowLine = btn.closest('.group-row-line');
+        const requiresSub = rowLine && rowLine.dataset.requiresSubmission === '1';
+
+        if (requiresSub && newCompleted) {
+            const expandBody = btn.closest('.group-expand-body');
+            const existing = document.getElementById(`grp-sub-${taskId}`);
+            const prev = existing ? existing.innerText : '';
+            showSubmissionModal({
+                taskId,
+                prefill: prev,
+                title: '',
+                onConfirm: async (text) => {
+                    const rr = await App.post('/api/admin.php?action=toggle_task', { task_id: taskId, completed: true, submission_text: text });
+                    if (rr.success) { Toast.success(rr.message); _renderGroupExpand(expandBody); }
+                    return rr.success;
+                },
+                onCancel: () => {},
+            });
+            return;
+        }
 
         btn.disabled = true;
         const r = await App.post('/api/admin.php?action=toggle_task', {

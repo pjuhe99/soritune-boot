@@ -44,6 +44,14 @@ try {
     $ins->execute(['__inv_grp_a', 1, '2099-02-04', '2099-02-04', $cohort]);
     $ins->execute(['__inv_grp_b', 0, '2099-02-01', '2099-02-01', $cohort]);
 
+    // requires_submission 묶음 (INV-S2 회귀)
+    $insSub = $db->prepare("
+        INSERT INTO tasks (title, role, assignee_admin_id, completed, requires_submission, start_date, end_date, content_markdown, cohort)
+        VALUES (?, 'operation', NULL, ?, ?, ?, ?, 'cs', ?)
+    ");
+    $insSub->execute(['__inv_grp_sub', 0, 1, '2099-02-10', '2099-02-10', $cohort]);
+    $insSub->execute(['__inv_grp_sub', 0, 1, '2099-02-11', '2099-02-11', $cohort]);
+
     // ── INV-1: group_update 시뮬레이트 — title 변경이 다른 그룹에 영향 없음 ──
     $db->prepare("
         UPDATE tasks SET title = '__inv_grp_a_v2', content_markdown = 'c2'
@@ -90,6 +98,16 @@ try {
         if ($r['title'] === '__inv_today') { $found = true; break; }
     }
     t('INV-3 today_tasks row 단위 응답 정상', $found);
+
+    // ── INV-S2: __inv_grp_sub 묶음 안 requires_submission 일관 ──
+    $mixed = $db->prepare("
+        SELECT MIN(requires_submission) AS mn, MAX(requires_submission) AS mx
+          FROM tasks
+         WHERE cohort = ? AND title = '__inv_grp_sub' AND role = 'operation'
+    ");
+    $mixed->execute([$cohort]);
+    $m = $mixed->fetch();
+    t('INV-S2 fixture 묶음 안 requires_submission 일관', (int)$m['mn'] === 1 && (int)$m['mx'] === 1);
 } finally {
     // ── Cleanup ─────────────────────────────────────
     $db->prepare("DELETE FROM tasks WHERE title LIKE '__inv_grp%' OR title = '__inv_today'")->execute();
