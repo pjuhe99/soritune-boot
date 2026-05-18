@@ -1372,7 +1372,7 @@ case 'task_group_rows':
     $where  = "WHERE t.cohort = ? AND t.title = ? AND t.role = ?";
     $params = [$cohort, $title, $role];
     if ($onlyIncomplete) $where .= " AND t.completed = 0";
-    if ($onlyUntilToday) $where .= " AND t.end_date <= CURDATE()";
+    if ($onlyUntilToday) $where .= " AND t.start_date <= CURDATE()";
 
     $db = getDB();
     $sql = "
