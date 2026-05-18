@@ -16,6 +16,7 @@
 
 require_once __DIR__ . '/public_html/config.php';
 require_once __DIR__ . '/public_html/includes/coin_functions.php';
+require_once __DIR__ . '/public_html/includes/bootcamp_functions.php';
 
 $dryRun = in_array('--dry-run', $argv);
 $date   = null;
