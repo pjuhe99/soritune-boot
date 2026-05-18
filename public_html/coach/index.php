@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
     <link rel="stylesheet" href="/css/common.css<?= v('/css/common.css') ?>">
     <link rel="stylesheet" href="/css/admin.css<?= v('/css/admin.css') ?>">
+    <link rel="stylesheet" href="/css/admin-notices.css<?= v('/css/admin-notices.css') ?>">
     <link rel="stylesheet" href="/css/bootcamp.css<?= v('/css/bootcamp.css') ?>">
     <link rel="stylesheet" href="/css/calendar.css<?= v('/css/calendar.css') ?>">
     <link rel="stylesheet" href="/css/lecture.css<?= v('/css/lecture.css') ?>">
@@ -30,6 +31,7 @@
     <script src="/js/curriculum.js<?= v('/js/curriculum.js') ?>"></script>
     <script src="/js/cohort-chip.js<?= v('/js/cohort-chip.js') ?>"></script>
     <script src="/js/admin.js<?= v('/js/admin.js') ?>"></script>
+    <script src="/js/admin-notices.js<?= v('/js/admin-notices.js') ?>"></script>
     <script src="/js/coin.js<?= v('/js/coin.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <script src="/js/admin-study.js<?= v('/js/admin-study.js') ?>"></script>

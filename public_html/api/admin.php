@@ -14,6 +14,7 @@ require_once __DIR__ . '/services/retention.php';
 require_once __DIR__ . '/../includes/multipass/multipass_repo.php';
 require_once __DIR__ . '/../includes/multipass/multipass_csv_parser.php';
 require_once __DIR__ . '/../includes/multipass/multipass_bulk.php';
+require_once __DIR__ . '/services/notice.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -2173,6 +2174,93 @@ case 'multipass_bulk_apply':
     } catch (InvalidArgumentException $e) {
         jsonError($e->getMessage());
     }
+    break;
+
+// ── Notices ────────────────────────────────────────────────
+
+case 'notice_list':
+    $admin = requireAdmin(['coach','sub_coach','head','subhead1','subhead2','operation']);
+    if ($method !== 'GET') jsonError('GET만 허용됩니다.', 405);
+    $cohortId = isset($_GET['cohort_id']) ? (int)$_GET['cohort_id'] : null;
+    $cohortId = resolveAdminCohortId($cohortId, $admin);
+    if (!$cohortId) jsonError('cohort_id 가 결정되지 않았습니다.');
+    $rows = noticeListAdmin(getDB(), $cohortId);
+    jsonSuccess(['notices' => $rows, 'cohort_id' => $cohortId]);
+    break;
+
+case 'notice_create':
+    $admin = requireAdmin(['coach','sub_coach','head','subhead1','subhead2','operation']);
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $cohortId = isset($input['cohort_id']) ? (int)$input['cohort_id'] : null;
+    $cohortId = resolveAdminCohortId($cohortId, $admin);
+    if (!$cohortId) jsonError('cohort_id 가 결정되지 않았습니다.');
+    $title  = (string)($input['title'] ?? '');
+    $body   = (string)($input['body_markdown'] ?? '');
+    $isVis  = isset($input['is_visible']) ? (int)$input['is_visible'] : 1;
+    try {
+        $id = noticeCreate(
+            getDB(),
+            $cohortId,
+            (int)$admin['admin_id'],
+            (string)$admin['admin_name'],
+            $title, $body, $isVis
+        );
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage(), 400);
+    }
+    jsonSuccess(['id' => $id]);
+    break;
+
+case 'notice_update':
+    $admin = requireAdmin(['coach','sub_coach','head','subhead1','subhead2','operation']);
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    if (!$id) jsonError('id가 필요합니다.');
+    $cohortId = resolveAdminCohortId(null, $admin);
+    if (!$cohortId) jsonError('cohort_id 가 결정되지 않았습니다.');
+    $title = (string)($input['title'] ?? '');
+    $body  = (string)($input['body_markdown'] ?? '');
+    try {
+        noticeUpdate(getDB(), $cohortId, $id, $title, $body);
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage(), 400);
+    }
+    jsonSuccess(['ok' => true]);
+    break;
+
+case 'notice_toggle_visible':
+    $admin = requireAdmin(['coach','sub_coach','head','subhead1','subhead2','operation']);
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    if (!$id) jsonError('id가 필요합니다.');
+    $isVis = isset($input['is_visible']) ? (int)$input['is_visible'] : -1;
+    $cohortId = resolveAdminCohortId(null, $admin);
+    if (!$cohortId) jsonError('cohort_id 가 결정되지 않았습니다.');
+    try {
+        $newV = noticeToggleVisible(getDB(), $cohortId, $id, $isVis);
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage(), 400);
+    }
+    jsonSuccess(['ok' => true, 'is_visible' => $newV]);
+    break;
+
+case 'notice_delete':
+    $admin = requireAdmin(['coach','sub_coach','head','subhead1','subhead2','operation']);
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $input = getJsonInput();
+    $id = isset($input['id']) ? (int)$input['id'] : 0;
+    if (!$id) jsonError('id가 필요합니다.');
+    $cohortId = resolveAdminCohortId(null, $admin);
+    if (!$cohortId) jsonError('cohort_id 가 결정되지 않았습니다.');
+    try {
+        noticeDelete(getDB(), $cohortId, $id);
+    } catch (InvalidArgumentException $e) {
+        jsonError($e->getMessage(), 400);
+    }
+    jsonSuccess(['ok' => true]);
     break;
 
 // ── Default ─────────────────────────────────────────────────

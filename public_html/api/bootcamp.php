@@ -30,6 +30,7 @@ require_once __DIR__ . '/services/entrance.php';
 require_once __DIR__ . '/services/attendance.php';
 require_once __DIR__ . '/services/review.php';
 require_once __DIR__ . '/services/notify.php';
+require_once __DIR__ . '/services/notice.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -378,6 +379,20 @@ case 'notify_send_now':       handleNotifySendNow($method); break;
 case 'notify_list_batches':   handleNotifyListBatches(); break;
 case 'notify_batch_detail':   handleNotifyBatchDetail(); break;
 case 'notify_retry_failed':   handleNotifyRetryFailed($method); break;
+
+// ── Notices (공지사항 - 회원) ────────────────────────────────
+
+case 'notices':
+    $member = requireMember();
+    if ($method !== 'GET') jsonError('GET만 허용됩니다.', 405);
+    $db = getDB();
+    $stmt = $db->prepare("SELECT cohort_id FROM bootcamp_members WHERE id = ?");
+    $stmt->execute([(int)$member['member_id']]);
+    $cohortId = (int)$stmt->fetchColumn();
+    if (!$cohortId) jsonError('cohort_id 가 없습니다.');
+    $rows = noticeListMember($db, $cohortId);
+    jsonSuccess(['notices' => $rows]);
+    break;
 
 // ──────────────────────────────────────────────────────────────
 

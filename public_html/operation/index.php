@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/css/calendar.css<?= v('/css/calendar.css') ?>">
     <link rel="stylesheet" href="/css/lecture.css<?= v('/css/lecture.css') ?>">
     <link rel="stylesheet" href="/css/admin-issues.css<?= v('/css/admin-issues.css') ?>">
+    <link rel="stylesheet" href="/css/admin-notices.css<?= v('/css/admin-notices.css') ?>">
     <link rel="stylesheet" href="/css/bulk-register.css<?= v('/css/bulk-register.css') ?>">
     <link rel="stylesheet" href="/css/notify.css<?= v('/css/notify.css') ?>">
     <link rel="stylesheet" href="/css/retention.css<?= v('/css/retention.css') ?>">
@@ -41,6 +42,7 @@
     <script src="/js/admin-study.js<?= v('/js/admin-study.js') ?>"></script>
     <script src="/js/lecture.js<?= v('/js/lecture.js') ?>"></script>
     <script src="/js/admin-issues.js<?= v('/js/admin-issues.js') ?>"></script>
+    <script src="/js/admin-notices.js<?= v('/js/admin-notices.js') ?>"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="/js/bulk-register.js<?= v('/js/bulk-register.js') ?>"></script>
     <script src="/js/admin-reviews.js<?= v('/js/admin-reviews.js') ?>"></script>
