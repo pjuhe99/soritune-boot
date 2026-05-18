@@ -190,6 +190,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-guides-mgmt" data-hash="guides">가이드 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                             <button class="tab" data-tab="#tab-issues" data-hash="issues">오류 문의</button>
+                            <button class="tab" data-tab="#tab-notices" data-hash="notices">공지</button>
                             <button class="tab" data-tab="#tab-bulk-register" data-hash="bulk-register">일괄 등록</button>
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
                             <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
@@ -214,6 +215,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-guides-mgmt"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
                         <div class="tab-content" id="tab-issues"></div>
+                        <div class="tab-content" id="tab-notices"></div>
                         <div class="tab-content" id="tab-bulk-register"></div>
                         <div class="tab-content" id="bc-tab-study"></div>
                         <div class="tab-content" id="tab-reviews"></div>
@@ -239,6 +241,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#bc-tab-group-assign" data-hash="group-assign">조 배정</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
+                            <button class="tab" data-tab="#tab-notices-coach" data-hash="notices">공지</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-qr"></div>
@@ -254,6 +257,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="bc-tab-group-assign"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
                         <div class="tab-content" id="bc-tab-study"></div>
+                        <div class="tab-content" id="tab-notices-coach"></div>
                     </div>
                     </div>
                     ` : (role === 'leader' || role === 'subleader') ? `
@@ -291,6 +295,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-head-lectures" data-hash="lectures">특강 관리</button>
                             <button class="tab" data-tab="#tab-curriculum" data-hash="curriculum">진도 관리</button>
                             <button class="tab" data-tab="#bc-tab-study" data-hash="study">복습스터디</button>
+                            <button class="tab" data-tab="#tab-notices-head" data-hash="notices">공지</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
@@ -306,6 +311,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-head-lectures"></div>
                         <div class="tab-content" id="tab-curriculum"></div>
                         <div class="tab-content" id="bc-tab-study"></div>
+                        <div class="tab-content" id="tab-notices-head"></div>
                     </div>
                     </div>
                     `}
@@ -527,6 +533,25 @@ const AdminApp = (() => {
                         }
                     });
                     issueObserver.observe(issueTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // Notices 탭 lazy load (operation/coach/head 공통)
+            if (typeof AdminNotices !== 'undefined') {
+                const noticesTabId = role === 'operation' ? 'tab-notices'
+                                   : role === 'coach'     ? 'tab-notices-coach'
+                                   : (role === 'head' ? 'tab-notices-head' : null);
+                if (noticesTabId) {
+                    const noticesTab = document.getElementById(noticesTabId);
+                    if (noticesTab) {
+                        const noticesObserver = new MutationObserver(() => {
+                            if (noticesTab.classList.contains('active') && !noticesTab.dataset.loaded) {
+                                noticesTab.dataset.loaded = '1';
+                                AdminNotices.init(noticesTab, admin);
+                            }
+                        });
+                        noticesObserver.observe(noticesTab, { attributes: true, attributeFilter: ['class'] });
+                    }
                 }
             }
 
