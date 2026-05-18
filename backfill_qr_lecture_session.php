@@ -152,7 +152,8 @@ foreach (file(__DIR__ . '/.db_credentials', FILE_IGNORE_NEW_LINES | FILE_SKIP_EM
     }
 }
 $dumpCmd = sprintf(
-    "mysqldump -u %s -p%s %s qr_sessions > %s 2>/tmp/qr_dump_err_{$ts}.log",
+    "mysqldump -h %s -u %s -p%s %s qr_sessions > %s 2>/tmp/qr_dump_err_{$ts}.log",
+    escapeshellarg($creds['DB_HOST']),
     escapeshellarg($creds['DB_USER']),
     escapeshellarg($creds['DB_PASS']),
     escapeshellarg($creds['DB_NAME']),
