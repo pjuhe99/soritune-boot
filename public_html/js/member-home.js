@@ -65,9 +65,14 @@ const MemberHome = (() => {
                     </div>
                 </div>
             </div>
+            <div id="member-notices"></div>
             <div id="member-curriculum-section"></div>
             <div id="member-shortcuts-section"></div>
         `;
+
+        if (typeof MemberNotices !== 'undefined') {
+            MemberNotices.render(document.getElementById('member-notices'));
+        }
 
         headerEl.querySelectorAll('.cur-help-btn[data-guide]').forEach(btn => {
             btn.onclick = () => showGuide(btn.dataset.guide);
