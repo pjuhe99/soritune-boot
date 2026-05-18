@@ -37,6 +37,8 @@ function findMatchingLectureSession(
     }
 
     // ── Tier B: 동일 이름 admin 그룹 매칭 ────────────────────
+    // Tier C 와 동일한 ±60분 시각 가드 — admin 매칭만 되고 시각이 멀리 떨어진
+    // (그 코치의 다른 시간대 강의) 케이스는 NULL 유지하고 Tier C 진입.
     if ($adminId > 0) {
         $stmt = $db->prepare("
             SELECT id FROM lecture_sessions
@@ -48,10 +50,11 @@ function findMatchingLectureSession(
               AND lecture_date = ?
               AND cohort_id = ?
               AND status = 'active'
+              AND ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) / 60 <= 60
             ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) ASC
             LIMIT 1
         ");
-        $stmt->execute([$adminId, $atDate, $cohortId, $atTime]);
+        $stmt->execute([$adminId, $atDate, $cohortId, $atTime, $atTime]);
         $id = $stmt->fetchColumn();
         if ($id !== false) return (int)$id;
     }

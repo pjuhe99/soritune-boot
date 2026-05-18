@@ -91,6 +91,8 @@ LIMIT 1
 
 Tier A 가 0건일 때만 실행. 조건: `$admin['admin_id'] > 0`.
 
+Tier B 도 Tier C 와 동일한 ±60분 시각 가드 — admin 매칭만 되고 시각이 멀리 떨어진 (그 코치의 다른 시간대 강의) 케이스는 NULL 유지하고 Tier C 진입.
+
 ```sql
 SELECT id FROM lecture_sessions
 WHERE coach_admin_id IN (
@@ -101,11 +103,13 @@ WHERE coach_admin_id IN (
   AND lecture_date = :atDate
   AND cohort_id = :cohortId
   AND status = 'active'
-ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, :atTime)) ASC
+  AND ABS(TIME_TO_SEC(TIMEDIFF(start_time, :atTime))) / 60 <= 60
+ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, :atTime))) ASC
 LIMIT 1
 ```
 
 - `role` 가드: 코치 권한 5종으로 제한하여 동명 회원/operation 이 끼지 않도록.
+- ±60분 가드: PROD 시뮬레이션에서 QR #316 (Kel 11:34 → 20:30 강의 8h56m), QR #310 (Lulu 14:04 → 12:10 강의 1h54m) 처럼 시각 차이가 큰 잘못된 매칭 발생 → Tier A 와 동일하게 가장 가까운 강의를 고르되, ±60분 바깥은 NULL 유지.
 - Darren(16) 발급 QR이 Darren(25) 강의에 매칭되는 핵심 케이스.
 - 히트하면 그 id 반환.
 

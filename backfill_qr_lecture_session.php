@@ -87,9 +87,10 @@ foreach ($targets as $r) {
                       AND role IN ('coach','sub_coach','head','subhead1','subhead2')
                   )
                   AND lecture_date = ? AND cohort_id = ? AND status='active'
+                  AND ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) / 60 <= 60
                 ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) ASC LIMIT 1
             ");
-            $sb->execute([$adminId, $r['at_date'], $r['cohort_id'], $r['at_time']]);
+            $sb->execute([$adminId, $r['at_date'], $r['cohort_id'], $r['at_time'], $r['at_time']]);
             $tierB = $sb->fetchColumn() ?: null;
         }
     }

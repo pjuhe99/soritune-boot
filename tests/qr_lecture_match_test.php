@@ -69,7 +69,8 @@ try {
     // ───────────────────────────────────────────────────────────
     // 시나리오 2: Tier B 동일 이름 매칭
     //   Darren 옛 admin (role=sub_coach) 발급 QR
-    //   → 새 Darren (role=sub_coach) 으로 등록된 강의에 매칭
+    //   → 새 Darren (role=sub_coach) 으로 등록된 강의에 매칭.
+    //   명시적 atTime '06:30:00' 사용 (강의 06:00 기준 30분 내 → 가드 통과).
     // ───────────────────────────────────────────────────────────
     $insAdmin->execute(['darren_old_' . bin2hex(random_bytes(2)), 'Darren_T2', 'sub_coach']);
     $darrenOldId = (int)$db->lastInsertId();
@@ -80,7 +81,7 @@ try {
     $insLecture->execute([$scheduleId2, $cohortId, $darrenNewId, date('Y-m-d'), '06:00:00', '07:00:00', 2, '[06:00] Darren 2단계', 'active']);
     $lectureId2 = (int)$db->lastInsertId();
 
-    $matched = findMatchingLectureSession($db, $darrenOldId, $cohortId);
+    $matched = findMatchingLectureSession($db, $darrenOldId, $cohortId, date('Y-m-d'), '06:30:00');
     t('T2: Tier B 동일 이름 admin 매칭', $matched === $lectureId2, "expected={$lectureId2}, got=" . var_export($matched, true));
 
     // ───────────────────────────────────────────────────────────
@@ -224,6 +225,29 @@ try {
 
     $matched = findMatchingLectureSession($db, $nickId, $cohortId6);
     t('T9: cancelled 강의는 매칭 X', $matched === null, 'got=' . var_export($matched, true));
+
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 T2c: Tier B 시각 가드 (같은 코치 그날 강의 1건뿐이지만 >60분 → NULL)
+    //   Ace 옛 admin 발급, Ace 새 admin 강의 06:00 등록.
+    //   헬퍼를 12:00 시각으로 호출 → 시각차 360분 → Tier B 가드 차단.
+    //   Tier C 후보도 0건 (그 강의가 ±60분 밖) → NULL.
+    // ───────────────────────────────────────────────────────────
+    $cohortLabel7 = 'QRM7_' . bin2hex(random_bytes(3));
+    $db->prepare("INSERT INTO cohorts (cohort, code, is_active, start_date, end_date)
+                  VALUES (?, ?, 1, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY))")
+       ->execute([$cohortLabel7, $cohortLabel7]);
+    $cohortId7 = (int)$db->lastInsertId();
+
+    $insAdmin->execute(['ace_old_' . bin2hex(random_bytes(2)), 'Ace_T2c', 'sub_coach']);
+    $aceOldId = (int)$db->lastInsertId();
+    $insAdmin->execute(['ace_new_' . bin2hex(random_bytes(2)), 'Ace_T2c', 'sub_coach']);
+    $aceNewId = (int)$db->lastInsertId();
+    $insSchedule->execute([$cohortId7, $aceNewId, 2, '06:00:00', $aceNewId]);
+    $schT2c = (int)$db->lastInsertId();
+    $insLecture->execute([$schT2c, $cohortId7, $aceNewId, date('Y-m-d'), '06:00:00', '07:00:00', 2, '[T2c]', 'active']);
+
+    $matched = findMatchingLectureSession($db, $aceOldId, $cohortId7, date('Y-m-d'), '12:00:00');
+    t('T2c: Tier B 시각 >60분이면 NULL', $matched === null, 'got=' . var_export($matched, true));
 
 } finally {
     $db->rollBack();

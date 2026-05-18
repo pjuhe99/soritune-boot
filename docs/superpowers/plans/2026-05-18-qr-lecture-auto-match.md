@@ -214,6 +214,8 @@ Expected: `PASS T1` / `FAIL T2: Tier B 동일 이름 admin 매칭 (expected=<id>
 
 ```php
     // ── Tier B: 동일 이름 admin 그룹 매칭 ────────────────────
+    // Tier C 와 동일한 ±60분 시각 가드 — admin 매칭만 되고 시각이 멀리 떨어진
+    // (그 코치의 다른 시간대 강의) 케이스는 NULL 유지하고 Tier C 진입.
     if ($adminId > 0) {
         $stmt = $db->prepare("
             SELECT id FROM lecture_sessions
@@ -225,10 +227,11 @@ Expected: `PASS T1` / `FAIL T2: Tier B 동일 이름 admin 매칭 (expected=<id>
               AND lecture_date = ?
               AND cohort_id = ?
               AND status = 'active'
-            ORDER BY ABS(TIMESTAMPDIFF(SECOND, start_time, ?)) ASC
+              AND ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) / 60 <= 60
+            ORDER BY ABS(TIME_TO_SEC(TIMEDIFF(start_time, ?))) ASC
             LIMIT 1
         ");
-        $stmt->execute([$adminId, $atDate, $cohortId, $atTime]);
+        $stmt->execute([$adminId, $atDate, $cohortId, $atTime, $atTime]);
         $id = $stmt->fetchColumn();
         if ($id !== false) return (int)$id;
     }
@@ -1029,6 +1032,30 @@ Expected: 9개 commit (Task 1~8 + spec) push 완료.
 6. PROD apply: `--cohort=12 --apply`
 7. `php /var/www/html/_______site_SORITUNECOM_BOOT/tests/qr_match_invariants.php`
 8. PROD `/operation/#attendance` 12기 통계 눈으로 확인
+
+---
+
+## Task 10: Tier B ±60분 시각 가드 추가 (fold-in)
+
+**배경:** PROD 12기 read-only 시뮬레이션에서 Tier B 가 시각 무관하게 같은 코치 같은 날 강의에 매칭되어 QR #310 (Lulu 14:04 → 12:10 강의, 1h54m 차이), QR #316 (Kel 11:34 → 20:30 강의, 8h56m 차이) 등 의도와 다른 매칭 발견. Tier C 와 동일한 `ABS(TIMEDIFF) / 60 <= 60` 가드 추가.
+
+**Files:**
+- Modify: `public_html/api/services/qr_match.php` (Tier B SQL 에 가드 + 5번째 파라미터 추가)
+- Modify: `backfill_qr_lecture_session.php` (인라인 Tier B SQL 동일 수정)
+- Modify: `tests/qr_lecture_match_test.php` (T2c 시나리오 추가)
+- Modify: `docs/superpowers/specs/2026-05-18-qr-lecture-auto-match-design.md` (§4 Tier B SQL 갱신)
+- Modify: `docs/superpowers/plans/2026-05-18-qr-lecture-auto-match.md` (이 파일 — Task 2 Tier B SQL 갱신 + Task 10 추가)
+
+**영향:**
+- PROD 12기 매칭: 11건 → 9건 (#310/#316 정정 NULL 유지)
+- 시각 ±60분 안의 Tier B 매칭은 영향 없음
+- T2c 추가로 회귀 테스트 총 12개 (T1/T1b/T2/T3/T4/T5/T2b/T6/T7/T8/T9/T2c)
+
+**검증:**
+```bash
+cd /root/boot-dev && php tests/qr_lecture_match_test.php
+# Expected: 결과: PASS 12, FAIL 0
+```
 
 ---
 
