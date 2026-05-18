@@ -14,6 +14,9 @@ function findMatchingLectureSession(
     PDO $db, int $adminId, int $cohortId,
     ?string $atDate = null, ?string $atTime = null
 ): ?int {
+    if (($atDate === null) !== ($atTime === null)) {
+        throw new InvalidArgumentException('atDate and atTime must both be null or both be set');
+    }
     $atDate = $atDate ?? date('Y-m-d');
     $atTime = $atTime ?? date('H:i:s');
 

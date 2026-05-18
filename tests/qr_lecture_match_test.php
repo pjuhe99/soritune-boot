@@ -55,6 +55,17 @@ try {
     $matched = findMatchingLectureSession($db, $kelId, $cohortId);
     t('T1: Tier A 동일 admin_id 매칭', $matched === $lectureId1, "expected={$lectureId1}, got=" . var_export($matched, true));
 
+    // ───────────────────────────────────────────────────────────
+    // 시나리오 T1b: atDate/atTime half-null 가드
+    // ───────────────────────────────────────────────────────────
+    $caught = false;
+    try {
+        findMatchingLectureSession($db, $kelId, $cohortId, '2026-05-12', null);
+    } catch (InvalidArgumentException $e) {
+        $caught = true;
+    }
+    t('T1b: atDate/atTime half-null throws', $caught);
+
 } finally {
     $db->rollBack();
 }
