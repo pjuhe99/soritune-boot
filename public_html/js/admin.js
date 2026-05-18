@@ -1605,6 +1605,7 @@ const AdminApp = (() => {
             </div>
         `;
 
+        const reqSubChecked = data.requires_submission === 1 || data.requires_submission === '1' ? 'checked' : '';
         const body = `
             <div class="form-group">
                 <label class="form-label">제목 *</label>
@@ -1618,6 +1619,12 @@ const AdminApp = (() => {
             <div class="form-group">
                 <label class="form-label">내용</label>
                 <textarea class="form-textarea" id="tf-content" rows="4" style="resize:vertical">${App.esc(data.content_markdown || '')}</textarea>
+            </div>
+            <div class="form-group">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="tf-requires-submission" ${reqSubChecked}>
+                    <span>📝 결과물 제출 필수 (완료 체크 시 텍스트 입력 강제)</span>
+                </label>
             </div>
         `;
         const footer = `
@@ -1642,6 +1649,7 @@ const AdminApp = (() => {
             const payload = {
                 title: document.getElementById('tf-title').value.trim(),
                 content_markdown: document.getElementById('tf-content').value.trim(),
+                requires_submission: document.getElementById('tf-requires-submission').checked ? 1 : 0,
             };
 
             if (isEdit) {
@@ -1712,6 +1720,7 @@ const AdminApp = (() => {
             groupKey: { cohort, title, role },
             title: single.title,
             content_markdown: single.content_markdown,
+            requires_submission: parseInt(single.requires_submission) || 0,
             periodLabel,
             totalCount: parseInt(g.total_count) || 0,
             doneCount:  parseInt(g.done_count)  || 0,
