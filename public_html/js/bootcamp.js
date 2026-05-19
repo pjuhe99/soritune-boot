@@ -1892,21 +1892,78 @@ const BootcampApp = (() => {
         sec.innerHTML = `
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">대시보드</span>
+                <div class="db-daterange">
+                    <input type="date" id="db-date-start" class="db-date-input" aria-label="시작일">
+                    <span class="db-date-sep">~</span>
+                    <input type="date" id="db-date-end" class="db-date-input" aria-label="종료일">
+                    <button type="button" class="btn btn-sm btn-secondary" id="db-date-reset">기본값</button>
+                </div>
             </div>
             <div id="db-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
-        await renderDashboard(sec);
+        const startEl = sec.querySelector('#db-date-start');
+        const endEl   = sec.querySelector('#db-date-end');
+        const resetEl = sec.querySelector('#db-date-reset');
+
+        let debounceTimer = null;
+        let lastStart = '';
+        let lastEnd = '';
+
+        async function reload() {
+            await renderDashboard(sec, { startDate: startEl.value, endDate: endEl.value });
+            lastStart = startEl.value;
+            lastEnd = endEl.value;
+        }
+
+        function schedule() {
+            if (startEl.value && endEl.value && startEl.value > endEl.value) {
+                if (typeof App !== 'undefined' && App.toast) App.toast('시작일이 종료일보다 이후입니다.', 'error');
+                startEl.value = lastStart;
+                endEl.value = lastEnd;
+                return;
+            }
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(reload, 350);
+        }
+
+        startEl.addEventListener('change', schedule);
+        endEl.addEventListener('change', schedule);
+        resetEl.addEventListener('click', () => {
+            startEl.value = '';
+            endEl.value = '';
+            clearTimeout(debounceTimer);
+            reload();
+        });
+
+        await renderDashboard(sec, {});
+        lastStart = startEl.value;
+        lastEnd = endEl.value;
     }
 
-    async function renderDashboard(sec) {
+    async function renderDashboard(sec, opts = {}) {
         const body = sec.querySelector('#db-body') || sec;
+        const startInput = sec.querySelector('#db-date-start');
+        const endInput   = sec.querySelector('#db-date-end');
+
         App.showLoading();
         const params = selectedCohortId ? { cohort_id: selectedCohortId } : {};
+        if (opts.startDate) params.start_date = opts.startDate;
+        if (opts.endDate)   params.end_date   = opts.endDate;
         const r = await App.get(API + 'dashboard_stats', params);
         App.hideLoading();
 
-        if (!r.success || !r.cohort_summary) {
+        if (!r.success) {
+            body.innerHTML = `<div class="empty-state">${App.esc(r.error || '불러오기 실패')}</div>`;
+            return;
+        }
+
+        if (startInput && r.agg_start) startInput.value = r.agg_start;
+        if (endInput   && r.agg_end)   endInput.value   = r.agg_end;
+        if (startInput && r.cohort_start) startInput.min = r.cohort_start;
+        if (endInput) endInput.max = new Date().toISOString().slice(0, 10);
+
+        if (!r.cohort_summary) {
             body.innerHTML = '<div class="empty-state">아직 채점 기간이 시작되지 않았습니다.</div>';
             return;
         }
@@ -1942,7 +1999,7 @@ const BootcampApp = (() => {
         }
 
         html += `
-            <div class="db-section-title">기수 전체 과제율 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(${d.display_start} ~ ${d.scoring_end}, ${cs.member_count}명)</span></div>
+            <div class="db-section-title">기수 전체 과제율 <span style="font-weight:normal;font-size:var(--text-xs);color:var(--color-text-muted)">(${d.agg_start} ~ ${d.agg_end}, ${cs.member_count}명)</span></div>
             <div class="db-metrics">
                 <div class="db-metric-card">
                     <div class="db-metric-label">줌/데일리미션</div>
