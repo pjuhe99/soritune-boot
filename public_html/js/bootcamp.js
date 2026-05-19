@@ -17,6 +17,7 @@ const BootcampApp = (() => {
     let cohorts = [];
     let groups = [];
     let missionTypes = [];
+    let selectedMissingFilters = new Set();   // 현황판 미수행 필터 ('zoom'/'inner33'/'speak')
     let selectedCohortId = 0;
     let selectedGroupId = 0;
     let selectedStageNo = 0;
@@ -276,6 +277,7 @@ const BootcampApp = (() => {
         const showGroup = opts.group !== false && !leaderMode;
         const showStage = opts.stage !== false;
         const showCohort = !leaderMode;
+        const showMissionFilter = opts.missionFilter === true;
         return `
             <div class="bc-filters">
                 ${showCohort ? `
@@ -320,6 +322,7 @@ const BootcampApp = (() => {
                         <option value="score_asc" ${selectedSort === 'score_asc' ? 'selected' : ''}>점수 낮은 순</option>
                     </select>
                 </div>
+                ${showMissionFilter ? renderMissionFilterItems() : ''}
             </div>
         `;
     }
@@ -344,11 +347,39 @@ const BootcampApp = (() => {
             }
             onFilter();
         };
-        if (dateEl) dateEl.onchange = () => { selectedDate = dateEl.value; onFilter(); };
+        if (dateEl) dateEl.onchange = () => {
+            selectedDate = dateEl.value;
+            // 말까는 월요일에만 부여 → 날짜가 비-월요일이 되면 자동 해제 + disable
+            const speakCb = scope.querySelector('.bc-mission-filter input[data-mission-key="speak"]');
+            if (speakCb) {
+                const monday = isSelectedDateMonday();
+                if (!monday) selectedMissingFilters.delete('speak');
+                speakCb.checked = monday ? speakCb.checked : false;
+                speakCb.disabled = !monday;
+                const label = speakCb.closest('.bc-mission-filter-check');
+                if (label) {
+                    label.classList.toggle('is-disabled', !monday);
+                    if (!monday) label.title = '월요일에만 부여';
+                    else label.removeAttribute('title');
+                }
+            }
+            onFilter();
+        };
         if (groupEl) groupEl.onchange = () => { selectedGroupId = parseInt(groupEl.value); onFilter(); };
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
         const sortEl = scope.querySelector('#fl-sort');
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
+    }
+
+    function bindMissionFilterEvents(onFilter, scope) {
+        scope.querySelectorAll('.bc-mission-filter input[type="checkbox"]').forEach(cb => {
+            cb.onchange = () => {
+                const key = cb.dataset.missionKey;
+                if (cb.checked) selectedMissingFilters.add(key);
+                else selectedMissingFilters.delete(key);
+                onFilter();
+            };
+        });
     }
 
     function scoreClass(score) {
@@ -696,7 +727,89 @@ const BootcampApp = (() => {
     // ══════════════════════════════════════════════════════════
     // ── 현황판 ──
     // ══════════════════════════════════════════════════════════
+    // ── 현황판 미수행 필터 ──
+    const MISSION_FILTER_CODES = {
+        zoom:    ['zoom_daily', 'daily_mission'],   // 둘 다 미체크여야 매칭 (데일리는 줌특강 보완)
+        inner33: ['inner33'],
+        speak:   ['speak_mission'],                 // 월요일에만 부여
+    };
+
+    function isSelectedDateMonday() {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate || '');
+        if (!m) return false;
+        return new Date(+m[1], +m[2] - 1, +m[3]).getDay() === 1;   // 일=0, 월=1
+    }
+
+    function applyMissionFilter(members, checks, filters) {
+        if (filters.size === 0) return members;
+
+        const idOf = code => missionTypes.find(m => m.code === code)?.id;
+        const activeFilters = new Set(filters);
+        const ids = {};
+
+        // mission code → id 매핑 + 누락 가드
+        for (const [key, codes] of Object.entries(MISSION_FILTER_CODES)) {
+            if (!activeFilters.has(key)) continue;
+            const mapped = codes.map(idOf);
+            if (mapped.some(x => x == null)) {
+                console.warn(`[status-board] mission code 누락: ${codes.join(',')} — '${key}' 필터 무시`);
+                activeFilters.delete(key);
+                continue;
+            }
+            ids[key] = mapped;
+        }
+
+        // 말까는 월요일이 아니면 평가 스킵 (UI 에서도 disabled 지만 방어적으로)
+        if (activeFilters.has('speak') && !isSelectedDateMonday()) activeFilters.delete('speak');
+        if (activeFilters.size === 0) return members;
+
+        return members.filter(mem => {
+            const c = checks[mem.id] || {};
+            // OR 합집합: 켜진 필터 중 하나라도 매칭하면 표시
+            if (activeFilters.has('zoom')) {
+                const [zoomId, dailyId] = ids.zoom;
+                if (c[zoomId] !== 1 && c[dailyId] !== 1) return true;
+            }
+            if (activeFilters.has('inner33')) {
+                const [innerId] = ids.inner33;
+                if (c[innerId] !== 1) return true;
+            }
+            if (activeFilters.has('speak')) {
+                const [speakId] = ids.speak;
+                if (c[speakId] !== 1) return true;
+            }
+            return false;
+        });
+    }
+
+    function renderMissionFilterItems() {
+        const isMonday = isSelectedDateMonday();
+        const opts = [
+            { key: 'zoom',    label: '줌특강X', disabled: false },
+            { key: 'inner33', label: '내맛X',   disabled: false },
+            { key: 'speak',   label: '말까X',   disabled: !isMonday, hint: isMonday ? '' : '월요일에만 부여' },
+        ];
+        return `
+            <div class="filter-item bc-mission-filter">
+                <span class="filter-label">미수행</span>
+                <div class="bc-mission-filter-checks">
+                    ${opts.map(o => `
+                        <label class="bc-mission-filter-check ${o.disabled ? 'is-disabled' : ''}"
+                               ${o.hint ? `title="${App.esc(o.hint)}"` : ''}>
+                            <input type="checkbox"
+                                   data-mission-key="${o.key}"
+                                   ${selectedMissingFilters.has(o.key) ? 'checked' : ''}
+                                   ${o.disabled ? 'disabled' : ''}>
+                            ${App.esc(o.label)}
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
     async function loadStatusBoard() {
+        selectedMissingFilters = new Set();   // 탭 진입 시마다 미수행 필터 리셋
         const sec = document.getElementById('bc-tab-status');
         await loadGroups();
 
@@ -704,11 +817,12 @@ const BootcampApp = (() => {
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">현황판</span>
             </div>
-            ${filterBarHtml()}
+            ${filterBarHtml({ missionFilter: true })}
             <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
         bindFilterEvents(renderStatusBoard, sec);
+        bindMissionFilterEvents(renderStatusBoard, sec);
         renderStatusBoard();
     }
 
@@ -725,12 +839,16 @@ const BootcampApp = (() => {
         if (!r.success) return;
 
         const { members, checks, mission_types: mt, miss_days: missDays, warning_notes: warnNotes, thresholds } = r;
-        if (!members.length) {
-            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+        const filtered = applyMissionFilter(members, checks, selectedMissingFilters);
+        if (!filtered.length) {
+            const msg = members.length === 0
+                ? '회원이 없습니다.'
+                : '조건에 맞는 회원이 없습니다.';
+            body.innerHTML = `<div class="empty-state">${msg}</div>`;
             return;
         }
 
-        body.innerHTML = members.map(m => {
+        body.innerHTML = filtered.map(m => {
             const mc = checks[m.id] || {};
             const score = parseInt(m.current_score);
             const missCount = missDays[m.id] || 0;

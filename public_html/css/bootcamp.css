@@ -32,6 +32,34 @@
     min-width: 100px;
 }
 
+/* ── Mission Filter (현황판 미수행 체크박스) ───────────────── */
+.bc-mission-filter .bc-mission-filter-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: center;
+    padding: 6px 0;
+}
+.bc-mission-filter-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    user-select: none;
+}
+.bc-mission-filter-check input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+.bc-mission-filter-check.is-disabled {
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+}
+.bc-mission-filter-check.is-disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
 /* ── Checklist Grid ────────────────────────────────────────── */
 .bc-checklist-table {
     width: 100%;
