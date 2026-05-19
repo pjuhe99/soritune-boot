@@ -204,7 +204,7 @@ case 'today_tasks':
     $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
-    if (hasRole($admin, 'operation')) {
+    if (hasAnyRole($admin, ['operation','head','subhead1','subhead2'])) {
         if ($filterRole === 'mine') {
             // My tasks only
             $stmt = $db->prepare("
@@ -287,7 +287,7 @@ case 'overdue_tasks':
     $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
-    if (hasRole($admin, 'operation')) {
+    if (hasAnyRole($admin, ['operation','head','subhead1','subhead2'])) {
         if ($filterRole === 'mine') {
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
@@ -1213,7 +1213,7 @@ case 'admin_delete':
 
 case 'task_group_get':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $cohort = trim($input['cohort'] ?? '');
     $title  = trim($input['title']  ?? '');
@@ -1239,8 +1239,7 @@ case 'task_group_get':
     break;
 
 case 'all_tasks_grouped':
-    $admin = requireAdmin();
-    if (!hasRole($admin, 'operation')) jsonError('권한이 없습니다.', 403);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $cohort = getEffectiveCohort($admin);
     $filterRole = $_GET['filter_role'] ?? '';
     $adminId = $admin['admin_id'];
@@ -1308,7 +1307,7 @@ case 'all_tasks_grouped':
 
 case 'task_group_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $cohort   = trim($input['cohort'] ?? '');
     $title    = trim($input['title']  ?? '');
@@ -1331,7 +1330,7 @@ case 'task_group_update':
 
 case 'task_group_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $cohort = trim($input['cohort'] ?? '');
     $title  = trim($input['title']  ?? '');
@@ -1361,7 +1360,7 @@ case 'task_group_delete':
     break;
 
 case 'task_group_rows':
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $cohort = trim($_GET['cohort'] ?? '');
     $title  = trim($_GET['title']  ?? '');
     $role   = trim($_GET['role']   ?? '');
@@ -1443,7 +1442,7 @@ case 'task_submission_update':
 
 case 'task_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $title    = trim($input['title'] ?? '');
     $roles    = $input['roles'] ?? [];
@@ -1576,7 +1575,7 @@ case 'task_create':
 
 case 'task_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('Task ID가 필요합니다.');
@@ -1601,7 +1600,7 @@ case 'task_update':
 
 case 'task_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('Task ID가 필요합니다.');
