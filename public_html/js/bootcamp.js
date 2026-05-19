@@ -352,19 +352,6 @@ const BootcampApp = (() => {
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
     }
 
-    // ── 현황판 미수행 필터 ──
-    const MISSION_FILTER_CODES = {
-        zoom:    ['zoom_daily', 'daily_mission'],   // 둘 다 미체크여야 매칭 (데일리는 줌특강 보완)
-        inner33: ['inner33'],
-        speak:   ['speak_mission'],                 // 월요일에만 부여
-    };
-
-    function isSelectedDateMonday() {
-        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate || '');
-        if (!m) return false;
-        return new Date(+m[1], +m[2] - 1, +m[3]).getDay() === 1;   // 일=0, 월=1
-    }
-
     function scoreClass(score) {
         if (score <= -25) return 'out';
         if (score <= -10) return 'danger';
@@ -710,6 +697,19 @@ const BootcampApp = (() => {
     // ══════════════════════════════════════════════════════════
     // ── 현황판 ──
     // ══════════════════════════════════════════════════════════
+    // ── 현황판 미수행 필터 ──
+    const MISSION_FILTER_CODES = {
+        zoom:    ['zoom_daily', 'daily_mission'],   // 둘 다 미체크여야 매칭 (데일리는 줌특강 보완)
+        inner33: ['inner33'],
+        speak:   ['speak_mission'],                 // 월요일에만 부여
+    };
+
+    function isSelectedDateMonday() {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate || '');
+        if (!m) return false;
+        return new Date(+m[1], +m[2] - 1, +m[3]).getDay() === 1;   // 일=0, 월=1
+    }
+
     async function loadStatusBoard() {
         const sec = document.getElementById('bc-tab-status');
         await loadGroups();
