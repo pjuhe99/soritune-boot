@@ -765,20 +765,20 @@ const BootcampApp = (() => {
 
         return members.filter(mem => {
             const c = checks[mem.id] || {};
-            // OR 합집합: 켜진 필터 중 하나라도 매칭하면 표시
+            // AND 교집합: 켜진 필터 모두 미수행이어야 표시 (둘 다 안 한 위험군)
             if (activeFilters.has('zoom')) {
                 const [zoomId, dailyId] = ids.zoom;
-                if (c[zoomId] !== 1 && c[dailyId] !== 1) return true;
+                if (c[zoomId] === 1 || c[dailyId] === 1) return false;   // 줌 또는 데일리 했으면 제외
             }
             if (activeFilters.has('inner33')) {
                 const [innerId] = ids.inner33;
-                if (c[innerId] !== 1) return true;
+                if (c[innerId] === 1) return false;
             }
             if (activeFilters.has('speak')) {
                 const [speakId] = ids.speak;
-                if (c[speakId] !== 1) return true;
+                if (c[speakId] === 1) return false;
             }
-            return false;
+            return true;
         });
     }
 
