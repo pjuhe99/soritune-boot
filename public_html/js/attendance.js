@@ -114,7 +114,8 @@ const AttendanceApp = (() => {
                 const catLabel = getCategoryLabel(s);
                 const catClass = `att-cat-${s.category}`;
                 const title = getSessionTitle(s);
-                const timeStr = s.lecture_start_time ? s.lecture_start_time.slice(0, 5) : s.created_at.slice(11, 16);
+                const scheduled = s.lecture_start_time || s.study_start_time;
+                const timeStr = scheduled ? scheduled.slice(0, 5) : s.created_at.slice(11, 16);
                 const rateStr = s.category === 'study'
                     ? `${s.attendee_count}명 참여`
                     : `${s.attendee_count}/${totalMembers} (${s.rate}%)`;
