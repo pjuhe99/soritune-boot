@@ -57,53 +57,62 @@ function setupFixture(PDO $db, string $cohortStart, string $cohortEnd = '2099-12
 echo "── Task 1 baseline ──\n";
 $fx = setupFixture($db, '2026-01-01');
 
-// today = '2026-01-15' (15일차) — Task 1 기존 동작: scoring_start = 2026-01-04, scoring_end = 2026-01-14, total_days = 11
+// today = '2026-01-15' (15일차) — 새 시맨틱: agg_start=scoring_start=2026-01-04, agg_end=today=2026-01-15, total_days=12
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-15');
 t('baseline: scoring_start = 2026-01-04', ($r['scoring_start'] ?? null) === '2026-01-04');
-t('baseline: scoring_end = 2026-01-14', ($r['scoring_end'] ?? null) === '2026-01-14');
-t('baseline: total_days = 14', (int)($r['total_days'] ?? -1) === 14);
+t('baseline: agg_end = 2026-01-15', ($r['agg_end'] ?? null) === '2026-01-15');
+t('baseline: agg_start = 2026-01-04 (scoring_start)', ($r['agg_start'] ?? null) === '2026-01-04');
+t('baseline: total_days = 12', (int)($r['total_days'] ?? -1) === 12);
 t('baseline: cohort_summary non-null', !empty($r['cohort_summary']));
 t('baseline: member_count = 2', (int)($r['cohort_summary']['member_count'] ?? -1) === 2);
+t('baseline: is_default_range = true', ($r['is_default_range'] ?? null) === true);
 
 echo "\n── Task 2 adaptation states ──\n";
 
 // 시나리오 A: 1일차 당일 (today == cohort.start_date)
-// → scoring_end = yesterday < display_start → cohort_summary null, adaptation_active true
+// → 새 시맨틱: aggEnd = today = cohort_start → cohort_summary non-null (가드 없어짐), total_days = 1 (start==today inclusive)
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-01');
-t('A 1일차: display_start = 2026-01-01', ($r['display_start'] ?? null) === '2026-01-01');
+t('A 1일차: agg_start = 2026-01-01 (cohort_start)', ($r['agg_start'] ?? null) === '2026-01-01');
+t('A 1일차: agg_end = 2026-01-01 (today)', ($r['agg_end'] ?? null) === '2026-01-01');
 t('A 1일차: scoring_start = 2026-01-04', ($r['scoring_start'] ?? null) === '2026-01-04');
 t('A 1일차: adaptation_active = true', ($r['adaptation_active'] ?? null) === true);
-t('A 1일차: cohort_summary = null', $r['cohort_summary'] === null);
-t('A 1일차: total_days = 0', (int)($r['total_days'] ?? -1) === 0);
+t('A 1일차: total_days = 1 (start==today inclusive)', (int)($r['total_days'] ?? -1) === 1);
 
 // 시나리오 B: 2일차 (today = start + 1)
-// → display_start ~ yesterday = start ~ start (1일), cohort_summary non-null, adaptation_active true
+// → 새 시맨틱: agg = cohort_start ~ today = 2일
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-02');
-t('B 2일차: display_start = 2026-01-01', ($r['display_start'] ?? null) === '2026-01-01');
+t('B 2일차: agg_start = 2026-01-01', ($r['agg_start'] ?? null) === '2026-01-01');
+t('B 2일차: agg_end = 2026-01-02', ($r['agg_end'] ?? null) === '2026-01-02');
 t('B 2일차: adaptation_active = true', ($r['adaptation_active'] ?? null) === true);
 t('B 2일차: cohort_summary non-null', !empty($r['cohort_summary']));
-t('B 2일차: total_days = 1', (int)($r['total_days'] ?? -1) === 1);
+t('B 2일차: total_days = 2', (int)($r['total_days'] ?? -1) === 2);
 
-// 시나리오 C: 3일차 (today = start + 2)
+// 시나리오 C: 3일차 (today = start + 2) — 새 시맨틱: agg=cohort_start~today=3일
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-03');
 t('C 3일차: adaptation_active = true', ($r['adaptation_active'] ?? null) === true);
-t('C 3일차: total_days = 2', (int)($r['total_days'] ?? -1) === 2);
+t('C 3일차: total_days = 3', (int)($r['total_days'] ?? -1) === 3);
+t('C 3일차: agg_end = 2026-01-03 (today)', ($r['agg_end'] ?? null) === '2026-01-03');
 
 // 시나리오 D: 4일차 = scoring_start (today = start + 3) — 경계
+// 새 시맨틱: adaptation_active=false → defaultStart=scoring_start=2026-01-04, defaultEnd=today=2026-01-04 → total_days=1
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-04');
 t('D 4일차: adaptation_active = false', ($r['adaptation_active'] ?? null) === false);
-t('D 4일차: total_days = 3', (int)($r['total_days'] ?? -1) === 3);
+t('D 4일차: agg_start = 2026-01-04 (scoring_start)', ($r['agg_start'] ?? null) === '2026-01-04');
+t('D 4일차: agg_end = 2026-01-04', ($r['agg_end'] ?? null) === '2026-01-04');
+t('D 4일차: total_days = 1', (int)($r['total_days'] ?? -1) === 1);
 
 // 시나리오 E: 5일차 이후 정상 (today = start + 4)
+// 새 시맨틱: defaultStart=scoring_start=2026-01-04, agg=2026-01-04~2026-01-05 → total_days=2
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-05');
 t('E 5일차: adaptation_active = false', ($r['adaptation_active'] ?? null) === false);
-t('E 5일차: display_start = 2026-01-01 (start)', ($r['display_start'] ?? null) === '2026-01-01');
-t('E 5일차: total_days = 4', (int)($r['total_days'] ?? -1) === 4);
+t('E 5일차: agg_start = 2026-01-04 (scoring_start)', ($r['agg_start'] ?? null) === '2026-01-04');
+t('E 5일차: agg_end = 2026-01-05', ($r['agg_end'] ?? null) === '2026-01-05');
+t('E 5일차: total_days = 2', (int)($r['total_days'] ?? -1) === 2);
 
 // 시나리오 F: 기존 baseline 시점도 adaptation_active = false 인지 확인 (regression)
 $r = computeDashboardStats($db, $fx['cohort_id'], $fx['cohort_start'], $fx['cohort_end'], '2026-01-15');
 t('F baseline regression: adaptation_active = false', ($r['adaptation_active'] ?? null) === false);
-t('F baseline regression: total_days = 14 (display_start 기준으로 늘어남)', (int)($r['total_days'] ?? -1) === 14);
+t('F baseline regression: total_days = 12', (int)($r['total_days'] ?? -1) === 12);
 
 teardownFixture($db);
 echo "\n{$pass} pass, {$fail} fail\n";
