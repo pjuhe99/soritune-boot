@@ -17,6 +17,7 @@ const BootcampApp = (() => {
     let cohorts = [];
     let groups = [];
     let missionTypes = [];
+    let selectedMissingFilters = new Set();   // 현황판 미수행 필터 ('zoom'/'inner33'/'speak')
     let selectedCohortId = 0;
     let selectedGroupId = 0;
     let selectedStageNo = 0;
@@ -349,6 +350,19 @@ const BootcampApp = (() => {
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
         const sortEl = scope.querySelector('#fl-sort');
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
+    }
+
+    // ── 현황판 미수행 필터 ──
+    const MISSION_FILTER_CODES = {
+        zoom:    ['zoom_daily', 'daily_mission'],   // 둘 다 미체크여야 매칭 (데일리는 줌특강 보완)
+        inner33: ['inner33'],
+        speak:   ['speak_mission'],                 // 월요일에만 부여
+    };
+
+    function isSelectedDateMonday() {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate || '');
+        if (!m) return false;
+        return new Date(+m[1], +m[2] - 1, +m[3]).getDay() === 1;   // 일=0, 월=1
     }
 
     function scoreClass(score) {
