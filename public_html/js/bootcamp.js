@@ -809,6 +809,7 @@ const BootcampApp = (() => {
     }
 
     async function loadStatusBoard() {
+        selectedMissingFilters = new Set();   // 탭 진입 시마다 미수행 필터 리셋
         const sec = document.getElementById('bc-tab-status');
         await loadGroups();
 
@@ -816,11 +817,12 @@ const BootcampApp = (() => {
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">현황판</span>
             </div>
-            ${filterBarHtml()}
+            ${filterBarHtml({ missionFilter: true })}
             <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
         bindFilterEvents(renderStatusBoard, sec);
+        bindMissionFilterEvents(renderStatusBoard, sec);
         renderStatusBoard();
     }
 
