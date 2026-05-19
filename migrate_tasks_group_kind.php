@@ -67,15 +67,21 @@ if (!indexExists($db, 'tasks', 'idx_cohort_group')) {
 
 echo "백필: group_scope IS NULL → role 복사\n";
 $db->beginTransaction();
-$stmt = $db->prepare("
-    UPDATE tasks
-       SET group_kind = 'role', group_scope = role
-     WHERE group_scope IS NULL
-");
-$stmt->execute();
-$updated = $stmt->rowCount();
-$db->commit();
-echo "백필 완료: {$updated} row\n";
+try {
+    $stmt = $db->prepare("
+        UPDATE tasks
+           SET group_kind = 'role', group_scope = role
+         WHERE group_scope IS NULL
+    ");
+    $stmt->execute();
+    $updated = $stmt->rowCount();
+    $db->commit();
+    echo "백필 완료: {$updated} row\n";
+} catch (Exception $e) {
+    $db->rollBack();
+    echo "FAIL: 백필 rollback — " . $e->getMessage() . "\n";
+    exit(1);
+}
 
 $total = (int)$db->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
 $nullScope = (int)$db->query("
