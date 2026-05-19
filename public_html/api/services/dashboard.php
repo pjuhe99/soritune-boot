@@ -9,15 +9,29 @@ function handleDashboardStats() {
     $explicit = (int)($_GET['cohort_id'] ?? 0);
     $cohortId = resolveAdminCohortId($explicit ?: null, $admin, false);
     if (!$cohortId) jsonError('활성 기수를 찾을 수 없습니다.');
-    $db = getDB();
 
+    $reqStart = trim((string)($_GET['start_date'] ?? ''));
+    $reqEnd   = trim((string)($_GET['end_date'] ?? ''));
+    foreach ([$reqStart, $reqEnd] as $d) {
+        if ($d !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+            jsonError('날짜 형식이 잘못되었습니다.');
+        }
+    }
+
+    $db = getDB();
     $stmt = $db->prepare("SELECT start_date, end_date FROM cohorts WHERE id = ?");
     $stmt->execute([$cohortId]);
     $cohort = $stmt->fetch();
     if (!$cohort) jsonError('기수를 찾을 수 없습니다.');
 
     $todayKST = date('Y-m-d');
-    jsonSuccess(computeDashboardStats($db, $cohortId, $cohort['start_date'], $cohort['end_date'] ?? null, $todayKST));
+    jsonSuccess(computeDashboardStats(
+        $db, $cohortId,
+        $cohort['start_date'], $cohort['end_date'] ?? null,
+        $todayKST,
+        $reqStart !== '' ? $reqStart : null,
+        $reqEnd   !== '' ? $reqEnd   : null
+    ));
 }
 
 /**
@@ -30,36 +44,38 @@ function handleDashboardStats() {
  * @param string  $todayKST     YYYY-MM-DD (오늘, KST)
  * @return array  jsonSuccess 의 data 부분
  */
-function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?string $cohortEnd, string $todayKST): array {
-    $adaptationEnd = date('Y-m-d', strtotime($cohortStart . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'));
-    $scoringStart  = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
-    $yesterday     = date('Y-m-d', strtotime($todayKST . ' -1 day'));
-    $scoringEnd    = ($cohortEnd && $cohortEnd < $yesterday) ? $cohortEnd : $yesterday;
-
-    $displayStart     = $cohortStart;
+function computeDashboardStats(
+    PDO $db,
+    int $cohortId,
+    string $cohortStart,
+    ?string $cohortEnd,
+    string $todayKST,
+    ?string $reqStart = null,
+    ?string $reqEnd = null
+): array {
+    $adaptationEnd    = date('Y-m-d', strtotime($cohortStart . ' + ' . (SCORE_ADAPTATION_DAYS - 1) . ' days'));
+    $scoringStart     = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
     $adaptationActive = $todayKST < $scoringStart;
-    $aggStart         = $displayStart;
 
-    if ($aggStart > $scoringEnd) {
-        return [
-            'display_start' => $displayStart,
-            'scoring_start' => $scoringStart,
-            'scoring_end' => $scoringEnd,
-            'adaptation_active' => $adaptationActive,
-            'total_days' => 0,
-            'total_mondays' => 0,
-            'cohort_summary' => null,
-            'groups' => [],
-            'members' => [],
-            'score_distribution' => [],
-            'score_warnings' => ['approaching' => [], 'revival_eligible' => [], 'out' => []],
-        ];
-    }
+    $defaultStart = $adaptationActive ? $cohortStart : $scoringStart;
+    $defaultEnd   = $todayKST;
+    if ($cohortEnd && $cohortEnd < $defaultEnd) $defaultEnd = $cohortEnd;
+
+    $aggStart = $reqStart !== null && $reqStart !== '' ? $reqStart : $defaultStart;
+    $aggEnd   = $reqEnd   !== null && $reqEnd   !== '' ? $reqEnd   : $defaultEnd;
+
+    if ($aggStart < $cohortStart) $aggStart = $cohortStart;
+    if ($aggEnd > $todayKST)      $aggEnd   = $todayKST;
+    if ($cohortEnd && $aggEnd > $cohortEnd) $aggEnd = $cohortEnd;
+
+    if ($aggStart > $aggEnd) jsonError('시작일이 종료일보다 이후입니다.');
+
+    $isDefaultRange = ($aggStart === $defaultStart && $aggEnd === $defaultEnd);
 
     $totalDays = 0;
     $totalMondays = 0;
     $current = $aggStart;
-    while ($current <= $scoringEnd) {
+    while ($current <= $aggEnd) {
         $totalDays++;
         if ((int)date('w', strtotime($current)) === 1) $totalMondays++;
         $current = date('Y-m-d', strtotime($current . ' +1 day'));
@@ -83,9 +99,13 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
 
     if (empty($memberIds)) {
         return [
-            'display_start' => $displayStart,
+            'agg_start' => $aggStart,
+            'agg_end' => $aggEnd,
+            'is_default_range' => $isDefaultRange,
+            'default_start' => $defaultStart,
+            'default_end' => $defaultEnd,
+            'cohort_start' => $cohortStart,
             'scoring_start' => $scoringStart,
-            'scoring_end' => $scoringEnd,
             'adaptation_active' => $adaptationActive,
             'total_days' => $totalDays,
             'total_mondays' => $totalMondays,
@@ -113,7 +133,7 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
         WHERE member_id IN ({$ph})
           AND check_date BETWEEN ? AND ?
     ");
-    $stmt->execute(array_merge($memberIds, [$aggStart, $scoringEnd]));
+    $stmt->execute(array_merge($memberIds, [$aggStart, $aggEnd]));
 
     $checkData = [];
     foreach ($stmt->fetchAll() as $c) {
@@ -136,7 +156,7 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
         $hamemmalCount = 0;
 
         $cur = $aggStart;
-        while ($cur <= $scoringEnd) {
+        while ($cur <= $aggEnd) {
             $missions = $byDate[$cur] ?? [];
             $dow = (int)date('w', strtotime($cur));
 
@@ -296,9 +316,13 @@ function computeDashboardStats(PDO $db, int $cohortId, string $cohortStart, ?str
     }
 
     return [
-        'display_start' => $displayStart,
+        'agg_start' => $aggStart,
+        'agg_end' => $aggEnd,
+        'is_default_range' => $isDefaultRange,
+        'default_start' => $defaultStart,
+        'default_end' => $defaultEnd,
+        'cohort_start' => $cohortStart,
         'scoring_start' => $scoringStart,
-        'scoring_end' => $scoringEnd,
         'adaptation_active' => $adaptationActive,
         'total_days' => $totalDays,
         'total_mondays' => $totalMondays,
