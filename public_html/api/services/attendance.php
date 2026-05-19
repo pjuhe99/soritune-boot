@@ -138,6 +138,49 @@ function handleAttendanceStats() {
         ];
     }
 
+    // 일자별 카테고리×단계 unique 회원 수 (강의/복습스터디만 — revival/etc 제외)
+    $uStmt = $db->prepare("
+        SELECT
+            CASE WHEN ls.id IS NOT NULL THEN 'lecture' ELSE 'study' END AS category,
+            COALESCE(ls.lecture_date, ss.study_date) AS d,
+            COALESCE(ls.stage, ss.level) AS stg,
+            qa.member_id
+        FROM qr_sessions qs
+        JOIN qr_attendance qa ON qa.qr_session_id = qs.id
+        LEFT JOIN lecture_sessions ls ON qs.lecture_session_id = ls.id
+        LEFT JOIN study_sessions ss ON ss.qr_session_id = qs.id
+        WHERE qs.cohort_id = ?
+          AND qs.session_type <> 'revival'
+          AND (ls.id IS NOT NULL OR ss.id IS NOT NULL)
+          AND COALESCE(ls.lecture_date, ss.study_date) BETWEEN ? AND ?
+    ");
+    $uStmt->execute([$cohortId, $dateFrom, $dateTo]);
+
+    $bucket = [];  // date => category => stage(or 'total') => set<member_id>
+    foreach ($uStmt->fetchAll() as $r) {
+        $d = $r['d']; $cat = $r['category']; $stg = (int)$r['stg']; $m = (int)$r['member_id'];
+        if (!isset($bucket[$d])) $bucket[$d] = ['lecture' => [], 'study' => []];
+        if (!isset($bucket[$d][$cat][$stg])) $bucket[$d][$cat][$stg] = [];
+        $bucket[$d][$cat][$stg][$m] = true;
+        if (!isset($bucket[$d][$cat]['total'])) $bucket[$d][$cat]['total'] = [];
+        $bucket[$d][$cat]['total'][$m] = true;
+    }
+
+    $stages = [];  // 응답에 등장한 stage 합집합
+    $dailyUnique = [];
+    foreach ($bucket as $d => $cats) {
+        $row = ['date' => $d, 'lecture' => [], 'study' => []];
+        foreach (['lecture','study'] as $cat) {
+            foreach (($cats[$cat] ?? []) as $key => $set) {
+                $row[$cat][(string)$key] = count($set);
+                if ($key !== 'total') $stages[(int)$key] = true;
+            }
+        }
+        $dailyUnique[] = $row;
+    }
+    usort($dailyUnique, fn($a,$b) => strcmp($b['date'], $a['date']));
+    $stageList = array_keys($stages); sort($stageList);
+
     jsonSuccess([
         'total_members' => $totalMembers,
         'stats'   => $stats,
@@ -145,5 +188,7 @@ function handleAttendanceStats() {
             'by_coach' => $byCoach,
             'by_stage' => $byStage,
         ],
+        'daily_unique' => $dailyUnique,
+        'stages'       => $stageList,
     ]);
 }

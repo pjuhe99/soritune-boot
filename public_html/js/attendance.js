@@ -33,6 +33,7 @@ const AttendanceApp = (() => {
                     <button class="btn btn-primary btn-sm" id="att-search-btn">조회</button>
                 </div>
                 <div id="att-summary"></div>
+                <div id="att-daily-unique"></div>
                 <div id="att-list"></div>
                 <div id="att-coach-summary"></div>
             </div>
@@ -53,6 +54,7 @@ const AttendanceApp = (() => {
         if (!r.success) return;
 
         renderSummary(r);
+        renderDailyUnique(r.daily_unique || [], r.stages || []);
         renderList(r.stats, r.total_members);
         renderCoachSummary(r.summary);
     }
@@ -86,6 +88,46 @@ const AttendanceApp = (() => {
                     <div class="att-summary-value">${data.total_members}</div>
                     <div class="att-summary-label">전체 인원</div>
                 </div>
+            </div>
+        `;
+    }
+
+    function renderDailyUnique(daily, stages) {
+        const el = document.getElementById('att-daily-unique');
+        if (!daily.length) { el.innerHTML = ''; return; }
+
+        const cell = (row, cat, key) => {
+            const v = row[cat] && row[cat][key];
+            return v ? v : 0;
+        };
+
+        let head = `<tr><th rowspan="2">날짜</th>`;
+        head += `<th colspan="${stages.length + 1}">강의</th>`;
+        head += `<th colspan="${stages.length + 1}">복습스터디</th></tr><tr>`;
+        for (const st of stages) head += `<th>${st}단계</th>`;
+        head += `<th>전체</th>`;
+        for (const st of stages) head += `<th>${st}단계</th>`;
+        head += `<th>전체</th></tr>`;
+
+        let body = '';
+        for (const row of daily) {
+            const d = row.date;
+            const weekday = ['일','월','화','수','목','금','토'][new Date(d + 'T00:00:00').getDay()];
+            body += `<tr><td>${d} (${weekday})</td>`;
+            for (const st of stages) body += `<td class="att-num">${cell(row,'lecture',String(st))}</td>`;
+            body += `<td class="att-num att-num-total">${cell(row,'lecture','total')}</td>`;
+            for (const st of stages) body += `<td class="att-num">${cell(row,'study',String(st))}</td>`;
+            body += `<td class="att-num att-num-total">${cell(row,'study','total')}</td>`;
+            body += `</tr>`;
+        }
+
+        el.innerHTML = `
+            <div class="att-bottom-card att-daily-card">
+                <div class="att-bottom-title">일자별 고유 출석자 (중복 제외)</div>
+                <table class="att-table att-daily-table">
+                    <thead>${head}</thead>
+                    <tbody>${body}</tbody>
+                </table>
             </div>
         `;
     }
