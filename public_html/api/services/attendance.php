@@ -39,6 +39,8 @@ function handleAttendanceStats() {
             ls.stage,
             ss.id AS study_session_id,
             ss.title AS study_title,
+            ss.study_date,
+            ss.start_time AS study_start_time,
             (SELECT COUNT(*) FROM qr_attendance qa WHERE qa.qr_session_id = qs.id) AS attendee_count
         FROM qr_sessions qs
         LEFT JOIN admins a ON qs.admin_id = a.id
@@ -79,8 +81,9 @@ function handleAttendanceStats() {
             'admin_name'       => $s['admin_name'] ?: '(시스템)',
             'lecture_title'    => $s['lecture_title'],
             'study_title'      => $s['study_title'],
-            'lecture_date'     => $s['lecture_date'] ?: substr($s['created_at'], 0, 10),
+            'lecture_date'     => $s['lecture_date'] ?: $s['study_date'] ?: substr($s['created_at'], 0, 10),
             'lecture_start_time' => $s['lecture_start_time'],
+            'study_start_time' => $s['study_start_time'],
             'stage'            => $s['stage'] ? (int)$s['stage'] : null,
             'attendee_count'   => $attendeeCount,
             'total_members'    => $totalMembers,
