@@ -277,6 +277,7 @@ const BootcampApp = (() => {
         const showGroup = opts.group !== false && !leaderMode;
         const showStage = opts.stage !== false;
         const showCohort = !leaderMode;
+        const showMissionFilter = opts.missionFilter === true;
         return `
             <div class="bc-filters">
                 ${showCohort ? `
@@ -321,6 +322,7 @@ const BootcampApp = (() => {
                         <option value="score_asc" ${selectedSort === 'score_asc' ? 'selected' : ''}>점수 낮은 순</option>
                     </select>
                 </div>
+                ${showMissionFilter ? renderMissionFilterItems() : ''}
             </div>
         `;
     }
@@ -750,6 +752,32 @@ const BootcampApp = (() => {
             }
             return false;
         });
+    }
+
+    function renderMissionFilterItems() {
+        const isMonday = isSelectedDateMonday();
+        const opts = [
+            { key: 'zoom',    label: '줌특강X', disabled: false },
+            { key: 'inner33', label: '내맛X',   disabled: false },
+            { key: 'speak',   label: '말까X',   disabled: !isMonday, hint: isMonday ? '' : '월요일에만 부여' },
+        ];
+        return `
+            <div class="filter-item bc-mission-filter">
+                <span class="filter-label">미수행</span>
+                <div class="bc-mission-filter-checks">
+                    ${opts.map(o => `
+                        <label class="bc-mission-filter-check ${o.disabled ? 'is-disabled' : ''}"
+                               ${o.hint ? `title="${App.esc(o.hint)}"` : ''}>
+                            <input type="checkbox"
+                                   data-mission-key="${o.key}"
+                                   ${selectedMissingFilters.has(o.key) ? 'checked' : ''}
+                                   ${o.disabled ? 'disabled' : ''}>
+                            ${App.esc(o.label)}
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     async function loadStatusBoard() {
