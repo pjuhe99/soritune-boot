@@ -1195,6 +1195,14 @@
 
 .att-table tr:last-child td { border-bottom: none; }
 
+.att-daily-card { margin-bottom: var(--space-4); }
+.att-daily-table th { text-align: center; }
+.att-daily-table .att-num { text-align: right; font-variant-numeric: tabular-nums; }
+.att-daily-table .att-num-total {
+    font-weight: var(--font-semibold);
+    background: var(--color-gray-50);
+}
+
 /* ── Responsive ── */
 @media (max-width: 640px) {
     .ga-stats-grid { grid-template-columns: 1fr 1fr; }
