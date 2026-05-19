@@ -347,6 +347,7 @@
 }
 
 /* ── Dashboard date range selector ─────────────────────────── */
+#bc-tab-dashboard > .bc-toolbar { margin-top: var(--space-5); }
 .db-daterange {
     display: flex;
     align-items: center;
@@ -354,11 +355,12 @@
     margin-left: auto;
 }
 .db-date-input {
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: var(--text-sm);
+    font-family: inherit;
     border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: #fff;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
     color: var(--color-text);
 }
 .db-date-sep { color: var(--color-text-muted); }
