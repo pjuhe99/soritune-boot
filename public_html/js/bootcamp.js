@@ -839,12 +839,16 @@ const BootcampApp = (() => {
         if (!r.success) return;
 
         const { members, checks, mission_types: mt, miss_days: missDays, warning_notes: warnNotes, thresholds } = r;
-        if (!members.length) {
-            body.innerHTML = '<div class="empty-state">회원이 없습니다.</div>';
+        const filtered = applyMissionFilter(members, checks, selectedMissingFilters);
+        if (!filtered.length) {
+            const msg = members.length === 0
+                ? '회원이 없습니다.'
+                : '조건에 맞는 회원이 없습니다.';
+            body.innerHTML = `<div class="empty-state">${msg}</div>`;
             return;
         }
 
-        body.innerHTML = members.map(m => {
+        body.innerHTML = filtered.map(m => {
             const mc = checks[m.id] || {};
             const score = parseInt(m.current_score);
             const missCount = missDays[m.id] || 0;
