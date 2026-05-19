@@ -354,6 +354,17 @@ const BootcampApp = (() => {
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
     }
 
+    function bindMissionFilterEvents(onFilter, scope) {
+        scope.querySelectorAll('.bc-mission-filter input[type="checkbox"]').forEach(cb => {
+            cb.onchange = () => {
+                const key = cb.dataset.missionKey;
+                if (cb.checked) selectedMissingFilters.add(key);
+                else selectedMissingFilters.delete(key);
+                onFilter();
+            };
+        });
+    }
+
     function scoreClass(score) {
         if (score <= -25) return 'out';
         if (score <= -10) return 'danger';
