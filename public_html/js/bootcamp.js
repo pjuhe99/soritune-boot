@@ -347,7 +347,24 @@ const BootcampApp = (() => {
             }
             onFilter();
         };
-        if (dateEl) dateEl.onchange = () => { selectedDate = dateEl.value; onFilter(); };
+        if (dateEl) dateEl.onchange = () => {
+            selectedDate = dateEl.value;
+            // 말까는 월요일에만 부여 → 날짜가 비-월요일이 되면 자동 해제 + disable
+            const speakCb = scope.querySelector('.bc-mission-filter input[data-mission-key="speak"]');
+            if (speakCb) {
+                const monday = isSelectedDateMonday();
+                if (!monday) selectedMissingFilters.delete('speak');
+                speakCb.checked = monday ? speakCb.checked : false;
+                speakCb.disabled = !monday;
+                const label = speakCb.closest('.bc-mission-filter-check');
+                if (label) {
+                    label.classList.toggle('is-disabled', !monday);
+                    if (!monday) label.title = '월요일에만 부여';
+                    else label.removeAttribute('title');
+                }
+            }
+            onFilter();
+        };
         if (groupEl) groupEl.onchange = () => { selectedGroupId = parseInt(groupEl.value); onFilter(); };
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
         const sortEl = scope.querySelector('#fl-sort');
