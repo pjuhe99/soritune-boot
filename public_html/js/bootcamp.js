@@ -710,6 +710,48 @@ const BootcampApp = (() => {
         return new Date(+m[1], +m[2] - 1, +m[3]).getDay() === 1;   // 일=0, 월=1
     }
 
+    function applyMissionFilter(members, checks, filters) {
+        if (filters.size === 0) return members;
+
+        const idOf = code => missionTypes.find(m => m.code === code)?.id;
+        const activeFilters = new Set(filters);
+        const ids = {};
+
+        // mission code → id 매핑 + 누락 가드
+        for (const [key, codes] of Object.entries(MISSION_FILTER_CODES)) {
+            if (!activeFilters.has(key)) continue;
+            const mapped = codes.map(idOf);
+            if (mapped.some(x => x == null)) {
+                console.warn(`[status-board] mission code 누락: ${codes.join(',')} — '${key}' 필터 무시`);
+                activeFilters.delete(key);
+                continue;
+            }
+            ids[key] = mapped;
+        }
+
+        // 말까는 월요일이 아니면 평가 스킵 (UI 에서도 disabled 지만 방어적으로)
+        if (activeFilters.has('speak') && !isSelectedDateMonday()) activeFilters.delete('speak');
+        if (activeFilters.size === 0) return members;
+
+        return members.filter(mem => {
+            const c = checks[mem.id] || {};
+            // OR 합집합: 켜진 필터 중 하나라도 매칭하면 표시
+            if (activeFilters.has('zoom')) {
+                const [zoomId, dailyId] = ids.zoom;
+                if (c[zoomId] !== 1 && c[dailyId] !== 1) return true;
+            }
+            if (activeFilters.has('inner33')) {
+                const [innerId] = ids.inner33;
+                if (c[innerId] !== 1) return true;
+            }
+            if (activeFilters.has('speak')) {
+                const [speakId] = ids.speak;
+                if (c[speakId] !== 1) return true;
+            }
+            return false;
+        });
+    }
+
     async function loadStatusBoard() {
         const sec = document.getElementById('bc-tab-status');
         await loadGroups();
