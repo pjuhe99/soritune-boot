@@ -2136,6 +2136,8 @@ const AdminApp = (() => {
                  data-cohort="${groupRow.dataset.cohort}"
                  data-title="${groupRow.dataset.title}"
                  data-role="${groupRow.dataset.role}"
+                 data-group-kind="${groupRow.dataset.groupKind || 'role'}"
+                 data-group-scope="${groupRow.dataset.groupScope || ''}"
                  data-only-incomplete="1"
                  data-only-until-today="1">
                 <div class="empty-state" style="padding:16px">로딩 중...</div>
@@ -2155,12 +2157,18 @@ const AdminApp = (() => {
         const cohort         = decodeURIComponent(body.dataset.cohort);
         const title          = decodeURIComponent(body.dataset.title);
         const role           = decodeURIComponent(body.dataset.role);
+        const groupKind      = body.dataset.groupKind || 'role';
+        const groupScopeRaw  = body.dataset.groupScope || '';
+        // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. 백엔드가 '' → NULL 정규화.
+        const groupScope     = groupScopeRaw === '' ? '' : decodeURIComponent(groupScopeRaw);
         const onlyIncomplete = body.dataset.onlyIncomplete === '1';
         const onlyUntilToday = body.dataset.onlyUntilToday === '1';
 
         body.innerHTML = '<div class="empty-state" style="padding:16px">로딩 중...</div>';
         const r = await App.get('/api/admin.php?action=task_group_rows', {
             cohort, title, role,
+            group_kind: groupKind,
+            group_scope: groupScope,
             only_incomplete:  onlyIncomplete  ? '1' : '0',
             only_until_today: onlyUntilToday  ? '1' : '0',
         });

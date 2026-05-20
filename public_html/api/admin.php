@@ -1228,6 +1228,9 @@ case 'task_group_get':
     $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
     if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
     if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
@@ -1336,6 +1339,9 @@ case 'task_group_update':
     $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
     if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
     $newTitle   = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
     $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
@@ -1365,6 +1371,9 @@ case 'task_group_delete':
     $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
     if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
     if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
@@ -1403,6 +1412,9 @@ case 'task_group_rows':
     $groupKind  = trim($_GET['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $_GET) ? $_GET['group_scope'] : $role;
     if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
     if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
