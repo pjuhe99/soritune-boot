@@ -139,13 +139,21 @@ t('kind=person 존재X 거부', !empty($r['body']['error']) || $r['code'] >= 400
 
 // ── cohort_people_search ─────
 $me = $db->query("SELECT name FROM admins WHERE is_active = 1 ORDER BY id LIMIT 1")->fetchColumn();
-if ($me) {
+if (!$me) {
+    t('cohort_people_search seed 존재', false, 'admins 활성 row 0');
+} else {
     $q = mb_substr($me, 0, 1);
     $r = req('GET', "{$base}/api/admin.php?action=cohort_people_search&cohort=" . rawurlencode($cohort) . "&q=" . rawurlencode($q), $h);
     t('cohort_people_search 200',
         $r['code'] === 200 && !empty($r['body']['success']),
         'code=' . $r['code']);
-    t('cohort_people_search 결과 ≥ 1', is_array($r['body']['people'] ?? null) && count($r['body']['people']) >= 1);
+    $people = $r['body']['people'] ?? null;
+    t('cohort_people_search 결과 ≥ 1', is_array($people) && count($people) >= 1);
+    $first = is_array($people) ? ($people[0] ?? null) : null;
+    t('cohort_people_search 응답 shape',
+        is_array($first)
+        && in_array($first['type'] ?? null, ['admin','member'], true)
+        && isset($first['id'], $first['name'], $first['role_labels']));
 }
 
 // q 빈 문자열 → 에러

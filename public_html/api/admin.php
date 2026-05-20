@@ -1776,6 +1776,7 @@ case 'cohort_people_search':
     foreach ($stmt->fetchAll() as $row) {
         $roles = $row['roles'] ? explode(',', $row['roles']) : [];
         $labels = array_map(fn($r) => $roleLabels[$r] ?? $r, $roles);
+        // role_labels: 표시용 단일 string. admin 은 다중 role 가능하므로 ', ' join.
         $people[] = [
             'type' => 'admin',
             'id'   => (int)$row['id'],
@@ -1785,8 +1786,9 @@ case 'cohort_people_search':
     }
 
     // member (leader/subleader) 후보
-    // NOTE: bootcamp_groups 스키마에는 group_no 컬럼이 없고 name(예: "봄가을조") 만 있으므로
-    // 응답 키를 group_name (string) 으로 둔다. 프론트 (Task 8) 도 group_name 기준으로 렌더.
+    // NOTE: bootcamp_groups 스키마에는 group_no 컬럼이 없고 name(예: "차니조", "봄가을조") 만 있으므로
+    // 응답 키를 group_name (string) 으로 둔다. 값에 prefix 가 없어 프론트 (Task 8) 가
+    // 그대로 표시하면 됨.
     if ($cohortId) {
         $stmt = $db->prepare("
             SELECT bm.id, bm.real_name AS name, bm.nickname,
@@ -1802,6 +1804,7 @@ case 'cohort_people_search':
         ");
         $stmt->execute([$cohortId, $like, $like]);
         foreach ($stmt->fetchAll() as $row) {
+            // role_labels: 표시용 단일 string. member 는 leader/subleader 단일 role.
             $people[] = [
                 'type'        => 'member',
                 'id'          => (int)$row['id'],
@@ -1813,7 +1816,8 @@ case 'cohort_people_search':
         }
     }
 
-    // 합쳐서 최대 20개
+    // 합쳐서 최대 20개. admin 우선 (admin 매칭이 20 건이면 member 가 노출되지 않을 수
+    // 있음 — 운영자가 일반적으로 admin 을 먼저 찾는다는 가정).
     $people = array_slice($people, 0, 20);
     jsonSuccess(['people' => $people]);
     break;
