@@ -1209,7 +1209,14 @@ case 'admin_delete':
     break;
 
 // ── Task Group CRUD (operation/head/subhead1/subhead2) ─────
-// 묶음 키 = (cohort, title, role)
+// 묶음 키 = (cohort, title, group_kind, group_scope)
+//   - group_kind ∈ {role, everyone, person} (ENUM)
+//   - group_scope: kind=role/person(admin) → role 이름,
+//                  kind=person → 'admin:{id}' 또는 'member:{id}',
+//                  kind=everyone → NULL
+//   - NULL-safe 매칭은 `(group_scope <=> ?)` 사용 (IS NULL 분기 불필요).
+//   - 레거시 호환: {cohort,title,role} 만 보내면 group_kind='role',
+//                  group_scope=role 로 폴백.
 
 case 'task_group_get':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
@@ -1218,8 +1225,9 @@ case 'task_group_get':
     $cohort     = trim($input['cohort'] ?? '');
     $title      = trim($input['title']  ?? '');
     $role       = trim($input['role']   ?? '');
-    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
     if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
@@ -1319,12 +1327,14 @@ case 'task_group_update':
     $cohort     = trim($input['cohort'] ?? '');
     $title      = trim($input['title']  ?? '');
     $role       = trim($input['role']   ?? '');
-    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
     $newTitle   = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
     $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
     if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
 
     $db = getDB();
@@ -1346,9 +1356,11 @@ case 'task_group_delete':
     $cohort     = trim($input['cohort'] ?? '');
     $title      = trim($input['title']  ?? '');
     $role       = trim($input['role']   ?? '');
-    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupKind  = trim($input['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $db = getDB();
     $del = $db->prepare("
@@ -1382,9 +1394,11 @@ case 'task_group_rows':
     $cohort = trim($_GET['cohort'] ?? '');
     $title  = trim($_GET['title']  ?? '');
     $role   = trim($_GET['role']   ?? '');
-    $groupKind  = $_GET['group_kind'] ?? 'role';
+    $groupKind  = trim($_GET['group_kind'] ?? 'role');
     $groupScope = array_key_exists('group_scope', $_GET) ? $_GET['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
     if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $onlyIncomplete = ($_GET['only_incomplete']  ?? '1') === '1';
     $onlyUntilToday = ($_GET['only_until_today'] ?? '1') === '1';
