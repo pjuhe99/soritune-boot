@@ -542,25 +542,6 @@ const AdminApp = (() => {
                 }
             }
 
-            // Notices 탭 lazy load (operation/coach/head 공통)
-            if (typeof AdminNotices !== 'undefined') {
-                const noticesTabId = role === 'operation' ? 'tab-notices'
-                                   : role === 'coach'     ? 'tab-notices-coach'
-                                   : (role === 'head' ? 'tab-notices-head' : null);
-                if (noticesTabId) {
-                    const noticesTab = document.getElementById(noticesTabId);
-                    if (noticesTab) {
-                        const noticesObserver = new MutationObserver(() => {
-                            if (noticesTab.classList.contains('active') && !noticesTab.dataset.loaded) {
-                                noticesTab.dataset.loaded = '1';
-                                AdminNotices.init(noticesTab, admin);
-                            }
-                        });
-                        noticesObserver.observe(noticesTab, { attributes: true, attributeFilter: ['class'] });
-                    }
-                }
-            }
-
             // Bulk Register 탭 lazy load
             if (typeof BulkRegisterApp !== 'undefined') {
                 const bulkTab = document.getElementById('tab-bulk-register');
@@ -572,6 +553,25 @@ const AdminApp = (() => {
                         }
                     });
                     bulkObserver.observe(bulkTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+        }
+
+        // Notices 탭 lazy load (operation/coach/head 공통)
+        if (typeof AdminNotices !== 'undefined') {
+            const noticesTabId = role === 'operation' ? 'tab-notices'
+                               : role === 'coach'     ? 'tab-notices-coach'
+                               : (role === 'head' ? 'tab-notices-head' : null);
+            if (noticesTabId) {
+                const noticesTab = document.getElementById(noticesTabId);
+                if (noticesTab) {
+                    const noticesObserver = new MutationObserver(() => {
+                        if (noticesTab.classList.contains('active') && !noticesTab.dataset.loaded) {
+                            noticesTab.dataset.loaded = '1';
+                            AdminNotices.init(noticesTab, admin);
+                        }
+                    });
+                    noticesObserver.observe(noticesTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
         }
