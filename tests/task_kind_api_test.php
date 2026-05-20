@@ -179,8 +179,23 @@ if (!empty($r['body']['groups'])) {
 
 $r = req('GET', "{$base}/api/admin.php?action=all_tasks_grouped&filter_role=kind:everyone", $h);
 t('filter_role=kind:everyone 200', $r['code'] === 200 && !empty($r['body']['success']));
+if (!empty($r['body']['groups'])) {
+    $first = $r['body']['groups'][0];
+    t('kind:everyone row 의 group_kind=everyone',
+        ($first['group_kind'] ?? null) === 'everyone',
+        'got=' . ($first['group_kind'] ?? 'NULL'));
+}
 $r = req('GET', "{$base}/api/admin.php?action=all_tasks_grouped&filter_role=kind:person", $h);
 t('filter_role=kind:person 200', $r['code'] === 200 && !empty($r['body']['success']));
+if (!empty($r['body']['groups'])) {
+    $first = $r['body']['groups'][0];
+    t('kind:person row 의 group_kind=person',
+        ($first['group_kind'] ?? null) === 'person',
+        'got=' . ($first['group_kind'] ?? 'NULL'));
+    t('kind:person row 의 person_name 비어있지 않음',
+        !empty($first['person_name']),
+        'got=' . ($first['person_name'] ?? 'NULL'));
+}
 
 cleanup($db, $cohort, $testTitle);
 echo "\n--- {$pass} pass / {$fail} fail ---\n";

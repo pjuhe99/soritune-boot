@@ -1297,11 +1297,14 @@ case 'all_tasks_grouped':
         " . $groupBy . $orderBy);
         $stmt->execute([$cohort, $adminId, $adminId]);
     } elseif ($filterRole === 'kind:everyone') {
+        // 전체 부여 (group_kind='everyone') 묶음만. 정렬 키에서 t.role 제외 —
+        // everyone 은 사람마다 role 이 다양해서 흩어져 보이는 것을 방지.
         $stmt = $db->prepare($selectCore . "
             WHERE t.cohort = ? AND t.group_kind = 'everyone'
         " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
         $stmt->execute([$cohort]);
     } elseif ($filterRole === 'kind:person') {
+        // 특정 인물 부여 (group_kind='person') 묶음만. 정렬 키 동일 (kind:everyone 와 동일 이유).
         $stmt = $db->prepare($selectCore . "
             WHERE t.cohort = ? AND t.group_kind = 'person'
         " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
