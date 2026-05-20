@@ -1,6 +1,7 @@
 <?php
 /**
- * task_create / cohort_people_search API 통합 테스트.
+ * task_create assignment_kind (role/everyone/person) API 통합 테스트.
+ * (cohort_people_search 통합은 Task 4 에서 같은 파일에 추가 예정.)
  *
  * 사용:
  *   ADMIN_COOKIE='PHPSESSID_ADMIN=...op...' \
@@ -64,10 +65,12 @@ $r = req('POST', "{$base}/api/admin.php?action=task_create", $h, [
     'end_date'   => date('Y-m-d'),
 ]);
 t('kind=role 생성 성공', $r['code'] === 200 && !empty($r['body']['success']), 'code=' . $r['code']);
-$cnt = (int)$db->query("
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM tasks
-     WHERE title = '" . $testTitle . "-role' AND group_kind='role' AND group_scope='coach'
-")->fetchColumn();
+     WHERE title = ? AND group_kind = 'role' AND group_scope = 'coach'
+");
+$stmt->execute([$testTitle . '-role']);
+$cnt = (int)$stmt->fetchColumn();
 t('kind=role row 의 group_kind/scope 백필', $cnt >= 1, "cnt={$cnt}");
 
 // ── kind=everyone ─────
@@ -80,20 +83,24 @@ $r = req('POST', "{$base}/api/admin.php?action=task_create", $h, [
     'end_date'   => date('Y-m-d'),
 ]);
 t('kind=everyone 생성 성공', $r['code'] === 200 && !empty($r['body']['success']), 'code=' . $r['code']);
-$cnt = (int)$db->query("
+$stmt = $db->prepare("
     SELECT COUNT(*) FROM tasks
-     WHERE title = '" . $testTitle . "-everyone' AND group_kind='everyone' AND group_scope IS NULL
-")->fetchColumn();
+     WHERE title = ? AND group_kind = 'everyone' AND group_scope IS NULL
+");
+$stmt->execute([$testTitle . '-everyone']);
+$cnt = (int)$stmt->fetchColumn();
 t('kind=everyone row 의 group_scope NULL', $cnt >= 1, "cnt={$cnt}");
 
 // ── kind=person, type=admin ─────
-$adminId = (int)$db->query("
+$stmt = $db->prepare("
     SELECT a.id FROM admins a
      JOIN admin_roles ar ON a.id = ar.admin_id
      WHERE a.is_active = 1 AND ar.role IN ('coach','sub_coach','head','subhead1','subhead2','operation')
-       AND (a.cohort = '{$cohort}' OR a.cohort IS NULL)
+       AND (a.cohort = ? OR a.cohort IS NULL)
      LIMIT 1
-")->fetchColumn();
+");
+$stmt->execute([$cohort]);
+$adminId = (int)$stmt->fetchColumn();
 if (!$adminId) { echo "skip person/admin: 활성 admin 없음\n"; }
 else {
     $r = req('POST', "{$base}/api/admin.php?action=task_create", $h, [
@@ -106,13 +113,15 @@ else {
         'end_date'   => date('Y-m-d'),
     ]);
     t('kind=person admin 생성 성공', $r['code'] === 200 && !empty($r['body']['success']), 'code=' . $r['code']);
-    $cnt = (int)$db->query("
+    $stmt = $db->prepare("
         SELECT COUNT(*) FROM tasks
-         WHERE title = '" . $testTitle . "-person-admin'
+         WHERE title = ?
            AND group_kind = 'person'
-           AND group_scope = 'admin:{$adminId}'
-           AND assignee_admin_id = {$adminId}
-    ")->fetchColumn();
+           AND group_scope = ?
+           AND assignee_admin_id = ?
+    ");
+    $stmt->execute([$testTitle . '-person-admin', "admin:{$adminId}", $adminId]);
+    $cnt = (int)$stmt->fetchColumn();
     t('kind=person admin row 의 scope/assignee 일치', $cnt === 1, "cnt={$cnt}");
 }
 

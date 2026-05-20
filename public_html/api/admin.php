@@ -1632,11 +1632,15 @@ case 'task_create':
                 ];
             }
         }
+        // everyone 인데 0명이면 명백한 실수이므로 명시적 에러
+        // (role 분기는 placeholder row 로 폴백 — cohort-clone 마이그 경로 호환)
         if (empty($assignments)) jsonError('이 기수에 활성 멤버가 없습니다.');
     } else { // kind === 'person'
         $type = $target['type'];
         $id   = (int)$target['id'];
         if ($type === 'admin') {
+            // admin 이 다중 role 일 때 MIN(ar.role) 으로 lexicographic 첫 role 을
+            // 표시용 대표값으로 사용. 실제 식별은 group_scope='admin:{id}' 가 담당.
             $stmt = $db->prepare("
                 SELECT a.id, MIN(ar.role) AS role
                   FROM admins a
