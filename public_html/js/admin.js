@@ -1428,6 +1428,71 @@ const AdminApp = (() => {
         return Array.from(document.querySelectorAll(`.${idPrefix}-role-cb:checked`)).map(cb => cb.value);
     }
 
+    function setupPersonSearch() {
+        const input    = document.getElementById('tf-person-search');
+        const results  = document.getElementById('tf-person-results');
+        const selected = document.getElementById('tf-person-selected');
+        const hType    = document.getElementById('tf-person-type');
+        const hId      = document.getElementById('tf-person-id');
+        if (!input || !results || !selected) return;
+
+        let debounceId = null;
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceId);
+            const q = input.value.trim();
+            if (q.length < 1) {
+                results.style.display = 'none';
+                results.innerHTML = '';
+                return;
+            }
+            debounceId = setTimeout(async () => {
+                const r = await App.get('/api/admin.php?action=cohort_people_search', { q });
+                if (!r.success) { results.style.display = 'none'; return; }
+                const people = r.people || [];
+                if (!people.length) {
+                    results.innerHTML = '<div style="padding:8px;color:var(--gray-600,#888);font-size:0.85rem">검색 결과 없음</div>';
+                    results.style.display = '';
+                    return;
+                }
+                results.innerHTML = people.map(p => {
+                    const sub = p.type === 'admin'
+                        ? `<span class="text-muted">${App.esc(p.role_labels || '')}</span>`
+                        : `<span class="text-muted">${p.group_name ? App.esc(p.group_name) + ' ' : ''}${App.esc(p.role_labels || '')}${p.nickname ? ' · ' + App.esc(p.nickname) : ''}</span>`;
+                    return `
+                        <div class="person-search-item" data-type="${p.type}" data-id="${p.id}"
+                             data-name="${App.esc(p.name)}"
+                             style="padding:8px;cursor:pointer;border-bottom:1px solid var(--gray-100,#f3f4f6)">
+                            <strong>${App.esc(p.name)}</strong>
+                            <span style="margin-left:6px;font-size:0.85rem">${sub}</span>
+                        </div>
+                    `;
+                }).join('');
+                results.style.display = '';
+                results.querySelectorAll('.person-search-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        hType.value = el.dataset.type;
+                        hId.value   = el.dataset.id;
+                        selected.innerHTML = `
+                            <span class="badge badge-info" style="padding:6px 10px">
+                                👤 ${App.esc(el.dataset.name)}
+                                <button type="button" id="tf-person-clear"
+                                        style="margin-left:6px;background:transparent;border:none;cursor:pointer">×</button>
+                            </span>
+                        `;
+                        document.getElementById('tf-person-clear').addEventListener('click', () => {
+                            hType.value = ''; hId.value = '';
+                            selected.innerHTML = '';
+                        });
+                        results.style.display = 'none';
+                        results.innerHTML = '';
+                        input.value = '';
+                    });
+                });
+            }, 300);
+        });
+    }
+
     function showAdminForm(data = {}) {
         const isEdit = !!data.id;
         const selectedRoles = data.roles || [];
@@ -1681,9 +1746,43 @@ const AdminApp = (() => {
         } else {
             roleSection = `
                 <div class="form-group">
-                    <label class="form-label">담당 역할 * (복수 선택 가능)</label>
-                    <div style="display:flex;flex-wrap:wrap;padding:8px 0">
-                        ${renderRoleCheckboxes([], 'tf')}
+                    <label class="form-label">부여 방식 *</label>
+                    <div style="display:flex;gap:16px;padding:4px 0">
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="role" checked> 역할별
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="everyone"> 전체
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="person"> 특정 인물
+                        </label>
+                    </div>
+                </div>
+                <div id="tf-kind-role" class="tf-kind-section">
+                    <div class="form-group">
+                        <label class="form-label">담당 역할 * (복수 선택 가능)</label>
+                        <div style="display:flex;flex-wrap:wrap;padding:8px 0">
+                            ${renderRoleCheckboxes([], 'tf')}
+                        </div>
+                    </div>
+                </div>
+                <div id="tf-kind-everyone" class="tf-kind-section" style="display:none">
+                    <p class="text-muted" style="font-size:0.85rem;padding:8px 0">
+                        현재 기수의 활성 운영진(운영팀·총괄·부총괄·메인강사·서브강사) +
+                        조장·부조장 전원에게 부여됩니다. 각자 자기 화면에서 개별 체크합니다.
+                    </p>
+                </div>
+                <div id="tf-kind-person" class="tf-kind-section" style="display:none">
+                    <div class="form-group">
+                        <label class="form-label">담당자 *</label>
+                        <input type="text" class="form-input" id="tf-person-search"
+                               placeholder="이름·닉네임으로 검색 (최소 1자)" autocomplete="off">
+                        <div id="tf-person-results" class="person-search-results"
+                             style="border:1px solid var(--gray-200,#e5e5e5);border-radius:6px;margin-top:4px;max-height:200px;overflow-y:auto;display:none"></div>
+                        <input type="hidden" id="tf-person-type">
+                        <input type="hidden" id="tf-person-id">
+                        <div id="tf-person-selected" style="margin-top:8px"></div>
                     </div>
                 </div>
             `;
@@ -1799,6 +1898,19 @@ const AdminApp = (() => {
                     if (target) target.style.display = '';
                 });
             });
+
+            // 신규: kind 라디오 핸들러
+            const kindRadios = document.querySelectorAll('input[name="tf-kind"]');
+            kindRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    document.querySelectorAll('.tf-kind-section').forEach(s => s.style.display = 'none');
+                    const target = document.getElementById('tf-kind-' + radio.value);
+                    if (target) target.style.display = '';
+                });
+            });
+
+            // 사람 검색
+            setupPersonSearch();
         }
 
         document.getElementById('tf-save').onclick = async () => {
@@ -1817,8 +1929,19 @@ const AdminApp = (() => {
                 payload.new_content_markdown = document.getElementById('tf-content').value.trim();
                 if (!payload.new_title) return Toast.warning('제목을 입력해주세요.');
             } else {
-                payload.roles = getCheckedRoles('tf');
-                if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
+                const kind = document.querySelector('input[name="tf-kind"]:checked')?.value || 'role';
+                payload.assignment_kind = kind;
+
+                if (kind === 'role') {
+                    payload.roles = getCheckedRoles('tf');
+                    if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
+                } else if (kind === 'person') {
+                    const type = document.getElementById('tf-person-type').value;
+                    const id   = parseInt(document.getElementById('tf-person-id').value, 10);
+                    if (!type || !id) return Toast.warning('담당자를 선택해주세요.');
+                    payload.target_person = { type, id };
+                }
+                // kind === 'everyone' 은 추가 필드 없음
 
                 const mode = document.querySelector('input[name="tf-date-mode"]:checked').value;
                 payload.date_mode = mode;
