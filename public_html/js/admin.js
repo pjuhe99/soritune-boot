@@ -1437,6 +1437,8 @@ const AdminApp = (() => {
         if (!input || !results || !selected) return;
 
         let debounceId = null;
+        // 응답 race 방지: 더 늦게 도착한 옛 응답이 새 응답을 덮어쓰지 않도록 sequence 비교.
+        let reqSeq = 0;
 
         input.addEventListener('input', () => {
             clearTimeout(debounceId);
@@ -1447,7 +1449,9 @@ const AdminApp = (() => {
                 return;
             }
             debounceId = setTimeout(async () => {
+                const mySeq = ++reqSeq;
                 const r = await App.get('/api/admin.php?action=cohort_people_search', { q });
+                if (mySeq !== reqSeq) return;
                 if (!r.success) { results.style.display = 'none'; return; }
                 const people = r.people || [];
                 if (!people.length) {
@@ -1455,13 +1459,14 @@ const AdminApp = (() => {
                     results.style.display = '';
                     return;
                 }
-                results.innerHTML = people.map(p => {
+                // data-name 의 quote breakout 방어: name 은 별도 JS 배열에 보관하고
+                // DOM 에는 인덱스만 노출. data-type/id 도 일관성 위해 동일 패턴.
+                results.innerHTML = people.map((p, i) => {
                     const sub = p.type === 'admin'
                         ? `<span class="text-muted">${App.esc(p.role_labels || '')}</span>`
                         : `<span class="text-muted">${p.group_name ? App.esc(p.group_name) + ' ' : ''}${App.esc(p.role_labels || '')}${p.nickname ? ' · ' + App.esc(p.nickname) : ''}</span>`;
                     return `
-                        <div class="person-search-item" data-type="${p.type}" data-id="${p.id}"
-                             data-name="${App.esc(p.name)}"
+                        <div class="person-search-item" data-idx="${i}"
                              style="padding:8px;cursor:pointer;border-bottom:1px solid var(--gray-100,#f3f4f6)">
                             <strong>${App.esc(p.name)}</strong>
                             <span style="margin-left:6px;font-size:0.85rem">${sub}</span>
@@ -1471,11 +1476,13 @@ const AdminApp = (() => {
                 results.style.display = '';
                 results.querySelectorAll('.person-search-item').forEach(el => {
                     el.addEventListener('click', () => {
-                        hType.value = el.dataset.type;
-                        hId.value   = el.dataset.id;
+                        const p = people[parseInt(el.dataset.idx, 10)];
+                        if (!p) return;
+                        hType.value = p.type;
+                        hId.value   = String(p.id);
                         selected.innerHTML = `
                             <span class="badge badge-info" style="padding:6px 10px">
-                                👤 ${App.esc(el.dataset.name)}
+                                👤 ${App.esc(p.name)}
                                 <button type="button" id="tf-person-clear"
                                         style="margin-left:6px;background:transparent;border:none;cursor:pointer">×</button>
                             </span>
@@ -1490,6 +1497,14 @@ const AdminApp = (() => {
                     });
                 });
             }, 300);
+        });
+
+        // 바깥 클릭/Escape 로 결과 dropdown 닫기.
+        input.addEventListener('blur', () => {
+            setTimeout(() => { results.style.display = 'none'; }, 150);
+        });
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { results.style.display = 'none'; }
         });
     }
 
