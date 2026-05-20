@@ -24,6 +24,11 @@ const AdminApp = (() => {
         return admin && admin.admin_roles && admin.admin_roles.includes('operation');
     }
 
+    function canManageTasks() {
+        return admin && admin.admin_roles &&
+            admin.admin_roles.some(r => ['operation','head','subhead1','subhead2'].includes(r));
+    }
+
     // ── Init ──
     async function init() {
         root = document.getElementById('admin-root');
@@ -164,7 +169,7 @@ const AdminApp = (() => {
                     <div class="dashboard-card" id="card-tasks">
                         <div class="section" id="sec-guide-btn"></div>
                         <div class="section" id="sec-date-nav"></div>
-                        ${isOperation() ? '<div class="section" id="sec-task-filter"></div>' : ''}
+                        ${canManageTasks() ? '<div class="section" id="sec-task-filter"></div>' : ''}
                         <div class="section" id="sec-tasks"></div>
                         <div class="section" id="sec-overdue"></div>
                     </div>
@@ -282,6 +287,7 @@ const AdminApp = (() => {
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
                             <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
@@ -298,6 +304,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-notices-head" data-hash="notices">공지</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-revival"></div>
@@ -381,7 +388,7 @@ const AdminApp = (() => {
 
         renderGuideButton();
         renderDateNav();
-        if (isOperation()) renderTaskFilter();
+        if (canManageTasks()) renderTaskFilter();
 
         if (isOperation()) {
             // Dashboard 탭 (기본 active이므로 즉시 로드, 또는 lazy)
@@ -404,7 +411,6 @@ const AdminApp = (() => {
 
             loadMembersMgmt();
             loadAdminsMgmt();
-            loadTasksMgmt();
             loadGuidesMgmt();
             loadCalendarMgmt();
             loadCohortsMgmt();
@@ -568,6 +574,10 @@ const AdminApp = (() => {
                     bulkObserver.observe(bulkTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
+        }
+
+        if (canManageTasks()) {
+            loadTasksMgmt();
         }
 
         if ((role === 'coach' || role === 'sub_coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader' || isOperation()) && typeof BootcampApp !== 'undefined') {
@@ -856,7 +866,7 @@ const AdminApp = (() => {
         sec.innerHTML = '<div class="section-title">오늘의 Task</div><div class="empty-state">로딩 중...</div>';
 
         const params = { date: currentDate };
-        if (isOperation()) params.filter_role = taskFilter;
+        if (canManageTasks()) params.filter_role = taskFilter;
         const r = await App.get('/api/admin.php?action=today_tasks', params);
         if (!r.success) return;
 
@@ -875,7 +885,7 @@ const AdminApp = (() => {
     async function loadOverdueTasks() {
         const sec = document.getElementById('sec-overdue');
         const overdueParams = {};
-        if (isOperation()) overdueParams.filter_role = taskFilter;
+        if (canManageTasks()) overdueParams.filter_role = taskFilter;
         const r = await App.get('/api/admin.php?action=overdue_tasks', overdueParams);
         if (!r.success) return;
 
@@ -946,7 +956,9 @@ const AdminApp = (() => {
                         <div class="task-meta">
                             <span>${task.start_date} ~ ${task.end_date}</span>
                             ${task.assignee_name ? `<span class="badge badge-primary">${App.esc(task.assignee_name)}</span>` : ''}
-                            ${isOperation() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
+                            ${task.group_kind === 'everyone' ? `<span class="badge badge-info">📣 전체</span>` : ''}
+                            ${task.group_kind === 'person'   ? `<span class="badge badge-info">👤 개인 지정</span>` : ''}
+                            ${canManageTasks() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
                             ${requiresChip}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
                         </div>
@@ -1418,6 +1430,86 @@ const AdminApp = (() => {
         return Array.from(document.querySelectorAll(`.${idPrefix}-role-cb:checked`)).map(cb => cb.value);
     }
 
+    function setupPersonSearch() {
+        const input    = document.getElementById('tf-person-search');
+        const results  = document.getElementById('tf-person-results');
+        const selected = document.getElementById('tf-person-selected');
+        const hType    = document.getElementById('tf-person-type');
+        const hId      = document.getElementById('tf-person-id');
+        if (!input || !results || !selected) return;
+
+        let debounceId = null;
+        // 응답 race 방지: 더 늦게 도착한 옛 응답이 새 응답을 덮어쓰지 않도록 sequence 비교.
+        let reqSeq = 0;
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceId);
+            const q = input.value.trim();
+            if (q.length < 1) {
+                results.style.display = 'none';
+                results.innerHTML = '';
+                return;
+            }
+            debounceId = setTimeout(async () => {
+                const mySeq = ++reqSeq;
+                const r = await App.get('/api/admin.php?action=cohort_people_search', { q });
+                if (mySeq !== reqSeq) return;
+                if (!r.success) { results.style.display = 'none'; return; }
+                const people = r.people || [];
+                if (!people.length) {
+                    results.innerHTML = '<div style="padding:8px;color:var(--gray-600,#888);font-size:0.85rem">검색 결과 없음</div>';
+                    results.style.display = '';
+                    return;
+                }
+                // data-name 의 quote breakout 방어: name 은 별도 JS 배열에 보관하고
+                // DOM 에는 인덱스만 노출. data-type/id 도 일관성 위해 동일 패턴.
+                results.innerHTML = people.map((p, i) => {
+                    const sub = p.type === 'admin'
+                        ? `<span class="text-muted">${App.esc(p.role_labels || '')}</span>`
+                        : `<span class="text-muted">${p.group_name ? App.esc(p.group_name) + ' ' : ''}${App.esc(p.role_labels || '')}${p.nickname ? ' · ' + App.esc(p.nickname) : ''}</span>`;
+                    return `
+                        <div class="person-search-item" data-idx="${i}"
+                             style="padding:8px;cursor:pointer;border-bottom:1px solid var(--gray-100,#f3f4f6)">
+                            <strong>${App.esc(p.name)}</strong>
+                            <span style="margin-left:6px;font-size:0.85rem">${sub}</span>
+                        </div>
+                    `;
+                }).join('');
+                results.style.display = '';
+                results.querySelectorAll('.person-search-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const p = people[parseInt(el.dataset.idx, 10)];
+                        if (!p) return;
+                        hType.value = p.type;
+                        hId.value   = String(p.id);
+                        selected.innerHTML = `
+                            <span class="badge badge-info" style="padding:6px 10px">
+                                👤 ${App.esc(p.name)}
+                                <button type="button" id="tf-person-clear"
+                                        style="margin-left:6px;background:transparent;border:none;cursor:pointer">×</button>
+                            </span>
+                        `;
+                        document.getElementById('tf-person-clear').addEventListener('click', () => {
+                            hType.value = ''; hId.value = '';
+                            selected.innerHTML = '';
+                        });
+                        results.style.display = 'none';
+                        results.innerHTML = '';
+                        input.value = '';
+                    });
+                });
+            }, 300);
+        });
+
+        // 바깥 클릭/Escape 로 결과 dropdown 닫기.
+        input.addEventListener('blur', () => {
+            setTimeout(() => { results.style.display = 'none'; }, 150);
+        });
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { results.style.display = 'none'; }
+        });
+    }
+
     function showAdminForm(data = {}) {
         const isEdit = !!data.id;
         const selectedRoles = data.roles || [];
@@ -1568,12 +1660,25 @@ const AdminApp = (() => {
         const sec = document.getElementById('tab-tasks-mgmt');
         sec.innerHTML = '<div class="empty-state">로딩 중...</div>';
 
+        function renderTargetCell(g) {
+            if (g.group_kind === 'everyone') {
+                return '<span class="badge badge-info">📣 전체</span>';
+            }
+            if (g.group_kind === 'person') {
+                const name = g.person_name || '(삭제된 사용자)';
+                return `<span class="badge badge-info">👤 ${App.esc(name)}</span>`;
+            }
+            return `<span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span>`;
+        }
+
         const r = await App.get('/api/admin.php?action=all_tasks_grouped', { filter_role: taskMgmtFilter });
         const groups = r.success ? (r.groups || []) : [];
 
         const filters = [
             { key: 'mine', label: '내 Task' },
             { key: 'all', label: '전체' },
+            { key: 'kind:everyone', label: '📣 전체 부여' },
+            { key: 'kind:person',   label: '👤 개인 부여' },
             { key: 'coach', label: '메인강사' },
             { key: 'sub_coach', label: '서브강사' },
             { key: 'head', label: '총괄' },
@@ -1611,23 +1716,32 @@ const AdminApp = (() => {
             </div>
             <div style="overflow-x:auto">
                 <table class="data-table">
-                    <thead><tr><th>제목</th><th>역할</th><th>담당자</th><th>기간</th><th>진행</th><th></th></tr></thead>
+                    <thead><tr><th>제목</th><th>대상</th><th>담당자</th><th>기간</th><th>진행</th><th></th></tr></thead>
                     <tbody>
                         ${groups.map(g => {
                             const cohortAttr = encodeURIComponent(g.cohort);
                             const titleAttr  = encodeURIComponent(g.title);
                             const roleAttr   = encodeURIComponent(g.role);
+                            const groupKindAttr  = App.esc(g.group_kind || 'role');
+                            const groupScopeAttr = encodeURIComponent(g.group_scope ?? '');
+                            const personNameAttr = encodeURIComponent(g.person_name ?? '');
                             const requiresSubIcon = parseInt(g.requires_submission) === 1 ? '📝 ' : '';
                             return `
-                            <tr class="group-row" data-cohort="${cohortAttr}" data-title="${titleAttr}" data-role="${roleAttr}" style="cursor:pointer">
+                            <tr class="group-row"
+                                data-cohort="${cohortAttr}"
+                                data-title="${titleAttr}"
+                                data-role="${roleAttr}"
+                                data-group-kind="${groupKindAttr}"
+                                data-group-scope="${groupScopeAttr}"
+                                style="cursor:pointer">
                                 <td><span class="expand-arrow" style="display:inline-block;width:14px;color:var(--gray-500,#888)">▶</span> ${requiresSubIcon}${App.esc(g.title)}</td>
-                                <td><span class="badge badge-primary">${App.esc(ROLE_LABELS[g.role] || g.role)}</span></td>
+                                <td>${renderTargetCell(g)}</td>
                                 <td>${assigneeLabel(g.assignee_count)}</td>
                                 <td style="white-space:nowrap">${periodLabel(g.min_start_date, g.max_end_date)}</td>
                                 <td>${progressBadge(g.done_count, g.total_count)}</td>
                                 <td class="actions">
-                                    <button class="btn-icon" onclick="event.stopPropagation();AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}')">수정</button>
-                                    <button class="btn-icon danger" onclick="event.stopPropagation();AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0})">삭제</button>
+                                    <button class="btn-icon" onclick="event.stopPropagation();AdminApp._editTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}','${groupKindAttr}','${groupScopeAttr}','${personNameAttr}')">수정</button>
+                                    <button class="btn-icon danger" onclick="event.stopPropagation();AdminApp._deleteTaskGroup('${cohortAttr}','${titleAttr}','${roleAttr}','${groupKindAttr}','${groupScopeAttr}',${parseInt(g.total_count)||0},${parseInt(g.done_count)||0},${parseInt(g.assignee_count)||0})">삭제</button>
                                 </td>
                             </tr>
                         `;}).join('')}
@@ -1656,24 +1770,64 @@ const AdminApp = (() => {
 
         let roleSection;
         if (isEdit) {
+            const kindRow = data.groupKey.group_kind === 'everyone'
+                ? `<div><strong>대상</strong>: <span class="badge badge-info">📣 전체</span></div>`
+                : data.groupKey.group_kind === 'person'
+                ? `<div><strong>대상</strong>: <span class="badge badge-info">👤 ${App.esc(data.personName || '(삭제된 사용자)')}</span></div>`
+                : `<div><strong>역할</strong>: ${App.esc(ROLE_LABELS[data.groupKey.role] || data.groupKey.role)}</div>`;
+
             roleSection = `
                 <div class="form-group">
                     <label class="form-label">묶음 정보</label>
                     <div style="background:var(--gray-50,#f5f5f5);border:1px solid var(--gray-200,#e5e5e5);border-radius:8px;padding:12px;font-size:0.9rem;line-height:1.6">
-                        <div><strong>역할</strong>: ${App.esc(ROLE_LABELS[data.groupKey.role] || data.groupKey.role)}</div>
+                        ${kindRow}
                         <div><strong>기수</strong>: ${App.esc(data.groupKey.cohort)}</div>
                         <div><strong>기간</strong>: ${App.esc(data.periodLabel || '-')}</div>
                         <div><strong>총 ${data.totalCount || 0}개</strong> (완료 ${data.doneCount || 0} / 미완료 ${(data.totalCount || 0) - (data.doneCount || 0)})</div>
                     </div>
-                    <p class="text-muted" style="font-size:0.8rem;margin-top:6px">* 역할·기간은 묶음 식별 정보라 일괄 수정 대상이 아닙니다. 변경하려면 삭제 후 다시 만들어주세요.</p>
+                    <p class="text-muted" style="font-size:0.8rem;margin-top:6px">* 부여 방식·범위·기간은 묶음 식별 정보라 일괄 수정 대상이 아닙니다. 변경하려면 삭제 후 다시 만들어주세요.</p>
                 </div>
             `;
         } else {
             roleSection = `
                 <div class="form-group">
-                    <label class="form-label">담당 역할 * (복수 선택 가능)</label>
-                    <div style="display:flex;flex-wrap:wrap;padding:8px 0">
-                        ${renderRoleCheckboxes([], 'tf')}
+                    <label class="form-label">부여 방식 *</label>
+                    <div style="display:flex;gap:16px;padding:4px 0">
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="role" checked> 역할별
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="everyone"> 전체
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+                            <input type="radio" name="tf-kind" value="person"> 특정 인물
+                        </label>
+                    </div>
+                </div>
+                <div id="tf-kind-role" class="tf-kind-section">
+                    <div class="form-group">
+                        <label class="form-label">담당 역할 * (복수 선택 가능)</label>
+                        <div style="display:flex;flex-wrap:wrap;padding:8px 0">
+                            ${renderRoleCheckboxes([], 'tf')}
+                        </div>
+                    </div>
+                </div>
+                <div id="tf-kind-everyone" class="tf-kind-section" style="display:none">
+                    <p class="text-muted" style="font-size:0.85rem;padding:8px 0">
+                        현재 기수의 활성 운영진(운영팀·총괄·부총괄·메인강사·서브강사) +
+                        조장·부조장 전원에게 부여됩니다. 각자 자기 화면에서 개별 체크합니다.
+                    </p>
+                </div>
+                <div id="tf-kind-person" class="tf-kind-section" style="display:none">
+                    <div class="form-group">
+                        <label class="form-label">담당자 *</label>
+                        <input type="text" class="form-input" id="tf-person-search"
+                               placeholder="이름·닉네임으로 검색 (최소 1자)" autocomplete="off">
+                        <div id="tf-person-results" class="person-search-results"
+                             style="border:1px solid var(--gray-200,#e5e5e5);border-radius:6px;margin-top:4px;max-height:200px;overflow-y:auto;display:none"></div>
+                        <input type="hidden" id="tf-person-type">
+                        <input type="hidden" id="tf-person-id">
+                        <div id="tf-person-selected" style="margin-top:8px"></div>
                     </div>
                 </div>
             `;
@@ -1789,6 +1943,19 @@ const AdminApp = (() => {
                     if (target) target.style.display = '';
                 });
             });
+
+            // 신규: kind 라디오 핸들러
+            const kindRadios = document.querySelectorAll('input[name="tf-kind"]');
+            kindRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    document.querySelectorAll('.tf-kind-section').forEach(s => s.style.display = 'none');
+                    const target = document.getElementById('tf-kind-' + radio.value);
+                    if (target) target.style.display = '';
+                });
+            });
+
+            // 사람 검색
+            setupPersonSearch();
         }
 
         document.getElementById('tf-save').onclick = async () => {
@@ -1803,12 +1970,25 @@ const AdminApp = (() => {
                 payload.cohort = data.groupKey.cohort;
                 payload.title  = data.groupKey.title;       // 옛 title (식별용)
                 payload.role   = data.groupKey.role;
+                payload.group_kind  = data.groupKey.group_kind || 'role';
+                payload.group_scope = data.groupKey.group_scope ?? null;
                 payload.new_title = document.getElementById('tf-title').value.trim();
                 payload.new_content_markdown = document.getElementById('tf-content').value.trim();
                 if (!payload.new_title) return Toast.warning('제목을 입력해주세요.');
             } else {
-                payload.roles = getCheckedRoles('tf');
-                if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
+                const kind = document.querySelector('input[name="tf-kind"]:checked')?.value || 'role';
+                payload.assignment_kind = kind;
+
+                if (kind === 'role') {
+                    payload.roles = getCheckedRoles('tf');
+                    if (!payload.roles.length) return Toast.warning('역할을 하나 이상 선택해주세요.');
+                } else if (kind === 'person') {
+                    const type = document.getElementById('tf-person-type').value;
+                    const id   = parseInt(document.getElementById('tf-person-id').value, 10);
+                    if (!type || !id) return Toast.warning('담당자를 선택해주세요.');
+                    payload.target_person = { type, id };
+                }
+                // kind === 'everyone' 은 추가 필드 없음
 
                 const mode = document.querySelector('input[name="tf-date-mode"]:checked').value;
                 payload.date_mode = mode;
@@ -1843,19 +2023,30 @@ const AdminApp = (() => {
         };
     }
 
-    async function _editTaskGroup(cohortEnc, titleEnc, roleEnc) {
+    async function _editTaskGroup(cohortEnc, titleEnc, roleEnc, groupKindEnc, groupScopeEnc, personNameEnc) {
         const cohort = decodeURIComponent(cohortEnc);
         const title  = decodeURIComponent(titleEnc);
         const role   = decodeURIComponent(roleEnc);
+        const groupKind  = groupKindEnc || 'role';
+        const groupScope = (groupScopeEnc === '' || groupScopeEnc == null)
+            ? null
+            : decodeURIComponent(groupScopeEnc);
+        const personName = personNameEnc ? decodeURIComponent(personNameEnc) : '';
 
         // 그룹 메타 (집계) 와 prefill 값 (title/content) 둘 다 필요
         const [grouped, single] = await Promise.all([
             App.get('/api/admin.php?action=all_tasks_grouped', { filter_role: 'all' }),
-            App.post('/api/admin.php?action=task_group_get', { cohort, title, role }),
+            App.post('/api/admin.php?action=task_group_get', {
+                cohort, title, role,
+                group_kind: groupKind,
+                group_scope: groupScope,
+            }),
         ]);
         if (!single.success) return Toast.error(single.message || '묶음 조회 실패');
         const g = (grouped.groups || []).find(x =>
-            x.cohort === cohort && x.title === title && x.role === role);
+            x.cohort === cohort && x.title === title && x.role === role
+            && (x.group_kind || 'role') === groupKind
+            && (x.group_scope ?? null) === groupScope);
         if (!g) return Toast.error('묶음 메타를 찾을 수 없습니다.');
 
         const periodLabel = (g.min_start_date === g.max_end_date)
@@ -1863,7 +2054,8 @@ const AdminApp = (() => {
             : `${g.min_start_date} ~ ${g.max_end_date}`;
 
         showTaskForm({
-            groupKey: { cohort, title, role },
+            groupKey: { cohort, title, role, group_kind: groupKind, group_scope: groupScope },
+            personName: personName || g.person_name || '',
             title: single.title,
             content_markdown: single.content_markdown,
             requires_submission: parseInt(single.requires_submission) || 0,
@@ -1873,25 +2065,38 @@ const AdminApp = (() => {
         });
     }
 
-    async function _deleteTaskGroup(cohortEnc, titleEnc, roleEnc, totalCount, doneCount) {
+    async function _deleteTaskGroup(cohortEnc, titleEnc, roleEnc, groupKindEnc, groupScopeEnc, totalCount, doneCount, assigneeCount) {
         const cohort = decodeURIComponent(cohortEnc);
         const title  = decodeURIComponent(titleEnc);
         const role   = decodeURIComponent(roleEnc);
+        const groupKind  = groupKindEnc || 'role';
+        const groupScope = (groupScopeEnc === '' || groupScopeEnc == null)
+            ? null
+            : decodeURIComponent(groupScopeEnc);
         const incomplete = (totalCount || 0) - (doneCount || 0);
+
+        const kindLabel =
+            groupKind === 'everyone' ? '📣 전체 부여' :
+            groupKind === 'person'   ? '👤 개인 부여' :
+            (ROLE_LABELS[role] || role);
 
         let msg;
         if (incomplete === 0) {
             Toast.info('이미 모두 완료된 묶음입니다. 삭제할 row 가 없습니다.');
             return;
         } else if (doneCount === 0) {
-            msg = `'${title}' 묶음 ${incomplete}개를 삭제하시겠습니까?`;
+            msg = `[${kindLabel}] '${title}' 묶음 ${incomplete}개를 삭제하시겠습니까?`;
         } else {
-            msg = `'${title}' 묶음의 미완료 ${incomplete}개를 삭제합니다.\n이력 보존을 위해 완료된 ${doneCount}개는 남깁니다.\n진행할까요?`;
+            msg = `[${kindLabel}] '${title}' 묶음의 미완료 ${incomplete}개를 삭제합니다.\n이력 보존을 위해 완료된 ${doneCount}개는 남깁니다.\n진행할까요?`;
         }
         if (!await App.confirm(msg)) return;
 
         App.showLoading();
-        const r = await App.post('/api/admin.php?action=task_group_delete', { cohort, title, role });
+        const r = await App.post('/api/admin.php?action=task_group_delete', {
+            cohort, title, role,
+            group_kind: groupKind,
+            group_scope: groupScope,
+        });
         App.hideLoading();
         if (r.success) {
             Toast.success(r.message || `${r.deleted_count}개 삭제 / ${r.kept_count}개 보존`);
@@ -1933,6 +2138,8 @@ const AdminApp = (() => {
                  data-cohort="${groupRow.dataset.cohort}"
                  data-title="${groupRow.dataset.title}"
                  data-role="${groupRow.dataset.role}"
+                 data-group-kind="${groupRow.dataset.groupKind || 'role'}"
+                 data-group-scope="${groupRow.dataset.groupScope || ''}"
                  data-only-incomplete="1"
                  data-only-until-today="1">
                 <div class="empty-state" style="padding:16px">로딩 중...</div>
@@ -1952,12 +2159,18 @@ const AdminApp = (() => {
         const cohort         = decodeURIComponent(body.dataset.cohort);
         const title          = decodeURIComponent(body.dataset.title);
         const role           = decodeURIComponent(body.dataset.role);
+        const groupKind      = body.dataset.groupKind || 'role';
+        const groupScopeRaw  = body.dataset.groupScope || '';
+        // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. 백엔드가 '' → NULL 정규화.
+        const groupScope     = groupScopeRaw === '' ? '' : decodeURIComponent(groupScopeRaw);
         const onlyIncomplete = body.dataset.onlyIncomplete === '1';
         const onlyUntilToday = body.dataset.onlyUntilToday === '1';
 
         body.innerHTML = '<div class="empty-state" style="padding:16px">로딩 중...</div>';
         const r = await App.get('/api/admin.php?action=task_group_rows', {
             cohort, title, role,
+            group_kind: groupKind,
+            group_scope: groupScope,
             only_incomplete:  onlyIncomplete  ? '1' : '0',
             only_until_today: onlyUntilToday  ? '1' : '0',
         });

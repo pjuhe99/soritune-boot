@@ -204,7 +204,7 @@ case 'today_tasks':
     $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
-    if (hasRole($admin, 'operation')) {
+    if (hasAnyRole($admin, ['operation','head','subhead1','subhead2'])) {
         if ($filterRole === 'mine') {
             // My tasks only
             $stmt = $db->prepare("
@@ -287,7 +287,7 @@ case 'overdue_tasks':
     $filterRole = $_GET['filter_role'] ?? '';
 
     $db = getDB();
-    if (hasRole($admin, 'operation')) {
+    if (hasAnyRole($admin, ['operation','head','subhead1','subhead2'])) {
         if ($filterRole === 'mine') {
             $stmt = $db->prepare("
                 SELECT t.*, COALESCE(a.name, bm.real_name) AS assignee_name
@@ -1208,99 +1208,122 @@ case 'admin_delete':
     jsonSuccess([], '관리자가 삭제되었습니다.');
     break;
 
-// ── Task Group CRUD (operation only) ─────
-// 묶음 키 = (cohort, title, role)
+// ── Task Group CRUD (operation/head/subhead1/subhead2) ─────
+// 묶음 키 = (cohort, title, group_kind, group_scope)
+//   - group_kind ∈ {role, everyone, person} (ENUM)
+//   - group_scope: kind=role/person(admin) → role 이름,
+//                  kind=person → 'admin:{id}' 또는 'member:{id}',
+//                  kind=everyone → NULL
+//   - NULL-safe 매칭은 `(group_scope <=> ?)` 사용 (IS NULL 분기 불필요).
+//   - 레거시 호환: {cohort,title,role} 만 보내면 group_kind='role',
+//                  group_scope=role 로 폴백.
 
 case 'task_group_get':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort = trim($input['cohort'] ?? '');
-    $title  = trim($input['title']  ?? '');
-    $role   = trim($input['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = trim($input['group_kind'] ?? 'role');
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT title, content_markdown, requires_submission
+        SELECT title, content_markdown, requires_submission, group_kind, group_scope
           FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
          ORDER BY start_date ASC
          LIMIT 1
     ");
-    $stmt->execute([$cohort, $title, $role]);
+    $stmt->execute([$cohort, $title, $groupKind, $groupScope]);
     $row = $stmt->fetch();
     if (!$row) jsonError('해당 묶음을 찾을 수 없습니다.', 404);
     jsonSuccess([
         'title' => $row['title'],
         'content_markdown' => $row['content_markdown'],
         'requires_submission' => (int)$row['requires_submission'],
+        'group_kind' => $row['group_kind'],
+        'group_scope' => $row['group_scope'],
     ]);
     break;
 
 case 'all_tasks_grouped':
-    $admin = requireAdmin();
-    if (!hasRole($admin, 'operation')) jsonError('권한이 없습니다.', 403);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $cohort = getEffectiveCohort($admin);
     $filterRole = $_GET['filter_role'] ?? '';
     $adminId = $admin['admin_id'];
 
-    // 기존 all_tasks 의 필터 SQL 을 그대로 GROUP BY 로 변환
     $db = getDB();
+
+    // 공통 SELECT (LEFT JOIN 으로 person_name 만들기)
+    $selectCore = "
+        SELECT t.cohort, t.title, t.role,
+               t.group_kind, t.group_scope,
+               COUNT(*)                                AS total_count,
+               SUM(t.completed)                        AS done_count,
+               MIN(t.start_date)                       AS min_start_date,
+               MAX(t.end_date)                         AS max_end_date,
+               MAX(t.requires_submission)              AS requires_submission,
+               COUNT(DISTINCT CASE
+                       WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                       THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
+                     END) AS assignee_count,
+               COALESCE(MIN(adm.name), MIN(bm.real_name)) AS person_name
+          FROM tasks t
+          LEFT JOIN admins adm
+                 ON t.group_kind = 'person'
+                AND t.group_scope = CONCAT('admin:', adm.id)
+          LEFT JOIN bootcamp_members bm
+                 ON t.group_kind = 'person'
+                AND t.group_scope = CONCAT('member:', bm.id)
+    ";
+    $groupBy = "
+        GROUP BY t.cohort, t.title, t.role, t.group_kind, t.group_scope
+    ";
+    $orderBy = "
+        ORDER BY t.role, MIN(t.start_date) DESC, t.title
+    ";
+
     if ($filterRole === 'mine') {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ?
-               AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY t.role, MIN(t.start_date) DESC, t.title
-        ");
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+              AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
+        " . $groupBy . $orderBy);
         $stmt->execute([$cohort, $adminId, $adminId]);
+    } elseif ($filterRole === 'kind:everyone') {
+        // 전체 부여 (group_kind='everyone') 묶음만. 정렬 키에서 t.role 제외 —
+        // everyone 은 사람마다 role 이 다양해서 흩어져 보이는 것을 방지.
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ? AND t.group_kind = 'everyone'
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
+        $stmt->execute([$cohort]);
+    } elseif ($filterRole === 'kind:person') {
+        // 특정 인물 부여 (group_kind='person') 묶음만. 정렬 키 동일 (kind:everyone 와 동일 이유).
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ? AND t.group_kind = 'person'
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
+        $stmt->execute([$cohort]);
     } elseif ($filterRole && $filterRole !== 'all') {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ? AND t.role = ?
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY MIN(t.start_date) DESC, t.title
-        ");
+        // 기존: 특정 role 필터 (group_kind='role' 만 매칭 — everyone 은 별도 필터)
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+              AND t.group_kind = 'role'
+              AND t.role = ?
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
         $stmt->execute([$cohort, $filterRole]);
     } else {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ?
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY t.role, MIN(t.start_date) DESC, t.title
-        ");
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+        " . $groupBy . $orderBy);
         $stmt->execute([$cohort]);
     }
     jsonSuccess(['groups' => $stmt->fetchAll()]);
@@ -1308,50 +1331,71 @@ case 'all_tasks_grouped':
 
 case 'task_group_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort   = trim($input['cohort'] ?? '');
-    $title    = trim($input['title']  ?? '');
-    $role     = trim($input['role']   ?? '');
-    $newTitle = trim($input['new_title'] ?? '');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = trim($input['group_kind'] ?? 'role');
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
+    $newTitle   = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
     $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
     if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
 
     $db = getDB();
     $stmt = $db->prepare("
         UPDATE tasks
            SET title = ?, content_markdown = ?, requires_submission = ?
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
     ");
-    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $role]);
+    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $groupKind, $groupScope]);
     jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
     break;
 
 case 'task_group_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort = trim($input['cohort'] ?? '');
-    $title  = trim($input['title']  ?? '');
-    $role   = trim($input['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = trim($input['group_kind'] ?? 'role');
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $db = getDB();
     $del = $db->prepare("
         DELETE FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ? AND completed = 0
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
+           AND completed = 0
     ");
-    $del->execute([$cohort, $title, $role]);
+    $del->execute([$cohort, $title, $groupKind, $groupScope]);
     $deleted = $del->rowCount();
 
     $cnt = $db->prepare("
         SELECT COUNT(*) AS c
           FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
     ");
-    $cnt->execute([$cohort, $title, $role]);
+    $cnt->execute([$cohort, $title, $groupKind, $groupScope]);
     $kept = (int)$cnt->fetch()['c'];
 
     jsonSuccess([
@@ -1361,17 +1405,24 @@ case 'task_group_delete':
     break;
 
 case 'task_group_rows':
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $cohort = trim($_GET['cohort'] ?? '');
     $title  = trim($_GET['title']  ?? '');
     $role   = trim($_GET['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $groupKind  = trim($_GET['group_kind'] ?? 'role');
+    $groupScope = array_key_exists('group_scope', $_GET) ? $_GET['group_scope'] : $role;
+    if (is_string($groupScope)) $groupScope = trim($groupScope);
+    // 빈 문자열은 everyone 묶음의 NULL scope 를 의미. GET 쿼리는 NULL 을 못 보내므로
+    // '' 로 도착 → DB scope IS NULL row 와 매칭되도록 PHP null 로 정규화.
+    if ($groupScope === '') $groupScope = null;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $onlyIncomplete = ($_GET['only_incomplete']  ?? '1') === '1';
     $onlyUntilToday = ($_GET['only_until_today'] ?? '1') === '1';
 
-    $where  = "WHERE t.cohort = ? AND t.title = ? AND t.role = ?";
-    $params = [$cohort, $title, $role];
+    $where  = "WHERE t.cohort = ? AND t.title = ? AND t.group_kind = ? AND (t.group_scope <=> ?)";
+    $params = [$cohort, $title, $groupKind, $groupScope];
     if ($onlyIncomplete) $where .= " AND t.completed = 0";
     if ($onlyUntilToday) $where .= " AND t.start_date <= CURDATE()";
 
@@ -1439,25 +1490,42 @@ case 'task_submission_update':
     jsonSuccess([], '결과물이 수정되었습니다.');
     break;
 
-// ── Task CRUD (operation only for create/update/delete) ─────
+// ── Task CRUD (operation/head/subhead1/subhead2 for create/update/delete) ─────
 
 case 'task_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $title    = trim($input['title'] ?? '');
+    $kind     = $input['assignment_kind'] ?? 'role'; // 'role' | 'everyone' | 'person'
     $roles    = $input['roles'] ?? [];
+    $target   = $input['target_person'] ?? null;
     $content  = trim($input['content_markdown'] ?? '') ?: null;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $dateMode = $input['date_mode'] ?? 'direct';
     $requiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
 
-    if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
+    if (!$title) jsonError('제목을 입력해주세요.');
+    if (!in_array($kind, ['role','everyone','person'], true)) {
+        jsonError("올바르지 않은 부여 방식: {$kind}");
+    }
 
     $validRoles = ['leader', 'subleader', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation'];
-    foreach ($roles as $r) {
-        if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+
+    if ($kind === 'role') {
+        if (empty($roles)) jsonError('역할을 하나 이상 선택해주세요.');
+        foreach ($roles as $r) {
+            if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+        }
+    } elseif ($kind === 'person') {
+        if (!is_array($target) || empty($target['type']) || empty($target['id'])) {
+            jsonError('담당자를 선택해주세요.');
+        }
+        if (!in_array($target['type'], ['admin','member'], true)) {
+            jsonError("올바르지 않은 담당자 타입: {$target['type']}");
+        }
     }
+    // kind=everyone 은 추가 필드 없음
 
     $db = getDB();
 
@@ -1523,51 +1591,161 @@ case 'task_create':
         jsonError('올바르지 않은 날짜 설정 방식입니다.');
     }
 
-    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    // INSERT 준비 (group_kind/group_scope 포함)
+    $insertAdminStmt = $db->prepare('
+        INSERT INTO tasks
+          (title, role, group_kind, group_scope, assignee_admin_id, start_date, end_date,
+           content_markdown, cohort, requires_submission)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ');
+    $insertMemberStmt = $db->prepare('
+        INSERT INTO tasks
+          (title, role, group_kind, group_scope, assignee_member_id, start_date, end_date,
+           content_markdown, cohort, requires_submission)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ');
     $createdCount = 0;
 
-    // Get cohort_id for bootcamp_members lookup
+    // cohort_id 룩업 (bootcamp_members 용)
     $cohortIdStmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
     $cohortIdStmt->execute([$cohort]);
     $cohortIdRow = $cohortIdStmt->fetch();
     $cohortId = $cohortIdRow ? (int)$cohortIdRow['id'] : null;
 
-    foreach ($datePairs as [$sd, $ed]) {
+    /**
+     * 부여 펼침 → array of ['role'=>..., 'admin_id'=>?, 'member_id'=>?, 'group_scope'=>?]
+     */
+    $assignments = []; // 사람 단위 (모든 date 에 공통)
+
+    if ($kind === 'role') {
         foreach ($roles as $role) {
-            $isMemberRole = in_array($role, ['leader', 'subleader']);
-            $assignees = [];
-
+            $isMemberRole = in_array($role, ['leader', 'subleader'], true);
+            $rows = [];
             if ($isMemberRole && $cohortId) {
-                // Leader/subleader: lookup from bootcamp_members
-                $stmt = $db->prepare('
+                $stmt = $db->prepare("
                     SELECT id FROM bootcamp_members
-                    WHERE member_role = ? AND is_active = 1 AND cohort_id = ?
-                ');
+                     WHERE member_role = ? AND is_active = 1 AND cohort_id = ?
+                ");
                 $stmt->execute([$role, $cohortId]);
-                $assignees = $stmt->fetchAll();
-            } else if (!$isMemberRole) {
-                // Other roles: lookup from admins + admin_roles
-                $stmt = $db->prepare('
+                foreach ($stmt->fetchAll() as $row) {
+                    $rows[] = ['role' => $role, 'admin_id' => null, 'member_id' => (int)$row['id']];
+                }
+            } elseif (!$isMemberRole) {
+                $stmt = $db->prepare("
                     SELECT a.id FROM admins a
-                    JOIN admin_roles ar ON a.id = ar.admin_id
-                    WHERE ar.role = ? AND a.is_active = 1
-                      AND (a.cohort = ? OR a.cohort IS NULL)
-                ');
+                     JOIN admin_roles ar ON a.id = ar.admin_id
+                     WHERE ar.role = ? AND a.is_active = 1
+                       AND (a.cohort = ? OR a.cohort IS NULL)
+                ");
                 $stmt->execute([$role, $cohort]);
-                $assignees = $stmt->fetchAll();
-            }
-
-            if (empty($assignees)) {
-                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort, $requiresSubmission]);
-                $createdCount++;
-            } else {
-                $ins = $isMemberRole ? $insertMemberStmt : $insertAdminStmt;
-                foreach ($assignees as $a) {
-                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort, $requiresSubmission]);
-                    $createdCount++;
+                foreach ($stmt->fetchAll() as $row) {
+                    $rows[] = ['role' => $role, 'admin_id' => (int)$row['id'], 'member_id' => null];
                 }
             }
+            if (empty($rows)) {
+                // role placeholder (기존 동작)
+                $rows[] = ['role' => $role, 'admin_id' => null, 'member_id' => null];
+            }
+            foreach ($rows as $r) {
+                $r['group_scope'] = $role;
+                $assignments[] = $r;
+            }
+        }
+    } elseif ($kind === 'everyone') {
+        // admin role 들 (operation/head/subhead1/subhead2/coach/sub_coach)
+        $stmt = $db->prepare("
+            SELECT DISTINCT a.id AS admin_id, ar.role AS role
+              FROM admins a
+              JOIN admin_roles ar ON a.id = ar.admin_id
+             WHERE a.is_active = 1
+               AND ar.role IN ('operation','head','subhead1','subhead2','coach','sub_coach')
+               AND (a.cohort = ? OR a.cohort IS NULL)
+        ");
+        $stmt->execute([$cohort]);
+        foreach ($stmt->fetchAll() as $row) {
+            $assignments[] = [
+                'role' => $row['role'], 'admin_id' => (int)$row['admin_id'],
+                'member_id' => null, 'group_scope' => null,
+            ];
+        }
+        // leader/subleader 들
+        if ($cohortId) {
+            $stmt = $db->prepare("
+                SELECT id AS member_id, member_role AS role
+                  FROM bootcamp_members
+                 WHERE is_active = 1 AND cohort_id = ?
+                   AND member_role IN ('leader','subleader')
+            ");
+            $stmt->execute([$cohortId]);
+            foreach ($stmt->fetchAll() as $row) {
+                $assignments[] = [
+                    'role' => $row['role'], 'admin_id' => null,
+                    'member_id' => (int)$row['member_id'], 'group_scope' => null,
+                ];
+            }
+        }
+        // everyone 인데 0명이면 명백한 실수이므로 명시적 에러
+        // (role 분기는 placeholder row 로 폴백 — cohort-clone 마이그 경로 호환)
+        if (empty($assignments)) jsonError('이 기수에 활성 멤버가 없습니다.');
+    } else { // kind === 'person'
+        $type = $target['type'];
+        $id   = (int)$target['id'];
+        if ($type === 'admin') {
+            // admin 이 다중 role 일 때 MIN(ar.role) 으로 lexicographic 첫 role 을
+            // 표시용 대표값으로 사용. 실제 식별은 group_scope='admin:{id}' 가 담당.
+            $stmt = $db->prepare("
+                SELECT a.id, MIN(ar.role) AS role
+                  FROM admins a
+                  JOIN admin_roles ar ON a.id = ar.admin_id
+                 WHERE a.id = ? AND a.is_active = 1
+                   AND (a.cohort = ? OR a.cohort IS NULL)
+                 GROUP BY a.id
+            ");
+            $stmt->execute([$id, $cohort]);
+            $row = $stmt->fetch();
+            if (!$row) jsonError('해당 admin 을 찾을 수 없거나 비활성입니다.');
+            $assignments[] = [
+                'role' => $row['role'], 'admin_id' => $id, 'member_id' => null,
+                'group_scope' => "admin:{$id}",
+            ];
+        } else { // member
+            if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
+            $stmt = $db->prepare("
+                SELECT id, member_role FROM bootcamp_members
+                 WHERE id = ? AND is_active = 1 AND cohort_id = ?
+                   AND member_role IN ('leader','subleader')
+            ");
+            $stmt->execute([$id, $cohortId]);
+            $row = $stmt->fetch();
+            if (!$row) jsonError('해당 멤버를 찾을 수 없거나 부여 대상이 아닙니다.');
+            $assignments[] = [
+                'role' => $row['member_role'], 'admin_id' => null, 'member_id' => $id,
+                'group_scope' => "member:{$id}",
+            ];
+        }
+    }
+
+    // INSERT 펼침
+    foreach ($datePairs as [$sd, $ed]) {
+        foreach ($assignments as $a) {
+            if ($a['admin_id'] !== null) {
+                $insertAdminStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    $a['admin_id'], $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            } elseif ($a['member_id'] !== null) {
+                $insertMemberStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    $a['member_id'], $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            } else {
+                // role placeholder (assignee NULL)
+                $insertAdminStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    null, $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            }
+            $createdCount++;
         }
     }
 
@@ -1576,7 +1754,7 @@ case 'task_create':
 
 case 'task_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('Task ID가 필요합니다.');
@@ -1601,7 +1779,7 @@ case 'task_update':
 
 case 'task_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
-    $admin = requireAdmin(['operation']);
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     if (!$id) jsonError('Task ID가 필요합니다.');
@@ -1609,6 +1787,91 @@ case 'task_delete':
     $db = getDB();
     $db->prepare('DELETE FROM tasks WHERE id = ?')->execute([$id]);
     jsonSuccess([], 'Task가 삭제되었습니다.');
+    break;
+
+// ── Task 다중 부여: 사람 검색 (admin + leader/subleader) ──────
+case 'cohort_people_search':
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
+    $cohort = trim($_GET['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $q = trim($_GET['q'] ?? '');
+    if (mb_strlen($q) < 1) jsonError('검색어를 입력해주세요.');
+    if (!$cohort) jsonError('cohort 가 필요합니다.');
+
+    $db = getDB();
+    $cohortIdStmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+    $cohortIdStmt->execute([$cohort]);
+    $cohortIdRow = $cohortIdStmt->fetch();
+    $cohortId = $cohortIdRow ? (int)$cohortIdRow['id'] : null;
+
+    $like = '%' . $q . '%';
+    $people = [];
+
+    // admin 후보 (cohort 일치 또는 NULL)
+    $stmt = $db->prepare("
+        SELECT a.id, a.name,
+               GROUP_CONCAT(ar.role ORDER BY ar.role SEPARATOR ',') AS roles
+          FROM admins a
+          JOIN admin_roles ar ON a.id = ar.admin_id
+         WHERE a.is_active = 1
+           AND ar.role IN ('operation','head','subhead1','subhead2','coach','sub_coach')
+           AND (a.cohort = ? OR a.cohort IS NULL)
+           AND a.name LIKE ?
+         GROUP BY a.id, a.name
+         ORDER BY a.name
+         LIMIT 20
+    ");
+    $stmt->execute([$cohort, $like]);
+    $roleLabels = [
+        'leader'=>'조장','subleader'=>'부조장','coach'=>'메인강사','sub_coach'=>'서브강사',
+        'head'=>'총괄코치','subhead1'=>'부총괄1','subhead2'=>'부총괄2','operation'=>'운영팀'
+    ];
+    foreach ($stmt->fetchAll() as $row) {
+        $roles = $row['roles'] ? explode(',', $row['roles']) : [];
+        $labels = array_map(fn($r) => $roleLabels[$r] ?? $r, $roles);
+        // role_labels: 표시용 단일 string. admin 은 다중 role 가능하므로 ', ' join.
+        $people[] = [
+            'type' => 'admin',
+            'id'   => (int)$row['id'],
+            'name' => $row['name'],
+            'role_labels' => implode(', ', $labels),
+        ];
+    }
+
+    // member (leader/subleader) 후보
+    // NOTE: bootcamp_groups 스키마에는 group_no 컬럼이 없고 name(예: "차니조", "봄가을조") 만 있으므로
+    // 응답 키를 group_name (string) 으로 둔다. 값에 prefix 가 없어 프론트 (Task 8) 가
+    // 그대로 표시하면 됨.
+    if ($cohortId) {
+        $stmt = $db->prepare("
+            SELECT bm.id, bm.real_name AS name, bm.nickname,
+                   bm.member_role, bg.name AS group_name
+              FROM bootcamp_members bm
+              LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+             WHERE bm.is_active = 1
+               AND bm.cohort_id = ?
+               AND bm.member_role IN ('leader','subleader')
+               AND (bm.real_name LIKE ? OR bm.nickname LIKE ?)
+             ORDER BY bg.name, bm.real_name
+             LIMIT 20
+        ");
+        $stmt->execute([$cohortId, $like, $like]);
+        foreach ($stmt->fetchAll() as $row) {
+            // role_labels: 표시용 단일 string. member 는 leader/subleader 단일 role.
+            $people[] = [
+                'type'        => 'member',
+                'id'          => (int)$row['id'],
+                'name'        => $row['name'],
+                'nickname'    => $row['nickname'],
+                'role_labels' => $roleLabels[$row['member_role']] ?? $row['member_role'],
+                'group_name'  => $row['group_name'],
+            ];
+        }
+    }
+
+    // 합쳐서 최대 20개. admin 우선 (admin 매칭이 20 건이면 member 가 노출되지 않을 수
+    // 있음 — 운영자가 일반적으로 admin 을 먼저 찾는다는 가정).
+    $people = array_slice($people, 0, 20);
+    jsonSuccess(['people' => $people]);
     break;
 
 // ── Guide CRUD (operation only) ─────────────────────────────
