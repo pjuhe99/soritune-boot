@@ -1737,6 +1737,87 @@ case 'task_delete':
     jsonSuccess([], 'Task가 삭제되었습니다.');
     break;
 
+// ── Task 다중 부여: 사람 검색 (admin + leader/subleader) ──────
+case 'cohort_people_search':
+    $admin = requireAdmin(['operation','head','subhead1','subhead2']);
+    $cohort = trim($_GET['cohort'] ?? '') ?: getEffectiveCohort($admin);
+    $q = trim($_GET['q'] ?? '');
+    if (mb_strlen($q) < 1) jsonError('검색어를 입력해주세요.');
+    if (!$cohort) jsonError('cohort 가 필요합니다.');
+
+    $db = getDB();
+    $cohortIdStmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
+    $cohortIdStmt->execute([$cohort]);
+    $cohortIdRow = $cohortIdStmt->fetch();
+    $cohortId = $cohortIdRow ? (int)$cohortIdRow['id'] : null;
+
+    $like = '%' . $q . '%';
+    $people = [];
+
+    // admin 후보 (cohort 일치 또는 NULL)
+    $stmt = $db->prepare("
+        SELECT a.id, a.name,
+               GROUP_CONCAT(ar.role ORDER BY ar.role SEPARATOR ',') AS roles
+          FROM admins a
+          JOIN admin_roles ar ON a.id = ar.admin_id
+         WHERE a.is_active = 1
+           AND ar.role IN ('operation','head','subhead1','subhead2','coach','sub_coach')
+           AND (a.cohort = ? OR a.cohort IS NULL)
+           AND a.name LIKE ?
+         GROUP BY a.id, a.name
+         ORDER BY a.name
+         LIMIT 20
+    ");
+    $stmt->execute([$cohort, $like]);
+    $roleLabels = [
+        'leader'=>'조장','subleader'=>'부조장','coach'=>'메인강사','sub_coach'=>'서브강사',
+        'head'=>'총괄코치','subhead1'=>'부총괄1','subhead2'=>'부총괄2','operation'=>'운영팀'
+    ];
+    foreach ($stmt->fetchAll() as $row) {
+        $roles = $row['roles'] ? explode(',', $row['roles']) : [];
+        $labels = array_map(fn($r) => $roleLabels[$r] ?? $r, $roles);
+        $people[] = [
+            'type' => 'admin',
+            'id'   => (int)$row['id'],
+            'name' => $row['name'],
+            'role_labels' => implode(', ', $labels),
+        ];
+    }
+
+    // member (leader/subleader) 후보
+    // NOTE: bootcamp_groups 스키마에는 group_no 컬럼이 없고 name(예: "봄가을조") 만 있으므로
+    // 응답 키를 group_name (string) 으로 둔다. 프론트 (Task 8) 도 group_name 기준으로 렌더.
+    if ($cohortId) {
+        $stmt = $db->prepare("
+            SELECT bm.id, bm.real_name AS name, bm.nickname,
+                   bm.member_role, bg.name AS group_name
+              FROM bootcamp_members bm
+              LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
+             WHERE bm.is_active = 1
+               AND bm.cohort_id = ?
+               AND bm.member_role IN ('leader','subleader')
+               AND (bm.real_name LIKE ? OR bm.nickname LIKE ?)
+             ORDER BY bg.name, bm.real_name
+             LIMIT 20
+        ");
+        $stmt->execute([$cohortId, $like, $like]);
+        foreach ($stmt->fetchAll() as $row) {
+            $people[] = [
+                'type'        => 'member',
+                'id'          => (int)$row['id'],
+                'name'        => $row['name'],
+                'nickname'    => $row['nickname'],
+                'role_labels' => $roleLabels[$row['member_role']] ?? $row['member_role'],
+                'group_name'  => $row['group_name'],
+            ];
+        }
+    }
+
+    // 합쳐서 최대 20개
+    $people = array_slice($people, 0, 20);
+    jsonSuccess(['people' => $people]);
+    break;
+
 // ── Guide CRUD (operation only) ─────────────────────────────
 
 case 'guide_create':

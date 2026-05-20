@@ -137,6 +137,21 @@ $r = req('POST', "{$base}/api/admin.php?action=task_create", $h, [
 ]);
 t('kind=person 존재X 거부', !empty($r['body']['error']) || $r['code'] >= 400);
 
+// ── cohort_people_search ─────
+$me = $db->query("SELECT name FROM admins WHERE is_active = 1 ORDER BY id LIMIT 1")->fetchColumn();
+if ($me) {
+    $q = mb_substr($me, 0, 1);
+    $r = req('GET', "{$base}/api/admin.php?action=cohort_people_search&cohort=" . rawurlencode($cohort) . "&q=" . rawurlencode($q), $h);
+    t('cohort_people_search 200',
+        $r['code'] === 200 && !empty($r['body']['success']),
+        'code=' . $r['code']);
+    t('cohort_people_search 결과 ≥ 1', is_array($r['body']['people'] ?? null) && count($r['body']['people']) >= 1);
+}
+
+// q 빈 문자열 → 에러
+$r = req('GET', "{$base}/api/admin.php?action=cohort_people_search&cohort=" . rawurlencode($cohort) . "&q=", $h);
+t('cohort_people_search q 빈 거부', !empty($r['body']['error']));
+
 cleanup($db, $cohort, $testTitle);
 echo "\n--- {$pass} pass / {$fail} fail ---\n";
 exit($fail ? 1 : 0);
