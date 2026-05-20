@@ -24,6 +24,11 @@ const AdminApp = (() => {
         return admin && admin.admin_roles && admin.admin_roles.includes('operation');
     }
 
+    function canManageTasks() {
+        return admin && admin.admin_roles &&
+            admin.admin_roles.some(r => ['operation','head','subhead1','subhead2'].includes(r));
+    }
+
     // ── Init ──
     async function init() {
         root = document.getElementById('admin-root');
@@ -164,7 +169,7 @@ const AdminApp = (() => {
                     <div class="dashboard-card" id="card-tasks">
                         <div class="section" id="sec-guide-btn"></div>
                         <div class="section" id="sec-date-nav"></div>
-                        ${isOperation() ? '<div class="section" id="sec-task-filter"></div>' : ''}
+                        ${canManageTasks() ? '<div class="section" id="sec-task-filter"></div>' : ''}
                         <div class="section" id="sec-tasks"></div>
                         <div class="section" id="sec-overdue"></div>
                     </div>
@@ -282,6 +287,7 @@ const AdminApp = (() => {
                     <div class="admin-tabs" id="sec-tabs">
                         <div class="tab-wrap">
                             <button class="tab active" data-tab="#bc-tab-dashboard" data-hash="dashboard">대시보드</button>
+                            <button class="tab" data-tab="#tab-tasks-mgmt" data-hash="tasks">Task 관리</button>
                             <button class="tab" data-tab="#bc-tab-checklist" data-hash="checklist">체크리스트</button>
                             <button class="tab" data-tab="#bc-tab-status" data-hash="status">현황판</button>
                             <button class="tab" data-tab="#bc-tab-revival" data-hash="revival">패자부활전</button>
@@ -298,6 +304,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-notices-head" data-hash="notices">공지</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
+                        <div class="tab-content" id="tab-tasks-mgmt"></div>
                         <div class="tab-content" id="bc-tab-checklist"></div>
                         <div class="tab-content" id="bc-tab-status"></div>
                         <div class="tab-content" id="bc-tab-revival"></div>
@@ -381,7 +388,7 @@ const AdminApp = (() => {
 
         renderGuideButton();
         renderDateNav();
-        if (isOperation()) renderTaskFilter();
+        if (canManageTasks()) renderTaskFilter();
 
         if (isOperation()) {
             // Dashboard 탭 (기본 active이므로 즉시 로드, 또는 lazy)
@@ -404,7 +411,6 @@ const AdminApp = (() => {
 
             loadMembersMgmt();
             loadAdminsMgmt();
-            loadTasksMgmt();
             loadGuidesMgmt();
             loadCalendarMgmt();
             loadCohortsMgmt();
@@ -568,6 +574,10 @@ const AdminApp = (() => {
                     bulkObserver.observe(bulkTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
+        }
+
+        if (canManageTasks()) {
+            loadTasksMgmt();
         }
 
         if ((role === 'coach' || role === 'sub_coach' || role === 'head' || role === 'subhead1' || role === 'subhead2' || role === 'leader' || role === 'subleader' || isOperation()) && typeof BootcampApp !== 'undefined') {
@@ -856,7 +866,7 @@ const AdminApp = (() => {
         sec.innerHTML = '<div class="section-title">오늘의 Task</div><div class="empty-state">로딩 중...</div>';
 
         const params = { date: currentDate };
-        if (isOperation()) params.filter_role = taskFilter;
+        if (canManageTasks()) params.filter_role = taskFilter;
         const r = await App.get('/api/admin.php?action=today_tasks', params);
         if (!r.success) return;
 
@@ -875,7 +885,7 @@ const AdminApp = (() => {
     async function loadOverdueTasks() {
         const sec = document.getElementById('sec-overdue');
         const overdueParams = {};
-        if (isOperation()) overdueParams.filter_role = taskFilter;
+        if (canManageTasks()) overdueParams.filter_role = taskFilter;
         const r = await App.get('/api/admin.php?action=overdue_tasks', overdueParams);
         if (!r.success) return;
 
@@ -946,7 +956,7 @@ const AdminApp = (() => {
                         <div class="task-meta">
                             <span>${task.start_date} ~ ${task.end_date}</span>
                             ${task.assignee_name ? `<span class="badge badge-primary">${App.esc(task.assignee_name)}</span>` : ''}
-                            ${isOperation() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
+                            ${canManageTasks() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
                             ${requiresChip}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
                         </div>
