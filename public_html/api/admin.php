@@ -1259,62 +1259,65 @@ case 'all_tasks_grouped':
     $filterRole = $_GET['filter_role'] ?? '';
     $adminId = $admin['admin_id'];
 
-    // 기존 all_tasks 의 필터 SQL 을 그대로 GROUP BY 로 변환
     $db = getDB();
+
+    // 공통 SELECT (LEFT JOIN 으로 person_name 만들기)
+    $selectCore = "
+        SELECT t.cohort, t.title, t.role,
+               t.group_kind, t.group_scope,
+               COUNT(*)                                AS total_count,
+               SUM(t.completed)                        AS done_count,
+               MIN(t.start_date)                       AS min_start_date,
+               MAX(t.end_date)                         AS max_end_date,
+               MAX(t.requires_submission)              AS requires_submission,
+               COUNT(DISTINCT CASE
+                       WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
+                       THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
+                     END) AS assignee_count,
+               COALESCE(MIN(adm.name), MIN(bm.real_name)) AS person_name
+          FROM tasks t
+          LEFT JOIN admins adm
+                 ON t.group_kind = 'person'
+                AND t.group_scope = CONCAT('admin:', adm.id)
+          LEFT JOIN bootcamp_members bm
+                 ON t.group_kind = 'person'
+                AND t.group_scope = CONCAT('member:', bm.id)
+    ";
+    $groupBy = "
+        GROUP BY t.cohort, t.title, t.role, t.group_kind, t.group_scope
+    ";
+    $orderBy = "
+        ORDER BY t.role, MIN(t.start_date) DESC, t.title
+    ";
+
     if ($filterRole === 'mine') {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ?
-               AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY t.role, MIN(t.start_date) DESC, t.title
-        ");
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+              AND (t.assignee_admin_id = ? OR t.assignee_member_id = ?)
+        " . $groupBy . $orderBy);
         $stmt->execute([$cohort, $adminId, $adminId]);
+    } elseif ($filterRole === 'kind:everyone') {
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ? AND t.group_kind = 'everyone'
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
+        $stmt->execute([$cohort]);
+    } elseif ($filterRole === 'kind:person') {
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ? AND t.group_kind = 'person'
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
+        $stmt->execute([$cohort]);
     } elseif ($filterRole && $filterRole !== 'all') {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ? AND t.role = ?
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY MIN(t.start_date) DESC, t.title
-        ");
+        // 기존: 특정 role 필터 (group_kind='role' 만 매칭 — everyone 은 별도 필터)
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+              AND t.group_kind = 'role'
+              AND t.role = ?
+        " . $groupBy . " ORDER BY MIN(t.start_date) DESC, t.title");
         $stmt->execute([$cohort, $filterRole]);
     } else {
-        $stmt = $db->prepare("
-            SELECT t.cohort, t.title, t.role,
-                   COUNT(*)                                AS total_count,
-                   SUM(t.completed)                        AS done_count,
-                   MIN(t.start_date)                       AS min_start_date,
-                   MAX(t.end_date)                         AS max_end_date,
-                   MAX(t.requires_submission)              AS requires_submission,
-                   COUNT(DISTINCT CASE
-                           WHEN t.assignee_admin_id IS NOT NULL OR t.assignee_member_id IS NOT NULL
-                           THEN CONCAT_WS(':', COALESCE(t.assignee_admin_id, '_'), COALESCE(t.assignee_member_id, '_'))
-                         END) AS assignee_count
-              FROM tasks t
-             WHERE t.cohort = ?
-             GROUP BY t.cohort, t.title, t.role
-             ORDER BY t.role, MIN(t.start_date) DESC, t.title
-        ");
+        $stmt = $db->prepare($selectCore . "
+            WHERE t.cohort = ?
+        " . $groupBy . $orderBy);
         $stmt->execute([$cohort]);
     }
     jsonSuccess(['groups' => $stmt->fetchAll()]);

@@ -160,6 +160,28 @@ if (!$me) {
 $r = req('GET', "{$base}/api/admin.php?action=cohort_people_search&cohort=" . rawurlencode($cohort) . "&q=", $h);
 t('cohort_people_search q 빈 거부', !empty($r['body']['error']));
 
+// ── today_tasks / all_tasks_grouped 응답 필드 (Task 6) ─────
+$r = req('GET', "{$base}/api/admin.php?action=today_tasks", $h);
+if (!empty($r['body']['tasks'])) {
+    $first = $r['body']['tasks'][0];
+    t('today_tasks 응답에 group_kind 포함',
+        array_key_exists('group_kind', $first), 'keys=' . implode(',', array_keys($first)));
+}
+
+$r = req('GET', "{$base}/api/admin.php?action=all_tasks_grouped&filter_role=all", $h);
+if (!empty($r['body']['groups'])) {
+    $first = $r['body']['groups'][0];
+    t('all_tasks_grouped 응답에 group_kind 포함',
+        array_key_exists('group_kind', $first));
+    t('all_tasks_grouped 응답에 person_name 포함',
+        array_key_exists('person_name', $first));
+}
+
+$r = req('GET', "{$base}/api/admin.php?action=all_tasks_grouped&filter_role=kind:everyone", $h);
+t('filter_role=kind:everyone 200', $r['code'] === 200 && !empty($r['body']['success']));
+$r = req('GET', "{$base}/api/admin.php?action=all_tasks_grouped&filter_role=kind:person", $h);
+t('filter_role=kind:person 200', $r['code'] === 200 && !empty($r['body']['success']));
+
 cleanup($db, $cohort, $testTitle);
 echo "\n--- {$pass} pass / {$fail} fail ---\n";
 exit($fail ? 1 : 0);
