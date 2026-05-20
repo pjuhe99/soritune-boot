@@ -1445,18 +1445,35 @@ case 'task_create':
     $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
     $title    = trim($input['title'] ?? '');
+    $kind     = $input['assignment_kind'] ?? 'role'; // 'role' | 'everyone' | 'person'
     $roles    = $input['roles'] ?? [];
+    $target   = $input['target_person'] ?? null;
     $content  = trim($input['content_markdown'] ?? '') ?: null;
     $cohort   = trim($input['cohort'] ?? '') ?: getEffectiveCohort($admin);
     $dateMode = $input['date_mode'] ?? 'direct';
     $requiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
 
-    if (!$title || empty($roles)) jsonError('제목과 역할을 입력해주세요.');
+    if (!$title) jsonError('제목을 입력해주세요.');
+    if (!in_array($kind, ['role','everyone','person'], true)) {
+        jsonError("올바르지 않은 부여 방식: {$kind}");
+    }
 
     $validRoles = ['leader', 'subleader', 'coach', 'sub_coach', 'head', 'subhead1', 'subhead2', 'operation'];
-    foreach ($roles as $r) {
-        if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+
+    if ($kind === 'role') {
+        if (empty($roles)) jsonError('역할을 하나 이상 선택해주세요.');
+        foreach ($roles as $r) {
+            if (!in_array($r, $validRoles)) jsonError("올바르지 않은 역할: {$r}");
+        }
+    } elseif ($kind === 'person') {
+        if (!is_array($target) || empty($target['type']) || empty($target['id'])) {
+            jsonError('담당자를 선택해주세요.');
+        }
+        if (!in_array($target['type'], ['admin','member'], true)) {
+            jsonError("올바르지 않은 담당자 타입: {$target['type']}");
+        }
     }
+    // kind=everyone 은 추가 필드 없음
 
     $db = getDB();
 
@@ -1522,51 +1539,157 @@ case 'task_create':
         jsonError('올바르지 않은 날짜 설정 방식입니다.');
     }
 
-    $insertAdminStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_admin_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    $insertMemberStmt = $db->prepare('INSERT INTO tasks (title, role, assignee_member_id, start_date, end_date, content_markdown, cohort, requires_submission) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    // INSERT 준비 (group_kind/group_scope 포함)
+    $insertAdminStmt = $db->prepare('
+        INSERT INTO tasks
+          (title, role, group_kind, group_scope, assignee_admin_id, start_date, end_date,
+           content_markdown, cohort, requires_submission)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ');
+    $insertMemberStmt = $db->prepare('
+        INSERT INTO tasks
+          (title, role, group_kind, group_scope, assignee_member_id, start_date, end_date,
+           content_markdown, cohort, requires_submission)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ');
     $createdCount = 0;
 
-    // Get cohort_id for bootcamp_members lookup
+    // cohort_id 룩업 (bootcamp_members 용)
     $cohortIdStmt = $db->prepare('SELECT id FROM cohorts WHERE cohort = ?');
     $cohortIdStmt->execute([$cohort]);
     $cohortIdRow = $cohortIdStmt->fetch();
     $cohortId = $cohortIdRow ? (int)$cohortIdRow['id'] : null;
 
-    foreach ($datePairs as [$sd, $ed]) {
+    /**
+     * 부여 펼침 → array of ['role'=>..., 'admin_id'=>?, 'member_id'=>?, 'group_scope'=>?]
+     */
+    $assignments = []; // 사람 단위 (모든 date 에 공통)
+
+    if ($kind === 'role') {
         foreach ($roles as $role) {
-            $isMemberRole = in_array($role, ['leader', 'subleader']);
-            $assignees = [];
-
+            $isMemberRole = in_array($role, ['leader', 'subleader'], true);
+            $rows = [];
             if ($isMemberRole && $cohortId) {
-                // Leader/subleader: lookup from bootcamp_members
-                $stmt = $db->prepare('
+                $stmt = $db->prepare("
                     SELECT id FROM bootcamp_members
-                    WHERE member_role = ? AND is_active = 1 AND cohort_id = ?
-                ');
+                     WHERE member_role = ? AND is_active = 1 AND cohort_id = ?
+                ");
                 $stmt->execute([$role, $cohortId]);
-                $assignees = $stmt->fetchAll();
-            } else if (!$isMemberRole) {
-                // Other roles: lookup from admins + admin_roles
-                $stmt = $db->prepare('
+                foreach ($stmt->fetchAll() as $row) {
+                    $rows[] = ['role' => $role, 'admin_id' => null, 'member_id' => (int)$row['id']];
+                }
+            } elseif (!$isMemberRole) {
+                $stmt = $db->prepare("
                     SELECT a.id FROM admins a
-                    JOIN admin_roles ar ON a.id = ar.admin_id
-                    WHERE ar.role = ? AND a.is_active = 1
-                      AND (a.cohort = ? OR a.cohort IS NULL)
-                ');
+                     JOIN admin_roles ar ON a.id = ar.admin_id
+                     WHERE ar.role = ? AND a.is_active = 1
+                       AND (a.cohort = ? OR a.cohort IS NULL)
+                ");
                 $stmt->execute([$role, $cohort]);
-                $assignees = $stmt->fetchAll();
-            }
-
-            if (empty($assignees)) {
-                $insertAdminStmt->execute([$title, $role, null, $sd, $ed, $content, $cohort, $requiresSubmission]);
-                $createdCount++;
-            } else {
-                $ins = $isMemberRole ? $insertMemberStmt : $insertAdminStmt;
-                foreach ($assignees as $a) {
-                    $ins->execute([$title, $role, $a['id'], $sd, $ed, $content, $cohort, $requiresSubmission]);
-                    $createdCount++;
+                foreach ($stmt->fetchAll() as $row) {
+                    $rows[] = ['role' => $role, 'admin_id' => (int)$row['id'], 'member_id' => null];
                 }
             }
+            if (empty($rows)) {
+                // role placeholder (기존 동작)
+                $rows[] = ['role' => $role, 'admin_id' => null, 'member_id' => null];
+            }
+            foreach ($rows as $r) {
+                $r['group_scope'] = $role;
+                $assignments[] = $r;
+            }
+        }
+    } elseif ($kind === 'everyone') {
+        // admin role 들 (operation/head/subhead1/subhead2/coach/sub_coach)
+        $stmt = $db->prepare("
+            SELECT DISTINCT a.id AS admin_id, ar.role AS role
+              FROM admins a
+              JOIN admin_roles ar ON a.id = ar.admin_id
+             WHERE a.is_active = 1
+               AND ar.role IN ('operation','head','subhead1','subhead2','coach','sub_coach')
+               AND (a.cohort = ? OR a.cohort IS NULL)
+        ");
+        $stmt->execute([$cohort]);
+        foreach ($stmt->fetchAll() as $row) {
+            $assignments[] = [
+                'role' => $row['role'], 'admin_id' => (int)$row['admin_id'],
+                'member_id' => null, 'group_scope' => null,
+            ];
+        }
+        // leader/subleader 들
+        if ($cohortId) {
+            $stmt = $db->prepare("
+                SELECT id AS member_id, member_role AS role
+                  FROM bootcamp_members
+                 WHERE is_active = 1 AND cohort_id = ?
+                   AND member_role IN ('leader','subleader')
+            ");
+            $stmt->execute([$cohortId]);
+            foreach ($stmt->fetchAll() as $row) {
+                $assignments[] = [
+                    'role' => $row['role'], 'admin_id' => null,
+                    'member_id' => (int)$row['member_id'], 'group_scope' => null,
+                ];
+            }
+        }
+        if (empty($assignments)) jsonError('이 기수에 활성 멤버가 없습니다.');
+    } else { // kind === 'person'
+        $type = $target['type'];
+        $id   = (int)$target['id'];
+        if ($type === 'admin') {
+            $stmt = $db->prepare("
+                SELECT a.id, MIN(ar.role) AS role
+                  FROM admins a
+                  JOIN admin_roles ar ON a.id = ar.admin_id
+                 WHERE a.id = ? AND a.is_active = 1
+                   AND (a.cohort = ? OR a.cohort IS NULL)
+                 GROUP BY a.id
+            ");
+            $stmt->execute([$id, $cohort]);
+            $row = $stmt->fetch();
+            if (!$row) jsonError('해당 admin 을 찾을 수 없거나 비활성입니다.');
+            $assignments[] = [
+                'role' => $row['role'], 'admin_id' => $id, 'member_id' => null,
+                'group_scope' => "admin:{$id}",
+            ];
+        } else { // member
+            if (!$cohortId) jsonError('기수 정보를 찾을 수 없습니다.');
+            $stmt = $db->prepare("
+                SELECT id, member_role FROM bootcamp_members
+                 WHERE id = ? AND is_active = 1 AND cohort_id = ?
+                   AND member_role IN ('leader','subleader')
+            ");
+            $stmt->execute([$id, $cohortId]);
+            $row = $stmt->fetch();
+            if (!$row) jsonError('해당 멤버를 찾을 수 없거나 부여 대상이 아닙니다.');
+            $assignments[] = [
+                'role' => $row['member_role'], 'admin_id' => null, 'member_id' => $id,
+                'group_scope' => "member:{$id}",
+            ];
+        }
+    }
+
+    // INSERT 펼침
+    foreach ($datePairs as [$sd, $ed]) {
+        foreach ($assignments as $a) {
+            if ($a['admin_id'] !== null) {
+                $insertAdminStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    $a['admin_id'], $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            } elseif ($a['member_id'] !== null) {
+                $insertMemberStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    $a['member_id'], $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            } else {
+                // role placeholder (assignee NULL)
+                $insertAdminStmt->execute([
+                    $title, $a['role'], $kind, $a['group_scope'],
+                    null, $sd, $ed, $content, $cohort, $requiresSubmission,
+                ]);
+            }
+            $createdCount++;
         }
     }
 
