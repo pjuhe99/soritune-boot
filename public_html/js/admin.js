@@ -956,6 +956,8 @@ const AdminApp = (() => {
                         <div class="task-meta">
                             <span>${task.start_date} ~ ${task.end_date}</span>
                             ${task.assignee_name ? `<span class="badge badge-primary">${App.esc(task.assignee_name)}</span>` : ''}
+                            ${task.group_kind === 'everyone' ? `<span class="badge badge-info">📣 전체</span>` : ''}
+                            ${task.group_kind === 'person'   ? `<span class="badge badge-info">👤 개인 지정</span>` : ''}
                             ${canManageTasks() ? `<span class="badge badge-primary">${App.esc(ROLE_LABELS[task.role] || task.role)}</span>` : ''}
                             ${requiresChip}
                             ${hasContent ? `<button class="task-toggle-content" data-task-id="${task.id}">내용 보기</button>` : ''}
