@@ -1215,26 +1215,33 @@ case 'task_group_get':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort = trim($input['cohort'] ?? '');
-    $title  = trim($input['title']  ?? '');
-    $role   = trim($input['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
+    if (!in_array($groupKind, ['role','everyone','person'], true)) jsonError('올바르지 않은 group_kind.');
 
     $db = getDB();
     $stmt = $db->prepare("
-        SELECT title, content_markdown, requires_submission
+        SELECT title, content_markdown, requires_submission, group_kind, group_scope
           FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
          ORDER BY start_date ASC
          LIMIT 1
     ");
-    $stmt->execute([$cohort, $title, $role]);
+    $stmt->execute([$cohort, $title, $groupKind, $groupScope]);
     $row = $stmt->fetch();
     if (!$row) jsonError('해당 묶음을 찾을 수 없습니다.', 404);
     jsonSuccess([
         'title' => $row['title'],
         'content_markdown' => $row['content_markdown'],
         'requires_submission' => (int)$row['requires_submission'],
+        'group_kind' => $row['group_kind'],
+        'group_scope' => $row['group_scope'],
     ]);
     break;
 
@@ -1309,22 +1316,26 @@ case 'task_group_update':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort   = trim($input['cohort'] ?? '');
-    $title    = trim($input['title']  ?? '');
-    $role     = trim($input['role']   ?? '');
-    $newTitle = trim($input['new_title'] ?? '');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    $newTitle   = trim($input['new_title'] ?? '');
     $newContent = trim($input['new_content_markdown'] ?? '');
     $newRequiresSubmission = !empty($input['requires_submission']) ? 1 : 0;
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
     if ($newTitle === '') jsonError('새 제목을 입력해주세요.');
 
     $db = getDB();
     $stmt = $db->prepare("
         UPDATE tasks
            SET title = ?, content_markdown = ?, requires_submission = ?
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
     ");
-    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $role]);
+    $stmt->execute([$newTitle, $newContent ?: null, $newRequiresSubmission, $cohort, $title, $groupKind, $groupScope]);
     jsonSuccess(['affected_count' => $stmt->rowCount()], 'Task 묶음이 수정되었습니다.');
     break;
 
@@ -1332,25 +1343,32 @@ case 'task_group_delete':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation','head','subhead1','subhead2']);
     $input = getJsonInput();
-    $cohort = trim($input['cohort'] ?? '');
-    $title  = trim($input['title']  ?? '');
-    $role   = trim($input['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $cohort     = trim($input['cohort'] ?? '');
+    $title      = trim($input['title']  ?? '');
+    $role       = trim($input['role']   ?? '');
+    $groupKind  = $input['group_kind']  ?? 'role';
+    $groupScope = array_key_exists('group_scope', $input) ? $input['group_scope'] : $role;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
 
     $db = getDB();
     $del = $db->prepare("
         DELETE FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ? AND completed = 0
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
+           AND completed = 0
     ");
-    $del->execute([$cohort, $title, $role]);
+    $del->execute([$cohort, $title, $groupKind, $groupScope]);
     $deleted = $del->rowCount();
 
     $cnt = $db->prepare("
         SELECT COUNT(*) AS c
           FROM tasks
-         WHERE cohort = ? AND title = ? AND role = ?
+         WHERE cohort = ? AND title = ?
+           AND group_kind = ?
+           AND (group_scope <=> ?)
     ");
-    $cnt->execute([$cohort, $title, $role]);
+    $cnt->execute([$cohort, $title, $groupKind, $groupScope]);
     $kept = (int)$cnt->fetch()['c'];
 
     jsonSuccess([
@@ -1364,13 +1382,15 @@ case 'task_group_rows':
     $cohort = trim($_GET['cohort'] ?? '');
     $title  = trim($_GET['title']  ?? '');
     $role   = trim($_GET['role']   ?? '');
-    if (!$cohort || !$title || !$role) jsonError('cohort/title/role 필수.');
+    $groupKind  = $_GET['group_kind'] ?? 'role';
+    $groupScope = array_key_exists('group_scope', $_GET) ? $_GET['group_scope'] : $role;
+    if (!$cohort || !$title) jsonError('cohort/title 필수.');
 
     $onlyIncomplete = ($_GET['only_incomplete']  ?? '1') === '1';
     $onlyUntilToday = ($_GET['only_until_today'] ?? '1') === '1';
 
-    $where  = "WHERE t.cohort = ? AND t.title = ? AND t.role = ?";
-    $params = [$cohort, $title, $role];
+    $where  = "WHERE t.cohort = ? AND t.title = ? AND t.group_kind = ? AND (t.group_scope <=> ?)";
+    $params = [$cohort, $title, $groupKind, $groupScope];
     if ($onlyIncomplete) $where .= " AND t.completed = 0";
     if ($onlyUntilToday) $where .= " AND t.start_date <= CURDATE()";
 

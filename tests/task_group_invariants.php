@@ -8,9 +8,11 @@
  * (DEV DB 직접 조회 — 운영 cookie 불필요)
  *
  * ⚠️ SQL 동기화 주의:
- *   이 테스트의 INV-1 UPDATE / INV-2 DELETE / INV-3 SELECT 는
+ *   이 테스트의 INV-1 UPDATE / INV-2 DELETE / INV-3 SELECT / INV-S2 SELECT 는
  *   public_html/api/admin.php 의 task_group_update / task_group_delete /
- *   today_tasks case 와 동일한 SQL 패턴을 hand-write 한 것이다.
+ *   today_tasks / task_group_get case 와 동일한 SQL 패턴을 hand-write 한 것이다.
+ *   묶음 식별 키는 (cohort, title, group_kind, group_scope) 이며,
+ *   group_scope 는 NULL-safe 매칭을 위해 `<=>` 연산자를 사용한다.
  *   endpoint case 의 SQL 을 변경하면 이 파일도 같이 수정해야 한다
  *   (그렇지 않으면 endpoint 회귀를 이 테스트가 잡지 못함).
  */
@@ -35,8 +37,8 @@ $db->prepare("DELETE FROM tasks WHERE title LIKE '__inv_grp%' OR title = '__inv_
 
 try {
     $ins = $db->prepare("
-        INSERT INTO tasks (title, role, assignee_admin_id, completed, start_date, end_date, content_markdown, cohort)
-        VALUES (?, 'operation', NULL, ?, ?, ?, 'c1', ?)
+        INSERT INTO tasks (title, role, group_kind, group_scope, assignee_admin_id, completed, start_date, end_date, content_markdown, cohort)
+        VALUES (?, 'operation', 'role', 'operation', NULL, ?, ?, ?, 'c1', ?)
     ");
     $ins->execute(['__inv_grp_a', 0, '2099-02-01', '2099-02-01', $cohort]);
     $ins->execute(['__inv_grp_a', 0, '2099-02-02', '2099-02-02', $cohort]);
@@ -46,8 +48,8 @@ try {
 
     // requires_submission 묶음 (INV-S2 회귀)
     $insSub = $db->prepare("
-        INSERT INTO tasks (title, role, assignee_admin_id, completed, requires_submission, start_date, end_date, content_markdown, cohort)
-        VALUES (?, 'operation', NULL, ?, ?, ?, ?, 'cs', ?)
+        INSERT INTO tasks (title, role, group_kind, group_scope, assignee_admin_id, completed, requires_submission, start_date, end_date, content_markdown, cohort)
+        VALUES (?, 'operation', 'role', 'operation', NULL, ?, ?, ?, ?, 'cs', ?)
     ");
     $insSub->execute(['__inv_grp_sub', 0, 1, '2099-02-10', '2099-02-10', $cohort]);
     $insSub->execute(['__inv_grp_sub', 0, 1, '2099-02-11', '2099-02-11', $cohort]);
@@ -55,7 +57,8 @@ try {
     // ── INV-1: group_update 시뮬레이트 — title 변경이 다른 그룹에 영향 없음 ──
     $db->prepare("
         UPDATE tasks SET title = '__inv_grp_a_v2', content_markdown = 'c2'
-         WHERE cohort = ? AND title = '__inv_grp_a' AND role = 'operation'
+         WHERE cohort = ? AND title = '__inv_grp_a'
+           AND group_kind = 'role' AND (group_scope <=> 'operation')
     ")->execute([$cohort]);
 
     $other = $db->prepare("SELECT title, content_markdown FROM tasks WHERE cohort = ? AND title = '__inv_grp_b'");
@@ -71,7 +74,9 @@ try {
     // ── INV-2: group_delete 시뮬레이트 — completed=1 row 보존 ──
     $db->prepare("
         DELETE FROM tasks
-         WHERE cohort = ? AND title = '__inv_grp_a_v2' AND role = 'operation' AND completed = 0
+         WHERE cohort = ? AND title = '__inv_grp_a_v2'
+           AND group_kind = 'role' AND (group_scope <=> 'operation')
+           AND completed = 0
     ")->execute([$cohort]);
 
     $leftover = $db->prepare("SELECT completed FROM tasks WHERE cohort = ? AND title = '__inv_grp_a_v2'");
@@ -103,7 +108,8 @@ try {
     $mixed = $db->prepare("
         SELECT MIN(requires_submission) AS mn, MAX(requires_submission) AS mx
           FROM tasks
-         WHERE cohort = ? AND title = '__inv_grp_sub' AND role = 'operation'
+         WHERE cohort = ? AND title = '__inv_grp_sub'
+           AND group_kind = 'role' AND (group_scope <=> 'operation')
     ");
     $mixed->execute([$cohort]);
     $m = $mixed->fetch();
