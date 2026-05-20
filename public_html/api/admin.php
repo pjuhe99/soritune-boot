@@ -1208,7 +1208,7 @@ case 'admin_delete':
     jsonSuccess([], '관리자가 삭제되었습니다.');
     break;
 
-// ── Task Group CRUD (operation only) ─────
+// ── Task Group CRUD (operation/head/subhead1/subhead2) ─────
 // 묶음 키 = (cohort, title, role)
 
 case 'task_group_get':
@@ -1438,7 +1438,7 @@ case 'task_submission_update':
     jsonSuccess([], '결과물이 수정되었습니다.');
     break;
 
-// ── Task CRUD (operation only for create/update/delete) ─────
+// ── Task CRUD (operation/head/subhead1/subhead2 for create/update/delete) ─────
 
 case 'task_create':
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
