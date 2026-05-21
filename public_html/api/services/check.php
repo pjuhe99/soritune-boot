@@ -27,7 +27,7 @@ function handleChecklist() {
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
-               bm.group_id, bg.name AS group_name,
+               bm.group_id, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin
         FROM bootcamp_members bm
@@ -200,7 +200,7 @@ function handleChecklistByMission() {
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
-               bm.group_id, bg.name AS group_name,
+               bm.group_id, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin
         FROM bootcamp_members bm
@@ -333,7 +333,7 @@ function handleStatusBoard() {
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
-               bm.group_id, bm.member_status, bg.name AS group_name,
+               bm.group_id, bm.member_status, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin
         FROM bootcamp_members bm
