@@ -85,7 +85,7 @@ function computeDashboardStats(
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
-               bm.group_id, bm.member_status, bg.name AS group_name,
+               bm.group_id, bm.member_status, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score
         FROM bootcamp_members bm
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
@@ -188,6 +188,7 @@ function computeDashboardStats(
             'member_role' => $m['member_role'],
             'current_score' => (int)$m['current_score'],
             'member_status' => $m['member_status'],
+            'cafe_nickname' => $m['cafe_nickname'],
             'required' => [
                 'zoom_daily' => ['done' => $zoomDone, 'total' => $totalDays, 'rate' => $zoomRate],
                 'inner33' => ['done' => $inner33Done, 'total' => $totalDays, 'rate' => $inner33Rate],
