@@ -83,7 +83,16 @@ function ingestCafePosts(array $posts): array {
             assignment_date = VALUES(assignment_date)
     ");
 
+    // 닉 sync: 동일값 update 회피 가드 + PHP 측 batch cache 로 query 자체를 줄임.
+    $updateNickStmt = $db->prepare("
+        UPDATE bootcamp_members
+           SET cafe_nickname = ?
+         WHERE id = ?
+           AND (cafe_nickname IS NULL OR cafe_nickname <> ?)
+    ");
+
     $memberKeyCache = [];
+    $memberCafeNickCache = [];
 
     foreach ($posts as $post) {
         $articleId      = $post['cafe_article_id'] ?? $post['article_id'] ?? '';
@@ -132,6 +141,15 @@ function ingestCafePosts(array $posts): array {
                 !empty($post) ? json_encode($post, JSON_UNESCAPED_UNICODE) : null,
             ]);
             $results['inserted']++;
+
+            // 닉 sync: 매핑된 회원 + 비어있지 않은 닉만, batch 안 같은 회원은 1회만.
+            if ($memberId && $nickname !== null && $nickname !== '') {
+                if (!isset($memberCafeNickCache[$memberId])
+                    || $memberCafeNickCache[$memberId] !== $nickname) {
+                    $updateNickStmt->execute([$nickname, $memberId, $nickname]);
+                    $memberCafeNickCache[$memberId] = $nickname;
+                }
+            }
 
             if ($memberId && $boardType && $assignmentDate) {
                 $missionTypeId = getMissionTypeId($db, $boardType);
