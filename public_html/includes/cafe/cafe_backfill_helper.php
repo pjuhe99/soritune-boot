@@ -67,5 +67,28 @@ function backfillPostsForMembers(PDO $db, array $memberIds): array {
         }
     }
 
+    // 닉 백필: 방금 매핑된 회원들의 최신 cafe_posts.nickname 으로 cafe_nickname 1회 갱신.
+    // post 가 없는 회원은 자연 skip (다음 cron poll 에서 ingest sync 가 채움).
+    if (!empty($keyToMember)) {
+        $nickStmt = $db->prepare("
+            SELECT nickname FROM cafe_posts
+            WHERE member_key = ? AND nickname IS NOT NULL
+            ORDER BY posted_at DESC, id DESC LIMIT 1
+        ");
+        $memberNickStmt = $db->prepare("
+            UPDATE bootcamp_members
+               SET cafe_nickname = ?
+             WHERE id = ?
+               AND (cafe_nickname IS NULL OR cafe_nickname <> ?)
+        ");
+        foreach ($keyToMember as $key => $mid) {
+            $nickStmt->execute([$key]);
+            $latestNick = $nickStmt->fetchColumn();
+            if ($latestNick) {
+                $memberNickStmt->execute([$latestNick, $mid, $latestNick]);
+            }
+        }
+    }
+
     return $result;
 }

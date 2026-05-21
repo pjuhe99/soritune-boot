@@ -51,6 +51,8 @@ try {
     $insPost->execute(['TA_ART2', 't2', 'NEW_KEY_ALICE', 'gricky', 'daily_mission', $now, $today]);
     $insPost->execute(['TA_ART3', 't3', 'NEW_KEY_ALICE', 'gricky', null,            $now, null]); // board_type 없음 → saveCheck X
     $insPost->execute(['TA_ART4', 't4', 'NEW_KEY_BOB',   'seoyeon', 'inner33',      $now, $today]); // 다른 키
+    // 옛 회원(bob)이 OLD_KEY_TO_DISPLACE 키로 쓴 historical post. case 2 에서 charlie 가 키 displace 받을 때 닉 백필 소스.
+    $insPost->execute(['TA_ART_OLD', 't_old', 'OLD_KEY_TO_DISPLACE', 'seoyeon', 'inner33', $now, $today]);
 
     // Case 1: alice 에 신규 키 등록 → 3건 백필 + 2건 saveCheck (#3은 board_type 없음)
     $r = applyCafeBulkMapping($db, [
@@ -67,6 +69,8 @@ try {
     t('case1_posts', $aliceBackfilled === 3);
     $aliceMissions = (int)$db->query("SELECT COUNT(*) FROM member_mission_checks WHERE member_id={$alice} AND source_ref LIKE 'cafe:%'")->fetchColumn();
     t('case1_mission_rows', $aliceMissions === 2);
+    $aliceNick = $db->query("SELECT cafe_nickname FROM bootcamp_members WHERE id={$alice}")->fetchColumn();
+    t('case1_cafe_nickname_backfilled', $aliceNick === 'gricky', "got: " . var_export($aliceNick, true));
 
     // Case 2: charlie 에 'OLD_KEY_TO_DISPLACE' 등록 → bob 의 키 NULL 해제 + bob 의 과거 글은 charlie 로 백필
     $r = applyCafeBulkMapping($db, [
@@ -77,6 +81,8 @@ try {
     t('case2_bob_displaced', $bobKey === null);
     $charlieKey = $db->query("SELECT cafe_member_key FROM bootcamp_members WHERE id={$charlie}")->fetchColumn();
     t('case2_charlie_set', $charlieKey === 'OLD_KEY_TO_DISPLACE');
+    $charlieNick = $db->query("SELECT cafe_nickname FROM bootcamp_members WHERE id={$charlie}")->fetchColumn();
+    t('case2_cafe_nickname_backfilled', $charlieNick === 'seoyeon', "got: " . var_export($charlieNick, true));
 
     // Case 3: target_member_id 0 (어드민 미선택) → skipped
     $r = applyCafeBulkMapping($db, [
