@@ -447,10 +447,11 @@ const BootcampApp = (() => {
     }
 
     function memberCellHtml(m) {
+        const cafeNickHtml = m.cafe_nickname ? ` · ☕ ${App.esc(m.cafe_nickname)}` : '';
         return `
             <button class="bc-member-btn" data-member-id="${m.id}" type="button">
                 <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
-                <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계</div>
+                <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계${cafeNickHtml}</div>
             </button>`;
     }
 
