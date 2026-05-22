@@ -591,7 +591,7 @@ case 'member_list':
     $where = ["c.cohort = ?"];
     $params = [$cohort];
     if (!$includeInactive) {
-        $where[] = "bm.member_status = 'active'";
+        $where[] = "bm.member_status != 'refunded'";
     }
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
