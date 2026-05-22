@@ -29,7 +29,7 @@ function evaluateReviewEligibility($db, $memberId) {
     $member = $mStmt->fetch();
     if (!$member) return ['eligible' => false, 'reason' => 'member_inactive', 'active_cycle' => null, 'member' => null];
     if ((int)$member['is_active'] !== 1 ||
-        in_array($member['member_status'], ['refunded'])) {
+        in_array($member['member_status'], ['refunded', 'expelled'])) {
         return ['eligible' => false, 'reason' => 'member_inactive', 'active_cycle' => null, 'member' => $member];
     }
 
