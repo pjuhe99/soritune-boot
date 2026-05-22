@@ -40,6 +40,8 @@ try {
     // is_active=1 인 채로 환불 상태가 된 케이스 — `!= 'refunded'` 가드의 본 효과를 검증
     $ins->execute([$cohortId, '활성환불', 'ra', 'refunded', 1]);
     $idRactive = (int)$db->lastInsertId();
+    $ins->execute([$cohortId, '퇴출', 'x', 'expelled', 1]);
+    $idX = (int)$db->lastInsertId();
 
     // member_page.php:402 부티즈 SELECT (변경 후)
     $sql = "
@@ -47,7 +49,7 @@ try {
         FROM bootcamp_members bm
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
-          AND bm.member_status != 'refunded'
+          AND bm.member_status NOT IN ('refunded','expelled')
         ORDER BY bm.id ASC
     ";
     $stmt = $db->prepare($sql);
@@ -63,6 +65,8 @@ try {
     t('refunded 제외', !in_array($idR, $ids, true));
     t('is_active=1 인 refunded 도 제외 (member_status 가드 효과)',
       !in_array($idRactive, $ids, true));
+    t('expelled(is_active=1) 도 제외 (member_status 가드)',
+      !in_array($idX, $ids, true));
 } finally {
     $db->rollBack();
 }

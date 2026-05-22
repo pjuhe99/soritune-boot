@@ -3,7 +3,7 @@
  * cron init_daily_checks 의 활성 멤버 SELECT 가 leaving / out_of_group_management
  * 회원도 포함하는지 검증. SQL-level 회귀 가드 (실제 cron 실행은 안 함).
  *
- * 정책: '단체 활동 대상' = is_active=1 AND member_status != 'refunded'
+ * 정책: '단체 활동 대상' = is_active=1 AND member_status NOT IN ('refunded','expelled')
  *
  * 사용: php tests/leaving_cron_invariants.php
  */
@@ -50,9 +50,11 @@ try {
     $ins->execute([$cohortId, null, '환불', 'r', 'refunded', 0]);
     $idR = (int)$db->lastInsertId();
     // 운영자 수정 등으로 is_active=1 인 채로 환불 상태가 된 케이스 (rare)
-    // — `!= 'refunded'` 가드의 본 효과를 검증
+    // — NOT IN ('refunded','expelled') 가드의 본 효과를 검증
     $ins->execute([$cohortId, null, '활성환불', 'ra', 'refunded', 1]);
     $idRactive = (int)$db->lastInsertId();
+    $ins->execute([$cohortId, null, '퇴출', 'x', 'expelled', 1]);
+    $idX = (int)$db->lastInsertId();
 
     // cron init_daily_checks 가 쓰는 변경 후 SELECT
     $today = date('Y-m-d');
@@ -61,7 +63,7 @@ try {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.is_active = 1
-          AND bm.member_status != 'refunded'
+          AND bm.member_status NOT IN ('refunded','expelled')
           AND c.start_date <= ? AND c.end_date >= ?
           AND bm.cohort_id = ?
     ";
@@ -78,6 +80,8 @@ try {
     t('cron SELECT 가 refunded 회원은 제외', !in_array($idR, $ids, true));
     t('cron SELECT 가 is_active=1 인 refunded 도 제외 (member_status 가드 효과)',
       !in_array($idRactive, $ids, true));
+    t('cron SELECT 가 expelled(is_active=1) 도 제외 (member_status 가드 효과)',
+      !in_array($idX, $ids, true));
 
 } finally {
     $db->rollBack();
