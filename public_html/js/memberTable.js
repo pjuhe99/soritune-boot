@@ -38,6 +38,7 @@ const MemberTable = (() => {
 
     function statusBadge(m) {
         if (m.member_status === 'refunded') return '<span class="badge badge-danger">환불</span>';
+        if (m.member_status === 'expelled') return '<span class="badge badge-danger">퇴출</span>';
         if (m.member_status === 'leaving') return '<span class="badge badge-warning-solid">조에서 빠짐</span>';
         if (m.is_active == 0) return '<span class="badge badge-danger">비활성</span>';
         if (m.member_status === 'out_of_group_management') return '<span class="badge badge-danger">탈락</span>';
@@ -149,11 +150,16 @@ const MemberTable = (() => {
                             <button class="btn btn-sm btn-secondary" onclick="${editFn}(${m.id})">수정</button>
                             ${m.member_status === 'refunded'
                                 ? `<button class="btn btn-sm btn-primary" onclick="${opts.restoreFn || 'AdminApp._restoreMember'}(${m.id}, '${App.esc(m.nickname)}')">복원</button>`
-                                : m.member_status === 'leaving'
-                                    ? `<button class="btn btn-sm btn-primary" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'active', '${App.esc(m.nickname)}')">활성으로</button>
+                                : m.member_status === 'expelled'
+                                    ? `<button class="btn btn-sm btn-primary" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'active', '${App.esc(m.nickname)}')">복원</button>
                                        <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
-                                    : `<button class="btn btn-sm btn-warning" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'leaving', '${App.esc(m.nickname)}')">조에서 빼기</button>
-                                       <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
+                                    : m.member_status === 'leaving'
+                                        ? `<button class="btn btn-sm btn-primary" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'active', '${App.esc(m.nickname)}')">조에 복귀</button>
+                                           <button class="btn btn-sm btn-warning" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'expelled', '${App.esc(m.nickname)}')">내보내기</button>
+                                           <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
+                                        : `<button class="btn btn-sm btn-warning" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'leaving', '${App.esc(m.nickname)}')">조에서 빼기</button>
+                                           <button class="btn btn-sm btn-warning" onclick="${opts.setStatusFn || 'AdminApp._setMemberStatus'}(${m.id}, 'expelled', '${App.esc(m.nickname)}')">내보내기</button>
+                                           <button class="btn btn-sm btn-danger-outline" onclick="${deleteFn}(${m.id}, '${App.esc(m.nickname)}')">환불</button>`
                             }
                         </div>
                     </div>
