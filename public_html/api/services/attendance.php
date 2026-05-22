@@ -18,7 +18,7 @@ function handleAttendanceStats() {
     $totalStmt = $db->prepare("
         SELECT COUNT(*) FROM bootcamp_members
         WHERE cohort_id = ? AND is_active = 1
-          AND member_status NOT IN ('refunded','leaving')
+          AND member_status != 'refunded'
     ");
     $totalStmt->execute([$cohortId]);
     $totalMembers = (int)$totalStmt->fetchColumn();
