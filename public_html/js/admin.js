@@ -1114,8 +1114,10 @@ const AdminApp = (() => {
 
         const sc = r.status_counts || {};
         const refundedN = parseInt(sc.refunded) || 0;
+        const expelledN = parseInt(sc.expelled) || 0;
         const inactiveExtra = [];
         if (refundedN) inactiveExtra.push(`환불 ${refundedN}`);
+        if (expelledN) inactiveExtra.push(`퇴출 ${expelledN}`);
         const headerLabel = _membersIncludeInactive
             ? `회원 ${r.members.length}명 (전체)`
             : `활성 회원 ${r.members.length}명${inactiveExtra.length ? ` <span style="font-weight:normal;color:var(--color-text-sub);font-size:var(--text-xs)">(${inactiveExtra.join(' · ')} 미포함)</span>` : ''}`;
@@ -1125,7 +1127,7 @@ const AdminApp = (() => {
                 <span style="font-weight:600">${headerLabel}</span>
                 <label style="display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--color-text-sub);margin-left:12px;cursor:pointer;">
                     <input type="checkbox" id="mf-include-inactive" ${_membersIncludeInactive ? 'checked' : ''}>
-                    환불 회원 포함
+                    환불·퇴출 회원 포함
                 </label>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
                 <button class="btn btn-secondary btn-sm" id="btn-cafe-bulk">카페 키 일괄 등록</button>
@@ -1368,10 +1370,19 @@ const AdminApp = (() => {
     }
 
     async function _setMemberStatus(id, status, name) {
-        const label = status === 'leaving' ? '조에서 빼기' : '활성';
-        if (!await App.confirm(`'${name}' 회원을 '${label}' 상태로 변경하시겠습니까?`)) return;
+        const labelMap = { leaving: '조에서 빼기', expelled: '내보내기', active: '활성' };
+        const label = labelMap[status] || status;
+        let confirmMsg = `'${name}' 회원을 '${label}' 상태로 변경하시겠습니까?`;
+        if (status === 'expelled') {
+            confirmMsg += '\n이후 단체활동(zoom/카페/점수/후기/부티즈)에서 모두 빠집니다.';
+        }
+        if (!await App.confirm(confirmMsg)) return;
+        let reason = '';
+        if (status === 'expelled') {
+            reason = prompt('사유 (선택, 빈칸 가능):', '') || '';
+        }
         App.showLoading();
-        const r = await App.post('/api/admin.php?action=member_set_status', { id, status });
+        const r = await App.post('/api/admin.php?action=member_set_status', { id, status, reason });
         App.hideLoading();
         if (r.success) { Toast.success(r.message); loadMembersMgmt(); }
     }
