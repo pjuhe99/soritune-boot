@@ -170,7 +170,7 @@ function handleMemberSetStatus($method) {
         $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ?")->execute([$id]);
     }
 
-    $label = $status === 'leaving' ? '나간 회원' : '활성';
+    $label = $status === 'leaving' ? '조에서 빠진 회원' : '활성';
     jsonSuccess([], "'{$label}' 상태로 변경되었습니다.");
 }
 

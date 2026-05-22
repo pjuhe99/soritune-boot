@@ -1669,7 +1669,7 @@ const BootcampApp = (() => {
     }
 
     async function _setMemberStatus(id, status, nickname) {
-        const label = status === 'leaving' ? '나가기' : '활성';
+        const label = status === 'leaving' ? '조에서 빼기' : '활성';
         if (!await App.confirm(`'${nickname}' 회원을 '${label}' 상태로 변경하시겠습니까?`)) return;
         App.showLoading();
         const r = await App.post(API + 'member_set_status', { id, status });
@@ -2284,7 +2284,7 @@ const BootcampApp = (() => {
         return members.map(m => {
             const scoreClass = m.current_score <= -25 ? 'danger' : m.current_score <= -10 ? 'negative' : '';
 
-            const leavingBadge = m.member_status === 'leaving' ? ' <span class="badge badge-warning-solid" style="font-size:10px">나간 회원</span>' : '';
+            const leavingBadge = m.member_status === 'leaving' ? ' <span class="badge badge-warning-solid" style="font-size:10px">조에서 빠짐</span>' : '';
 
             const cafeNickHtml = m.cafe_nickname ? ` <span style="color:#888;font-size:11px">☕ ${App.esc(m.cafe_nickname)}</span>` : '';
 

@@ -1119,7 +1119,7 @@ const AdminApp = (() => {
         const inactiveExtra = [];
         if (refundedN) inactiveExtra.push(`환불 ${refundedN}`);
         if (outN) inactiveExtra.push(`탈락 ${outN}`);
-        if (leavingN) inactiveExtra.push(`나간 회원 ${leavingN}`);
+        if (leavingN) inactiveExtra.push(`조에서 빠진 회원 ${leavingN}`);
         const headerLabel = _membersIncludeInactive
             ? `회원 ${r.members.length}명 (전체)`
             : `활성 회원 ${r.members.length}명${inactiveExtra.length ? ` <span style="font-weight:normal;color:var(--color-text-sub);font-size:var(--text-xs)">(${inactiveExtra.join(' · ')} 미포함)</span>` : ''}`;
@@ -1129,7 +1129,7 @@ const AdminApp = (() => {
                 <span style="font-weight:600">${headerLabel}</span>
                 <label style="display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--color-text-sub);margin-left:12px;cursor:pointer;">
                     <input type="checkbox" id="mf-include-inactive" ${_membersIncludeInactive ? 'checked' : ''}>
-                    환불·탈락·나간 회원 포함
+                    환불·탈락·조에서 빠진 회원 포함
                 </label>
                 <button class="btn btn-primary btn-sm" id="btn-add-member">추가</button>
                 <button class="btn btn-secondary btn-sm" id="btn-cafe-bulk">카페 키 일괄 등록</button>
@@ -1372,7 +1372,7 @@ const AdminApp = (() => {
     }
 
     async function _setMemberStatus(id, status, name) {
-        const label = status === 'leaving' ? '나가기' : '활성';
+        const label = status === 'leaving' ? '조에서 빼기' : '활성';
         if (!await App.confirm(`'${name}' 회원을 '${label}' 상태로 변경하시겠습니까?`)) return;
         App.showLoading();
         const r = await App.post('/api/admin.php?action=member_set_status', { id, status });
