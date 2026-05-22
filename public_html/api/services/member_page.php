@@ -399,7 +399,7 @@ function handleMemberBootees() {
         LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
-          AND bm.member_status = 'active'
+          AND bm.member_status NOT IN ('refunded','expelled')
         ORDER BY coin DESC, bm.nickname ASC
     ");
     $stmt->execute([$cohortId]);

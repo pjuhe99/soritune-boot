@@ -86,7 +86,7 @@ function initDailyChecks() {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.is_active = 1
-          AND bm.member_status = 'active'
+          AND bm.member_status NOT IN ('refunded','expelled')
           AND c.start_date <= '{$today}'
           AND c.end_date >= '{$today}'
     ")->fetchAll(PDO::FETCH_ASSOC);
@@ -155,7 +155,7 @@ function backfillChecks() {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.is_active = 1
-          AND bm.member_status = 'active'
+          AND bm.member_status NOT IN ('refunded','expelled')
           AND c.end_date >= '{$yesterday}'
     ")->fetchAll(PDO::FETCH_ASSOC);
 

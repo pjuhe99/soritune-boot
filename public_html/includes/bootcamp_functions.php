@@ -331,6 +331,7 @@ function resolveMemberByKey($db, $cafeKey) {
     $stmt = $db->prepare("
         SELECT id FROM bootcamp_members
         WHERE cafe_member_key = ? AND is_active = 1
+          AND member_status NOT IN ('refunded','expelled')
         LIMIT 1
     ");
     $stmt->execute([$cafeKey]);

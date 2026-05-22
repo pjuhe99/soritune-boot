@@ -175,7 +175,7 @@ case 'session_status':
     // 전체 활성 멤버 수 (해당 기수)
     $totalStmt = $db->prepare("
         SELECT COUNT(*) AS cnt FROM bootcamp_members
-        WHERE cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
+        WHERE cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
     ");
     $totalStmt->execute([$session['cohort_id']]);
     $totalMembers = (int)$totalStmt->fetch()['cnt'];
@@ -236,16 +236,31 @@ case 'groups':
         ORDER BY name
     ");
     $stmt->execute([$session['cohort_id']]);
+    $groups = $stmt->fetchAll();
 
-    jsonSuccess(['groups' => $stmt->fetchAll()]);
+    // group_id=NULL 인 단체활동 대상 회원 (leaving/OOM) 이 있으면 가상 카드 추가
+    $unassignedStmt = $db->prepare("
+        SELECT COUNT(*) FROM bootcamp_members
+        WHERE cohort_id = ?
+          AND group_id IS NULL
+          AND is_active = 1
+          AND member_status NOT IN ('refunded','expelled')
+    ");
+    $unassignedStmt->execute([$session['cohort_id']]);
+    $unassignedCount = (int)$unassignedStmt->fetchColumn();
+    if ($unassignedCount > 0) {
+        $groups[] = ['id' => 0, 'name' => '기타 (조 미배정)', 'code' => '_unassigned_'];
+    }
+
+    jsonSuccess(['groups' => $groups]);
     break;
 
 // ── 조원 목록 (공개, 유효 세션 필요) ──
 case 'group_members':
     requireMember();
     $code = trim($_GET['code'] ?? '');
-    $groupId = (int)($_GET['group_id'] ?? 0);
-    if (!$code || !$groupId) jsonError('code와 group_id가 필요합니다.');
+    if (!$code || !isset($_GET['group_id'])) jsonError('code와 group_id가 필요합니다.');
+    $groupId = (int)$_GET['group_id'];
 
     $db = getDB();
     $session = getActiveSession($db, $code);
@@ -253,12 +268,25 @@ case 'group_members':
         jsonError('유효하지 않은 세션입니다.');
     }
 
-    $stmt = $db->prepare("
-        SELECT id, nickname FROM bootcamp_members
-        WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
-        ORDER BY nickname
-    ");
-    $stmt->execute([$groupId, $session['cohort_id']]);
+    if ($groupId === 0) {
+        // 가상 "기타 (조 미배정)" 카드 — group_id IS NULL 인 leaving/OOM 회원
+        $stmt = $db->prepare("
+            SELECT id, nickname FROM bootcamp_members
+            WHERE cohort_id = ?
+              AND group_id IS NULL
+              AND is_active = 1
+              AND member_status NOT IN ('refunded','expelled')
+            ORDER BY nickname
+        ");
+        $stmt->execute([$session['cohort_id']]);
+    } else {
+        $stmt = $db->prepare("
+            SELECT id, nickname FROM bootcamp_members
+            WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
+            ORDER BY nickname
+        ");
+        $stmt->execute([$groupId, $session['cohort_id']]);
+    }
 
     jsonSuccess(['members' => $stmt->fetchAll()]);
     break;
