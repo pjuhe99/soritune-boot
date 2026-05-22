@@ -49,6 +49,10 @@ try {
     $idO = (int)$db->lastInsertId();
     $ins->execute([$cohortId, null, '환불', 'r', 'refunded', 0]);
     $idR = (int)$db->lastInsertId();
+    // 운영자 수정 등으로 is_active=1 인 채로 환불 상태가 된 케이스 (rare)
+    // — `!= 'refunded'` 가드의 본 효과를 검증
+    $ins->execute([$cohortId, null, '활성환불', 'ra', 'refunded', 1]);
+    $idRactive = (int)$db->lastInsertId();
 
     // cron init_daily_checks 가 쓰는 변경 후 SELECT
     $today = date('Y-m-d');
@@ -72,6 +76,8 @@ try {
     t('cron SELECT 가 active/leaving/OOM 3명을 포함', $ids === $expected,
       'got=' . json_encode($ids) . ' expected=' . json_encode($expected));
     t('cron SELECT 가 refunded 회원은 제외', !in_array($idR, $ids, true));
+    t('cron SELECT 가 is_active=1 인 refunded 도 제외 (member_status 가드 효과)',
+      !in_array($idRactive, $ids, true));
 
 } finally {
     $db->rollBack();
