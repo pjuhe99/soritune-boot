@@ -786,25 +786,49 @@ case 'member_restore':
     break;
 
 case 'member_set_status':
-    // 나가기 설정/해제
     if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
     $admin = requireAdmin(['operation']);
     $input = getJsonInput();
     $id = (int)($input['id'] ?? 0);
     $status = $input['status'] ?? '';
+    $reason = trim((string)($input['reason'] ?? ''));
     if (!$id) jsonError('회원 ID가 필요합니다.');
-    if (!in_array($status, ['active', 'leaving'])) jsonError('유효하지 않은 상태입니다.');
+    if (!in_array($status, ['active', 'leaving', 'expelled'])) jsonError('유효하지 않은 상태입니다.');
 
     $db = getDB();
-    if ($status === 'leaving') {
-        // 나가기: is_active 유지(로그인 가능), 조 소속 해제
-        $db->prepare("UPDATE bootcamp_members SET member_status = 'leaving', group_id = NULL WHERE id = ?")->execute([$id]);
-    } else {
-        // 활성 복원
-        $db->prepare("UPDATE bootcamp_members SET member_status = 'active' WHERE id = ?")->execute([$id]);
+    $db->beginTransaction();
+    try {
+        $prevStmt = $db->prepare("SELECT member_status FROM bootcamp_members WHERE id = ? FOR UPDATE");
+        $prevStmt->execute([$id]);
+        $previousStatus = $prevStmt->fetchColumn();
+        if ($previousStatus === false) { $db->rollBack(); jsonError('회원을 찾을 수 없습니다.', 404); }
+
+        if ($status === 'leaving') {
+            $db->prepare("UPDATE bootcamp_members SET member_status='leaving', group_id=NULL WHERE id=?")->execute([$id]);
+        } elseif ($status === 'expelled') {
+            $db->prepare("UPDATE bootcamp_members SET member_status='expelled', group_id=NULL WHERE id=?")->execute([$id]);
+        } else {
+            $db->prepare("UPDATE bootcamp_members SET member_status='active' WHERE id=?")->execute([$id]);
+        }
+
+        $db->prepare("INSERT INTO admin_action_logs
+            (actor_admin_id, action_type, target_table, target_id, payload_json)
+            VALUES (?, 'member_status_change', 'bootcamp_members', ?, ?)")
+           ->execute([
+             $admin['id'] ?? null,
+             $id,
+             json_encode(['from' => $previousStatus, 'to' => $status, 'reason' => $reason !== '' ? $reason : null],
+                         JSON_UNESCAPED_UNICODE),
+           ]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $e;
     }
 
-    $label = $status === 'leaving' ? '조에서 빠진 회원' : '활성';
+    $labelMap = ['leaving' => '조에서 빠진 회원', 'expelled' => '퇴출 회원', 'active' => '활성'];
+    $label = $labelMap[$status] ?? $status;
     jsonSuccess([], "'{$label}' 상태로 변경되었습니다.");
     break;
 
