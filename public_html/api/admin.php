@@ -591,7 +591,7 @@ case 'member_list':
     $where = ["c.cohort = ?"];
     $params = [$cohort];
     if (!$includeInactive) {
-        $where[] = "bm.member_status != 'refunded'";
+        $where[] = "bm.member_status NOT IN ('refunded','expelled')";
     }
     $stmt = $db->prepare("
         SELECT bm.id, bm.real_name, bm.nickname, bm.phone, bm.user_id, bm.cafe_member_key,
@@ -625,7 +625,7 @@ case 'member_list':
         GROUP BY bm.member_status
     ");
     $countStmt->execute([$cohort]);
-    $statusCounts = ['active' => 0, 'leaving' => 0, 'refunded' => 0, 'out_of_group_management' => 0];
+    $statusCounts = ['active' => 0, 'leaving' => 0, 'refunded' => 0, 'out_of_group_management' => 0, 'expelled' => 0];
     foreach ($countStmt->fetchAll() as $row) {
         $statusCounts[$row['member_status']] = (int)$row['cnt'];
     }
