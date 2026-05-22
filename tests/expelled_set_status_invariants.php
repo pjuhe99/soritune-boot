@@ -65,7 +65,7 @@ try {
     t('member_status = expelled', $current['member_status'] === 'expelled');
     t('group_id = NULL', $current['group_id'] === null);
 
-    $log = $db->prepare("SELECT action_type, payload_json
+    $log = $db->prepare("SELECT actor_admin_id, action_type, payload_json
                           FROM admin_action_logs
                          WHERE target_table='bootcamp_members' AND target_id = ?");
     $log->execute([$memberId]);
@@ -77,6 +77,7 @@ try {
     t('payload.from = active', ($payload['from'] ?? null) === 'active');
     t('payload.to = expelled', ($payload['to'] ?? null) === 'expelled');
     t('payload.reason 보존', ($payload['reason'] ?? null) === $reason);
+    t('actor_admin_id 보존', (int)($logRow['actor_admin_id'] ?? 0) === $adminId);
 } finally {
     $db->rollBack();
 }

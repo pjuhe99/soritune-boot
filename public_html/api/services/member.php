@@ -185,7 +185,7 @@ function handleMemberSetStatus($method) {
             (actor_admin_id, action_type, target_table, target_id, payload_json)
             VALUES (?, 'member_status_change', 'bootcamp_members', ?, ?)")
            ->execute([
-             $admin['id'] ?? null,
+             $admin['admin_id'] ?? null,
              $id,
              json_encode(['from' => $previousStatus, 'to' => $status, 'reason' => $reason !== '' ? $reason : null],
                          JSON_UNESCAPED_UNICODE),
