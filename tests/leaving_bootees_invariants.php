@@ -37,6 +37,9 @@ try {
     $idO = (int)$db->lastInsertId();
     $ins->execute([$cohortId, '환불', 'r', 'refunded', 0]);
     $idR = (int)$db->lastInsertId();
+    // is_active=1 인 채로 환불 상태가 된 케이스 — `!= 'refunded'` 가드의 본 효과를 검증
+    $ins->execute([$cohortId, '활성환불', 'ra', 'refunded', 1]);
+    $idRactive = (int)$db->lastInsertId();
 
     // member_page.php:402 부티즈 SELECT (변경 후)
     $sql = "
@@ -58,6 +61,8 @@ try {
     t('부티즈 목록 = active + leaving + OOM', $ids === $expected,
       'got=' . json_encode($ids) . ' expected=' . json_encode($expected));
     t('refunded 제외', !in_array($idR, $ids, true));
+    t('is_active=1 인 refunded 도 제외 (member_status 가드 효과)',
+      !in_array($idRactive, $ids, true));
 } finally {
     $db->rollBack();
 }
