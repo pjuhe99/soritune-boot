@@ -2301,7 +2301,7 @@ const BootcampApp = (() => {
 
             if (mode === 'required') {
                 const rq = m.required;
-                return `<div class="db-member-item${m.member_status === 'leaving' ? ' db-member-leaving' : ''}">
+                return `<div class="db-member-item${(m.member_status === 'leaving' || m.member_status === 'expelled') ? ' db-member-leaving' : ''}">
                     <span class="db-member-name">${App.esc(m.nickname)}${leavingBadge}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${cafeNickHtml}</span>
                     <span class="db-member-score score-cell ${scoreClass}">${m.current_score}</span>
                     <div class="db-member-bars">
@@ -2313,7 +2313,7 @@ const BootcampApp = (() => {
                 </div>`;
             } else {
                 const op = m.optional;
-                return `<div class="db-member-item${m.member_status === 'leaving' ? ' db-member-leaving' : ''}">
+                return `<div class="db-member-item${(m.member_status === 'leaving' || m.member_status === 'expelled') ? ' db-member-leaving' : ''}">
                     <span class="db-member-name">${App.esc(m.nickname)}${leavingBadge}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${cafeNickHtml}</span>
                     <div class="db-member-optional">
                         <span class="db-opt-badge ${optLevel(op.bookclub_open)}">개설 ${op.bookclub_open}</span>
