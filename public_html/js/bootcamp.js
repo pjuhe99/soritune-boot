@@ -431,7 +431,7 @@ const BootcampApp = (() => {
                 </div>
                 <button class="btn btn-primary btn-sm" id="bc-checklist-save">저장</button>
             </div>
-            ${filterBarHtml({ date: checklistViewMode === 'daily' })}
+            ${filterBarHtml({ date: checklistViewMode === 'daily', includeExpelled: true })}
             <div class="bc-filters" id="bc-mission-filter" style="display:${checklistViewMode === 'mission' ? '' : 'none'}">
                 <div class="filter-item">
                     <span class="filter-label">과제</span>
@@ -489,6 +489,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'checklist', params);
         if (!r.success) return;
@@ -566,6 +567,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'checklist_by_mission', params);
         if (!r.success) return;
@@ -834,7 +836,7 @@ const BootcampApp = (() => {
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">현황판</span>
             </div>
-            ${filterBarHtml({ missionFilter: true })}
+            ${filterBarHtml({ missionFilter: true, includeExpelled: true })}
             <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
@@ -851,6 +853,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'status_board', params);
         if (!r.success) return;
