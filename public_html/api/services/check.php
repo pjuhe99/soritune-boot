@@ -30,6 +30,7 @@ function handleChecklist() {
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
+               bm.member_status,
                bm.group_id, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin
@@ -206,6 +207,7 @@ function handleChecklistByMission() {
 
     $stmt = $db->prepare("
         SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
+               bm.member_status,
                bm.group_id, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score,
                COALESCE(mcb.current_coin, 0) AS current_coin

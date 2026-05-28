@@ -1243,3 +1243,9 @@
     .att-date-range .form-input { width: 130px; }
     .att-session-title { display: none; }
 }
+
+/* expelled 회원 — 약한 시각 분리 (체크리스트/현황판 토글 on 시 노출) */
+.bc-member-btn--expelled {
+    opacity: 0.7;
+    background: var(--color-danger-50, #fff5f5);
+}

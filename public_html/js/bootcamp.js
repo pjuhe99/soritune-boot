@@ -464,9 +464,12 @@ const BootcampApp = (() => {
 
     function memberCellHtml(m) {
         const cafeNickHtml = m.cafe_nickname ? ` · ☕ ${App.esc(m.cafe_nickname)}` : '';
+        const isExpelled = m.member_status === 'expelled';
+        const expelledBadge = isExpelled ? ' <span class="badge badge-danger" style="font-size:10px">퇴출</span>' : '';
+        const btnClass = 'bc-member-btn' + (isExpelled ? ' bc-member-btn--expelled' : '');
         return `
-            <button class="bc-member-btn" data-member-id="${m.id}" type="button">
-                <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
+            <button class="${btnClass}" data-member-id="${m.id}" type="button">
+                <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}${expelledBadge}</div>
                 <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계${cafeNickHtml}</div>
             </button>`;
     }
