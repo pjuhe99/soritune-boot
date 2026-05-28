@@ -175,7 +175,7 @@ case 'session_status':
     // 전체 활성 멤버 수 (해당 기수)
     $totalStmt = $db->prepare("
         SELECT COUNT(*) AS cnt FROM bootcamp_members
-        WHERE cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
+        WHERE cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
     ");
     $totalStmt->execute([$session['cohort_id']]);
     $totalMembers = (int)$totalStmt->fetch()['cnt'];
@@ -244,7 +244,7 @@ case 'groups':
         WHERE cohort_id = ?
           AND group_id IS NULL
           AND is_active = 1
-          AND member_status NOT IN ('refunded','expelled')
+          AND member_status != 'refunded'
     ");
     $unassignedStmt->execute([$session['cohort_id']]);
     $unassignedCount = (int)$unassignedStmt->fetchColumn();
@@ -275,14 +275,14 @@ case 'group_members':
             WHERE cohort_id = ?
               AND group_id IS NULL
               AND is_active = 1
-              AND member_status NOT IN ('refunded','expelled')
+              AND member_status != 'refunded'
             ORDER BY nickname
         ");
         $stmt->execute([$session['cohort_id']]);
     } else {
         $stmt = $db->prepare("
             SELECT id, nickname FROM bootcamp_members
-            WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
+            WHERE group_id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
             ORDER BY nickname
         ");
         $stmt->execute([$groupId, $session['cohort_id']]);
