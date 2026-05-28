@@ -1,6 +1,7 @@
 <?php
 /**
- * expelled 회원은 후기 작성이 차단되는지.
+ * 약한 조치 전환 후: 후기 작성 게이트가 refunded 만 차단하고
+ * expelled 는 active 와 동일하게 통과시키는지.
  *
  * 사용: php tests/expelled_review_invariants.php
  */
@@ -40,8 +41,8 @@ try {
     $ins->execute([$cohortId, '퇴출', 'x', 'expelled', 1]);
     $idX = (int)$db->lastInsertId();
 
-    // review.php 게이트 (변경 후): refunded + expelled 차단
-    $blocked = ['refunded', 'expelled'];
+    // review.php 게이트 (약한 조치 전환 후): refunded 만 차단
+    $blocked = ['refunded'];
 
     $stmt = $db->prepare("SELECT member_status FROM bootcamp_members WHERE id = ?");
 
@@ -50,7 +51,7 @@ try {
         ['leaving', $idL, false],
         ['out_of_group_management', $idO, false],
         ['refunded', $idR, true],
-        ['expelled', $idX, true],
+        ['expelled', $idX, false],
     ] as [$label, $id, $expectBlock]) {
         $stmt->execute([$id]);
         $status = $stmt->fetchColumn();
