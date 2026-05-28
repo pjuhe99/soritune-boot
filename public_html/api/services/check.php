@@ -17,6 +17,9 @@ function handleChecklist() {
     $params = [$cohortId];
     if (!empty($_GET['group_id'])) { $where[] = "bm.group_id = ?"; $params[] = (int)$_GET['group_id']; }
     if (!empty($_GET['stage_no'])) { $where[] = "bm.stage_no = ?"; $params[] = (int)$_GET['stage_no']; }
+    if (empty($_GET['include_expelled'])) {
+        $where[] = "bm.member_status != 'expelled'";
+    }
 
     $sortMap = [
         'name_asc'     => 'bm.real_name ASC, bm.nickname ASC',
