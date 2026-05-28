@@ -177,7 +177,7 @@ function handleMemberSetStatus($method) {
             // 약한 조치 전환 (2026-05-28): group_id 보존 — 체크리스트·현황판은 새 토글로 제어
             $db->prepare("UPDATE bootcamp_members SET member_status='expelled' WHERE id=?")->execute([$id]);
         } else {
-            // 활성 복원 (group_id 는 운영자가 별도 배정)
+            // 활성 복원 (leaving 에서 온 경우 group_id 가 NULL 이므로 운영자가 별도 배정; expelled 는 group_id 보존이라 자동 동일)
             $db->prepare("UPDATE bootcamp_members SET member_status='active' WHERE id=?")->execute([$id]);
         }
 
