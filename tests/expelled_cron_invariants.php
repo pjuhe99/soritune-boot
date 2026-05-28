@@ -1,6 +1,6 @@
 <?php
 /**
- * cron init_daily_checks 의 활성 멤버 SELECT 가 expelled 회원을 제외하는지.
+ * cron init_daily_checks 의 활성 멤버 SELECT 가 약한 조치 정책에 맞게 refunded 만 제외하고 expelled 는 포함하는지.
  * 정책: '단체 활동 대상' = is_active=1 AND member_status != 'refunded'
  * (expelled 는 약한 조치 — active 와 동일하게 cron 통과)
  *
