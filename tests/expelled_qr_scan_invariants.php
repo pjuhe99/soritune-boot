@@ -54,16 +54,16 @@ try {
 
     t('qrRecordAttendance ok=true (expelled 통과 — active 와 동일)', !empty($result['ok']));
 
-    // member_mission_checks INSERT 됨 (zoom_daily mission_type 가 존재할 때)
+    // member_mission_checks INSERT 됨. zoom_daily mission_type 은 seed 라 모든 환경에 존재해야 함 — 없으면 precondition 실패.
     $mtStmt = $db->prepare("SELECT id FROM mission_types WHERE code = 'zoom_daily' LIMIT 1");
     $mtStmt->execute();
     $mtId = $mtStmt->fetchColumn();
-    if ($mtId) {
+    t('mission_types.zoom_daily seed 존재 (precondition)', $mtId !== false,
+      'mission_types 에 zoom_daily 가 없음 — 환경 seed 점검 필요');
+    if ($mtId !== false) {
         $cnt = $db->prepare("SELECT COUNT(*) FROM member_mission_checks WHERE member_id = ? AND check_date = CURDATE() AND mission_type_id = ?");
         $cnt->execute([$memberId, (int)$mtId]);
         t('member_mission_checks INSERT 됨 (active 와 동일)', (int)$cnt->fetchColumn() === 1);
-    } else {
-        t('member_mission_checks INSERT 됨 (active 와 동일)', true, 'zoom_daily mission_type 없음 — skip');
     }
 
     // qr_attendance INSERT 됨
