@@ -278,6 +278,8 @@ const BootcampApp = (() => {
         const showStage = opts.stage !== false;
         const showCohort = !leaderMode;
         const showMissionFilter = opts.missionFilter === true;
+        const showIncludeExpelled = opts.includeExpelled === true;
+        const includeExpelledChecked = localStorage.getItem('boot.include_expelled') === '1';
         return `
             <div class="bc-filters">
                 ${showCohort ? `
@@ -323,8 +325,17 @@ const BootcampApp = (() => {
                     </select>
                 </div>
                 ${showMissionFilter ? renderMissionFilterItems() : ''}
+                ${showIncludeExpelled ? `
+                <label class="filter-chip">
+                    <input type="checkbox" id="bc-include-expelled" ${includeExpelledChecked ? 'checked' : ''}>
+                    내보내기 회원 포함
+                </label>` : ''}
             </div>
         `;
+    }
+
+    function includeExpelledFlag() {
+        return localStorage.getItem('boot.include_expelled') === '1' ? 1 : 0;
     }
 
     function bindFilterEvents(onFilter, container) {
@@ -369,6 +380,11 @@ const BootcampApp = (() => {
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
         const sortEl = scope.querySelector('#fl-sort');
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
+        const incExpEl = scope.querySelector('#bc-include-expelled');
+        if (incExpEl) incExpEl.onchange = () => {
+            localStorage.setItem('boot.include_expelled', incExpEl.checked ? '1' : '0');
+            onFilter();
+        };
     }
 
     function bindMissionFilterEvents(onFilter, scope) {
