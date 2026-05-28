@@ -29,22 +29,27 @@ try {
     // 어드민 fixture (action_logs FK 가 admins 면 필요. 없으면 id=1 임의)
     $adminId = 1; // boot 의 admin_action_logs.actor_admin_id 는 DEFAULT NULL — 임의 INT OK
 
-    // active 회원
-    $db->prepare("INSERT INTO bootcamp_members
-        (cohort_id, group_id, real_name, nickname, member_status, is_active, stage_no, joined_at)
-        VALUES (?, NULL, '활성', 'a', 'active', 1, 1, CURDATE())")
+    // group fixture
+    $db->prepare("INSERT INTO bootcamp_groups (cohort_id, name, code) VALUES (?, 'TEST_G', 'tg')")
        ->execute([$cohortId]);
+    $groupId = (int)$db->lastInsertId();
+
+    // active 회원 + group 배정
+    $db->prepare("INSERT INTO bootcamp_members
+        (cohort_id, group_id, real_name, nickname, member_status, is_active, member_role, stage_no, joined_at)
+        VALUES (?, ?, '활성장', 'al', 'active', 1, 'leader', 1, CURDATE())")
+       ->execute([$cohortId, $groupId]);
     $memberId = (int)$db->lastInsertId();
 
-    // 변경 후 정책 시뮬레이션 — handleMemberSetStatus 의 핵심 동작을 인라인 재현:
+    // 변경 후 정책 시뮬레이션:
     // (1) FOR UPDATE 로 prev status 조회
-    // (2) member_status='expelled', group_id=NULL UPDATE
+    // (2) member_status='expelled' UPDATE — group_id 안 건드림
     // (3) admin_action_logs INSERT
     $prev = $db->prepare("SELECT member_status FROM bootcamp_members WHERE id = ? FOR UPDATE");
     $prev->execute([$memberId]);
     $previousStatus = $prev->fetchColumn();
 
-    $db->prepare("UPDATE bootcamp_members SET member_status='expelled', group_id=NULL WHERE id=?")
+    $db->prepare("UPDATE bootcamp_members SET member_status='expelled' WHERE id=?")
        ->execute([$memberId]);
 
     $reason = '점수 -50 이하 3주 연속';
@@ -58,12 +63,13 @@ try {
        ]);
 
     // 검증
-    $row = $db->prepare("SELECT member_status, group_id FROM bootcamp_members WHERE id = ?");
+    $row = $db->prepare("SELECT member_status, group_id, member_role FROM bootcamp_members WHERE id = ?");
     $row->execute([$memberId]);
     $current = $row->fetch(PDO::FETCH_ASSOC);
 
     t('member_status = expelled', $current['member_status'] === 'expelled');
-    t('group_id = NULL', $current['group_id'] === null);
+    t('group_id 보존 (NULL 아님)', (int)$current['group_id'] === $groupId);
+    t('member_role 보존', $current['member_role'] === 'leader');
 
     $log = $db->prepare("SELECT actor_admin_id, action_type, payload_json
                           FROM admin_action_logs
