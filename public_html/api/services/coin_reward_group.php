@@ -218,7 +218,7 @@ function handleCoinRewardGroupDistribute($method) {
         $stmt->execute($cycleIds);
         $allRows = $stmt->fetchAll();
 
-        $INACTIVE_STATUSES = ['refunded', 'leaving', 'out_of_group_management', 'expelled'];
+        $INACTIVE_STATUSES = ['refunded', 'leaving', 'out_of_group_management'];
         $activeRows   = [];
         $forfeitRows  = [];
         foreach ($allRows as $r) {

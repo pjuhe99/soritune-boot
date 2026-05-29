@@ -25,7 +25,7 @@ function qrRecordAttendance(PDO $db, array $session, int $memberId, ?int $actorM
         // 멤버 검증
         $memberStmt = $db->prepare("
             SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
-            WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
+            WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
         ");
         $memberStmt->execute([$memberId, $session['cohort_id']]);
         $member = $memberStmt->fetch();
@@ -112,7 +112,7 @@ function qrRecordRevival(PDO $db, array $session, int $memberId, ?int $actorMemb
         // 멤버 검증
         $memberStmt = $db->prepare("
             SELECT id, nickname, group_id, cohort_id FROM bootcamp_members
-            WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status NOT IN ('refunded','expelled')
+            WHERE id = ? AND cohort_id = ? AND is_active = 1 AND member_status != 'refunded'
         ");
         $memberStmt->execute([$memberId, $session['cohort_id']]);
         $member = $memberStmt->fetch();

@@ -170,11 +170,11 @@ function handleCafeRemapUnmapped($method) {
     $db = getDB();
 
     // cafe_member_key 보유 활성 회원 전체 → 그 키로 적재된 unmapped 게시글 백필
-    // expelled/refunded 제외: 퇴출·환불 회원의 게시글은 소급 백필 대상 아님
+    // refunded 제외: 환불 회원의 게시글은 소급 백필 대상 아님. expelled 는 active 와 동일 처리 (2026-05-28 약한 조치 전환)
     $memberIds = $db->query("
         SELECT id FROM bootcamp_members
         WHERE cafe_member_key IS NOT NULL AND is_active = 1
-          AND member_status NOT IN ('refunded','expelled')
+          AND member_status != 'refunded'
     ")->fetchAll(PDO::FETCH_COLUMN);
 
     if (empty($memberIds)) {

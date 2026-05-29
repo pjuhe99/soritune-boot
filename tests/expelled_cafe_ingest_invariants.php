@@ -1,7 +1,8 @@
 <?php
 /**
- * expelled 회원의 cafe_member_key 매핑이 있어도 ingestCafePosts 가
- * 자동 체크를 INSERT 하지 않는지.
+ * expelled 회원의 cafe_member_key 매핑이 있을 때 ingestCafePosts 가
+ * 약한 조치 정책에 맞게 active 와 동일하게 자동 체크를 INSERT 하는지.
+ * (2026-05-28 약한 조치 전환: resolveMemberByKey 가 expelled 도 매핑)
  *
  * 사용: php tests/expelled_cafe_ingest_invariants.php
  */
@@ -49,10 +50,10 @@ try {
         ],
     ]);
 
-    // member_mission_checks INSERT 안 됨
+    // member_mission_checks INSERT 됨 (active 와 동일 처리)
     $cnt = $db->prepare("SELECT COUNT(*) FROM member_mission_checks WHERE member_id = ? AND check_date = ?");
     $cnt->execute([$memberId, $today]);
-    t('expelled 회원의 카페 자동체크 INSERT 안 됨', (int)$cnt->fetchColumn() === 0);
+    t('expelled 회원의 카페 자동체크 INSERT 됨 (active 와 동일)', (int)$cnt->fetchColumn() === 1);
 } finally {
     $db->rollBack();
 }

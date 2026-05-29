@@ -1,6 +1,7 @@
 <?php
 /**
- * expelled 회원의 QR 스캔이 qrRecordAttendance 에서 거부되는지.
+ * expelled 회원의 QR 스캔이 약한 조치 정책에 맞게 active 와 동일하게 통과하는지.
+ * (2026-05-28 약한 조치 전환: qrRecordAttendance 가 expelled 도 정상 처리)
  *
  * 사용: php tests/expelled_qr_scan_invariants.php
  */
@@ -51,17 +52,24 @@ try {
 
     $result = qrRecordAttendance($db, $session, $memberId, null, '127.0.0.1', 'test');
 
-    t('qrRecordAttendance ok=false (expelled 거부)', empty($result['ok']));
+    t('qrRecordAttendance ok=true (expelled 통과 — active 와 동일)', !empty($result['ok']));
 
-    // member_mission_checks INSERT 안 됨
-    $cnt = $db->prepare("SELECT COUNT(*) FROM member_mission_checks WHERE member_id = ? AND check_date = CURDATE()");
-    $cnt->execute([$memberId]);
-    t('member_mission_checks INSERT 안 됨', (int)$cnt->fetchColumn() === 0);
+    // member_mission_checks INSERT 됨. zoom_daily mission_type 은 seed 라 모든 환경에 존재해야 함 — 없으면 precondition 실패.
+    $mtStmt = $db->prepare("SELECT id FROM mission_types WHERE code = 'zoom_daily' LIMIT 1");
+    $mtStmt->execute();
+    $mtId = $mtStmt->fetchColumn();
+    t('mission_types.zoom_daily seed 존재 (precondition)', $mtId !== false,
+      'mission_types 에 zoom_daily 가 없음 — 환경 seed 점검 필요');
+    if ($mtId !== false) {
+        $cnt = $db->prepare("SELECT COUNT(*) FROM member_mission_checks WHERE member_id = ? AND check_date = CURDATE() AND mission_type_id = ?");
+        $cnt->execute([$memberId, (int)$mtId]);
+        t('member_mission_checks INSERT 됨 (active 와 동일)', (int)$cnt->fetchColumn() === 1);
+    }
 
-    // qr_attendance INSERT 안 됨
+    // qr_attendance INSERT 됨
     $att = $db->prepare("SELECT COUNT(*) FROM qr_attendance WHERE qr_session_id = ? AND member_id = ?");
     $att->execute([$sessionId, $memberId]);
-    t('qr_attendance INSERT 안 됨', (int)$att->fetchColumn() === 0);
+    t('qr_attendance INSERT 됨 (active 와 동일)', (int)$att->fetchColumn() === 1);
 } finally {
     $db->rollBack();
 }

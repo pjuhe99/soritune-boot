@@ -1,6 +1,7 @@
 <?php
 /**
- * handleMemberBootees 의 같은-기수 부티즈 목록이 expelled 회원을 제외하는지.
+ * handleMemberBootees 의 같은-기수 부티즈 목록이 약한 조치 정책에 맞게
+ * refunded 만 제외하고 expelled 는 포함하는지.
  *
  * 사용: php tests/expelled_bootees_invariants.php
  */
@@ -42,13 +43,13 @@ try {
     $ins->execute([$cohortId, '퇴출', 'x', 'expelled', 1]);
     $idX = (int)$db->lastInsertId();
 
-    // member_page.php:402 부티즈 SELECT (변경 후)
+    // member_page.php:402 부티즈 SELECT (약한 조치 전환 후: refunded 만 제외)
     $sql = "
         SELECT bm.id
         FROM bootcamp_members bm
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
-          AND bm.member_status NOT IN ('refunded','expelled')
+          AND bm.member_status != 'refunded'
         ORDER BY bm.id ASC
     ";
     $stmt = $db->prepare($sql);
@@ -56,14 +57,14 @@ try {
     $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     sort($ids);
 
-    $expected = [$idA, $idL, $idO];
+    $expected = [$idA, $idL, $idO, $idX];
     sort($expected);
 
-    t('부티즈 목록 = active + leaving + OOM (3명)', $ids === $expected,
+    t('부티즈 목록 = active + leaving + OOM + expelled (4명)', $ids === $expected,
       'got=' . json_encode($ids) . ' expected=' . json_encode($expected));
     t('refunded(is_active=0) 제외', !in_array($idR, $ids, true));
     t('refunded(is_active=1) 제외', !in_array($idRactive, $ids, true));
-    t('expelled(is_active=1) 제외', !in_array($idX, $ids, true));
+    t('expelled(is_active=1) 포함 (약한 조치 — active 와 동일 처리)', in_array($idX, $ids, true));
 } finally {
     $db->rollBack();
 }

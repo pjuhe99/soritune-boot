@@ -278,6 +278,8 @@ const BootcampApp = (() => {
         const showStage = opts.stage !== false;
         const showCohort = !leaderMode;
         const showMissionFilter = opts.missionFilter === true;
+        const showIncludeExpelled = opts.includeExpelled === true;
+        const includeExpelledChecked = localStorage.getItem('boot.include_expelled') === '1';
         return `
             <div class="bc-filters">
                 ${showCohort ? `
@@ -323,8 +325,17 @@ const BootcampApp = (() => {
                     </select>
                 </div>
                 ${showMissionFilter ? renderMissionFilterItems() : ''}
+                ${showIncludeExpelled ? `
+                <label class="filter-chip">
+                    <input type="checkbox" id="bc-include-expelled" ${includeExpelledChecked ? 'checked' : ''}>
+                    내보내기 회원 포함
+                </label>` : ''}
             </div>
         `;
+    }
+
+    function includeExpelledFlag() {
+        return localStorage.getItem('boot.include_expelled') === '1' ? 1 : 0;
     }
 
     function bindFilterEvents(onFilter, container) {
@@ -369,6 +380,11 @@ const BootcampApp = (() => {
         if (stageEl) stageEl.onchange = () => { selectedStageNo = parseInt(stageEl.value); onFilter(); };
         const sortEl = scope.querySelector('#fl-sort');
         if (sortEl) sortEl.onchange = () => { selectedSort = sortEl.value; onFilter(); };
+        const incExpEl = scope.querySelector('#bc-include-expelled');
+        if (incExpEl) incExpEl.onchange = () => {
+            localStorage.setItem('boot.include_expelled', incExpEl.checked ? '1' : '0');
+            onFilter();
+        };
     }
 
     function bindMissionFilterEvents(onFilter, scope) {
@@ -415,7 +431,7 @@ const BootcampApp = (() => {
                 </div>
                 <button class="btn btn-primary btn-sm" id="bc-checklist-save">저장</button>
             </div>
-            ${filterBarHtml({ date: checklistViewMode === 'daily' })}
+            ${filterBarHtml({ date: checklistViewMode === 'daily', includeExpelled: true })}
             <div class="bc-filters" id="bc-mission-filter" style="display:${checklistViewMode === 'mission' ? '' : 'none'}">
                 <div class="filter-item">
                     <span class="filter-label">과제</span>
@@ -448,9 +464,12 @@ const BootcampApp = (() => {
 
     function memberCellHtml(m) {
         const cafeNickHtml = m.cafe_nickname ? ` · ☕ ${App.esc(m.cafe_nickname)}` : '';
+        const isExpelled = m.member_status === 'expelled';
+        const expelledBadge = isExpelled ? ' <span class="badge badge-danger" style="font-size:10px">퇴출</span>' : '';
+        const btnClass = 'bc-member-btn' + (isExpelled ? ' bc-member-btn--expelled' : '');
         return `
-            <button class="bc-member-btn" data-member-id="${m.id}" type="button">
-                <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}</div>
+            <button class="${btnClass}" data-member-id="${m.id}" type="button">
+                <div class="member-name">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}${parseInt(m.participation_count || 0) > 1 ? ` <span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}${expelledBadge}</div>
                 <div class="member-sub">${App.esc(m.group_name || '-')} · ${m.stage_no}단계${cafeNickHtml}</div>
             </button>`;
     }
@@ -473,6 +492,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'checklist', params);
         if (!r.success) return;
@@ -550,6 +570,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'checklist_by_mission', params);
         if (!r.success) return;
@@ -818,7 +839,7 @@ const BootcampApp = (() => {
             <div class="bc-toolbar mt-md">
                 <span class="bc-toolbar-title">현황판</span>
             </div>
-            ${filterBarHtml({ missionFilter: true })}
+            ${filterBarHtml({ missionFilter: true, includeExpelled: true })}
             <div id="bc-status-body"><div class="empty-state">로딩 중...</div></div>
         `;
 
@@ -835,6 +856,7 @@ const BootcampApp = (() => {
         if (selectedGroupId) params.group_id = selectedGroupId;
         if (selectedStageNo) params.stage_no = selectedStageNo;
         if (selectedSort) params.sort = selectedSort;
+        if (includeExpelledFlag()) params.include_expelled = 1;
 
         const r = await App.get(API + 'status_board', params);
         if (!r.success) return;
@@ -855,6 +877,8 @@ const BootcampApp = (() => {
             const missCount = missDays[m.id] || 0;
             const hasNote = !!warnNotes[m.id];
             const isOut = m.member_status === 'out_of_group_management';
+            const isExpelled = m.member_status === 'expelled';
+            const expelledBadge = isExpelled ? ' <span class="badge badge-danger" style="font-size:10px">퇴출</span>' : '';
             const isRevivalCandidate = score <= (thresholds?.revival_candidate ?? -8);
             const isRevivalEligible = score <= (thresholds?.revival_eligible ?? -10);
             const sc = scoreClass(score);
@@ -880,12 +904,14 @@ const BootcampApp = (() => {
                 warningBadge += `<span class="badge badge-yellow">${missCount}일 미수행</span>`;
             }
 
+            const cardClass = 'bc-status-card' + (isExpelled ? ' bc-status-card--expelled' : '') + (warningClass ? ' ' + warningClass : '');
             return `
-                <div class="bc-status-card ${warningClass}" data-member-id="${m.id}">
+                <div class="${cardClass}" data-member-id="${m.id}">
                     <div class="bc-status-info">
                         <div class="bc-status-name">
                             ${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}
                             ${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}
+                            ${expelledBadge}
                             ${warningBadge}
                         </div>
                         <div class="bc-status-meta">
@@ -1673,7 +1699,7 @@ const BootcampApp = (() => {
         const label = labelMap[status] || status;
         let confirmMsg = `'${nickname}' 님을 '${label}' 상태로 변경하시겠습니까?`;
         if (status === 'expelled') {
-            confirmMsg += '\n이후 단체활동(zoom/카페/점수/후기/부티즈)에서 모두 빠집니다.';
+            confirmMsg += '\n다른 활동은 활성화된 회원과 동일하게 유지되며, 체크리스트·현황판에서만 기본 숨김됩니다. (상단 \'내보내기 회원 포함\' 체크박스로 표시 가능)';
         }
         if (!await App.confirm(confirmMsg)) return;
         let reason = '';

@@ -1,7 +1,8 @@
 <?php
 /**
- * cron init_daily_checks 의 활성 멤버 SELECT 가 expelled 회원을 제외하는지.
- * 정책: '단체 활동 대상' = is_active=1 AND member_status NOT IN ('refunded','expelled')
+ * cron init_daily_checks 의 활성 멤버 SELECT 가 약한 조치 정책에 맞게 refunded 만 제외하고 expelled 는 포함하는지.
+ * 정책: '단체 활동 대상' = is_active=1 AND member_status != 'refunded'
+ * (expelled 는 약한 조치 — active 와 동일하게 cron 통과)
  *
  * 사용: php tests/expelled_cron_invariants.php
  */
@@ -49,7 +50,7 @@ try {
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.is_active = 1
-          AND bm.member_status NOT IN ('refunded','expelled')
+          AND bm.member_status != 'refunded'
           AND c.start_date <= ? AND c.end_date >= ?
           AND bm.cohort_id = ?
     ";
@@ -58,14 +59,14 @@ try {
     $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     sort($ids);
 
-    $expected = [$idA, $idL, $idO];
+    $expected = [$idA, $idL, $idO, $idX];
     sort($expected);
 
-    t('cron SELECT = active + leaving + OOM (3명)', $ids === $expected,
+    t('cron SELECT = active + leaving + OOM + expelled (4명)', $ids === $expected,
       'got=' . json_encode($ids) . ' expected=' . json_encode($expected));
     t('refunded(is_active=0) 제외', !in_array($idR, $ids, true));
     t('refunded(is_active=1) 제외 (member_status 가드)', !in_array($idRactive, $ids, true));
-    t('expelled(is_active=1) 제외 (member_status 가드)', !in_array($idX, $ids, true));
+    t('expelled(is_active=1) 포함 (약한 조치 — active 와 동일 처리)', in_array($idX, $ids, true));
 } finally {
     $db->rollBack();
 }

@@ -806,7 +806,8 @@ case 'member_set_status':
         if ($status === 'leaving') {
             $db->prepare("UPDATE bootcamp_members SET member_status='leaving', group_id=NULL WHERE id=?")->execute([$id]);
         } elseif ($status === 'expelled') {
-            $db->prepare("UPDATE bootcamp_members SET member_status='expelled', group_id=NULL WHERE id=?")->execute([$id]);
+            // 약한 조치 전환 (2026-05-28): group_id 보존 — 체크리스트·현황판은 새 토글로 제어
+            $db->prepare("UPDATE bootcamp_members SET member_status='expelled' WHERE id=?")->execute([$id]);
         } else {
             $db->prepare("UPDATE bootcamp_members SET member_status='active' WHERE id=?")->execute([$id]);
         }
