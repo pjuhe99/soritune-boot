@@ -1374,7 +1374,7 @@ const AdminApp = (() => {
         const label = labelMap[status] || status;
         let confirmMsg = `'${name}' 회원을 '${label}' 상태로 변경하시겠습니까?`;
         if (status === 'expelled') {
-            confirmMsg += '\n다른 활동은 active 회원과 동일하게 유지되며, 체크리스트·현황판에서만 기본 숨김됩니다. (상단 \'내보내기 회원 포함\' 체크박스로 표시 가능)';
+            confirmMsg += '\n다른 활동은 활성화된 회원과 동일하게 유지되며, 체크리스트·현황판에서만 기본 숨김됩니다. (상단 \'내보내기 회원 포함\' 체크박스로 표시 가능)';
         }
         if (!await App.confirm(confirmMsg)) return;
         let reason = '';
