@@ -877,6 +877,8 @@ const BootcampApp = (() => {
             const missCount = missDays[m.id] || 0;
             const hasNote = !!warnNotes[m.id];
             const isOut = m.member_status === 'out_of_group_management';
+            const isExpelled = m.member_status === 'expelled';
+            const expelledBadge = isExpelled ? ' <span class="badge badge-danger" style="font-size:10px">퇴출</span>' : '';
             const isRevivalCandidate = score <= (thresholds?.revival_candidate ?? -8);
             const isRevivalEligible = score <= (thresholds?.revival_eligible ?? -10);
             const sc = scoreClass(score);
@@ -902,12 +904,14 @@ const BootcampApp = (() => {
                 warningBadge += `<span class="badge badge-yellow">${missCount}일 미수행</span>`;
             }
 
+            const cardClass = 'bc-status-card' + (isExpelled ? ' bc-status-card--expelled' : '') + (warningClass ? ' ' + warningClass : '');
             return `
-                <div class="bc-status-card ${warningClass}" data-member-id="${m.id}">
+                <div class="${cardClass}" data-member-id="${m.id}">
                     <div class="bc-status-info">
                         <div class="bc-status-name">
                             ${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''}
                             ${parseInt(m.participation_count) > 1 ? `<span class="badge badge-info" style="font-size:10px">${m.participation_count}회차</span>` : ''}
+                            ${expelledBadge}
                             ${warningBadge}
                         </div>
                         <div class="bc-status-meta">

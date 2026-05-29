@@ -39,12 +39,12 @@ try {
     $ins->execute([$cohortId, '퇴출', 'x', 'expelled', 1]);
     $idX = (int)$db->lastInsertId();
 
-    // review.php 게이트 (변경 후): 'refunded' / 'expelled' 차단
-    $blocked = ['refunded', 'expelled'];
+    // review.php 게이트 (약한 조치 후): 'refunded' 만 차단, expelled 는 허용
+    $blocked = ['refunded'];
 
     $stmt = $db->prepare("SELECT member_status FROM bootcamp_members WHERE id = ?");
 
-    foreach ([['leaving', $idL, false], ['out_of_group_management', $idO, false], ['refunded', $idR, true], ['expelled', $idX, true]] as [$label, $id, $expectBlock]) {
+    foreach ([['leaving', $idL, false], ['out_of_group_management', $idO, false], ['refunded', $idR, true], ['expelled', $idX, false]] as [$label, $id, $expectBlock]) {
         $stmt->execute([$id]);
         $status = $stmt->fetchColumn();
         $isBlocked = in_array($status, $blocked, true);

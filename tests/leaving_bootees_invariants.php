@@ -49,7 +49,7 @@ try {
         FROM bootcamp_members bm
         WHERE bm.cohort_id = ?
           AND bm.is_active = 1
-          AND bm.member_status NOT IN ('refunded','expelled')
+          AND bm.member_status != 'refunded'
         ORDER BY bm.id ASC
     ";
     $stmt = $db->prepare($sql);
@@ -57,16 +57,16 @@ try {
     $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     sort($ids);
 
-    $expected = [$idA, $idL, $idO];
+    $expected = [$idA, $idL, $idO, $idX];
     sort($expected);
 
-    t('부티즈 목록 = active + leaving + OOM', $ids === $expected,
+    t('부티즈 목록 = active + leaving + OOM + expelled', $ids === $expected,
       'got=' . json_encode($ids) . ' expected=' . json_encode($expected));
     t('refunded 제외', !in_array($idR, $ids, true));
     t('is_active=1 인 refunded 도 제외 (member_status 가드 효과)',
       !in_array($idRactive, $ids, true));
-    t('expelled(is_active=1) 도 제외 (member_status 가드)',
-      !in_array($idX, $ids, true));
+    t('expelled(is_active=1) 포함 (약한 조치 — active 와 동일)',
+      in_array($idX, $ids, true));
 } finally {
     $db->rollBack();
 }
