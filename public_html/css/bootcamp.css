@@ -31,6 +31,23 @@
     background: var(--color-bg);
     min-width: 100px;
 }
+.bc-filters .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: var(--text-sm);
+    background: var(--color-bg);
+    cursor: pointer;
+    user-select: none;
+    line-height: 1.2;
+}
+.bc-filters .filter-chip input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
 
 /* ── Mission Filter (현황판 미수행 체크박스) ───────────────── */
 .bc-mission-filter .bc-mission-filter-checks {
