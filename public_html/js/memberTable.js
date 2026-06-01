@@ -101,7 +101,7 @@ const MemberTable = (() => {
 
             // 기본 행
             const mainRow = `
-            <tr class="mt-row" data-id="${m.id}" data-entered="${parseInt(m.entered) ? '1' : '0'}" data-group="${App.esc(m.group_name || '')}">
+            <tr class="mt-row" data-id="${m.id}" data-entered="${parseInt(m.entered) ? '1' : '0'}" data-group="${App.esc(m.group_name || '')}" data-phone="${App.esc((m.phone || '').replace(/\D/g, ''))}">
                 <td class="mt-col-name">
                     <div class="mt-name-primary">${App.esc(m.nickname)} ${roleBadge} ${pcBadge}</div>
                     <div class="mt-name-sub">${App.esc(m.real_name || '')}</div>
@@ -222,9 +222,22 @@ const MemberTable = (() => {
     function searchBarHtml(count, members) {
         return `${members ? entranceStatsHtml(members) : ''}
         <div class="mt-search-bar">
-            <input type="text" class="form-input mt-search-input" placeholder="이름 또는 아이디로 검색" id="mt-search">
+            <input type="text" class="form-input mt-search-input" placeholder="이름 · 아이디 · 휴대폰번호로 검색" id="mt-search">
             <span class="mt-search-count" id="mt-search-count">${count}명</span>
         </div>`;
+    }
+
+    /**
+     * 행이 검색어와 일치하는지 — 이름/닉네임, 아이디, 휴대폰번호(부분, 숫자만) 매칭
+     * q 는 이미 trim+lowercase 된 검색어
+     */
+    function rowMatchesSearch(row, q) {
+        if (!q) return true;
+        const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
+        const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
+        if (name.includes(q) || userId.includes(q)) return true;
+        const digits = q.replace(/\D/g, '');
+        return digits.length > 0 && (row.dataset.phone || '').includes(digits);
     }
 
     /**
@@ -239,9 +252,7 @@ const MemberTable = (() => {
             const q = input.value.trim().toLowerCase();
             let visible = 0;
             container.querySelectorAll('.mt-row').forEach(row => {
-                const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
-                const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
-                const match = !q || name.includes(q) || userId.includes(q);
+                const match = rowMatchesSearch(row, q);
                 row.style.display = match ? '' : 'none';
                 const detail = container.querySelector(`.mt-detail[data-for="${row.dataset.id}"]`);
                 if (detail && !match) {
@@ -278,10 +289,7 @@ const MemberTable = (() => {
                         // 검색 필터도 함께 적용
                         const searchInput = container.querySelector('#mt-search');
                         if (show && searchInput && searchInput.value.trim()) {
-                            const q = searchInput.value.trim().toLowerCase();
-                            const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
-                            const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
-                            show = name.includes(q) || userId.includes(q);
+                            show = rowMatchesSearch(row, searchInput.value.trim().toLowerCase());
                         }
                     } else {
                         row.dataset._entranceHidden = '1';
@@ -331,10 +339,7 @@ const MemberTable = (() => {
                         // 검색 필터도 함께 적용
                         const searchInput = container.querySelector('#mt-search');
                         if (searchInput && searchInput.value.trim()) {
-                            const q = searchInput.value.trim().toLowerCase();
-                            const name = row.querySelector('.mt-col-name')?.textContent.toLowerCase() || '';
-                            const userId = row.querySelector('.mt-col-userid')?.textContent.toLowerCase() || '';
-                            show = name.includes(q) || userId.includes(q);
+                            show = rowMatchesSearch(row, searchInput.value.trim().toLowerCase());
                         }
                         // 입장 필터도 함께 적용
                         const entranceFilter = container.querySelector('.mt-entrance-filters .chip.active');
