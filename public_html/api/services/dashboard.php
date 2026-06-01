@@ -84,7 +84,7 @@ function computeDashboardStats(
     ensureScoresFresh($db, $cohortId);
 
     $stmt = $db->prepare("
-        SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
+        SELECT bm.id, bm.nickname, bm.real_name, bm.phone, bm.member_role, bm.stage_no,
                bm.group_id, bm.member_status, bm.cafe_nickname, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score
         FROM bootcamp_members bm
@@ -183,6 +183,7 @@ function computeDashboardStats(
             'id' => $mid,
             'nickname' => $m['nickname'],
             'real_name' => $m['real_name'],
+            'phone' => $m['phone'],
             'group_id' => $gid,
             'group_name' => $m['group_name'] ?? '',
             'member_role' => $m['member_role'],
@@ -306,7 +307,7 @@ function computeDashboardStats(
     $out = [];
     foreach ($memberResults as $mr) {
         $score = $mr['current_score'];
-        $info = ['id' => $mr['id'], 'nickname' => $mr['nickname'], 'group_name' => $mr['group_name'], 'current_score' => $score];
+        $info = ['id' => $mr['id'], 'nickname' => $mr['nickname'], 'real_name' => $mr['real_name'], 'phone' => $mr['phone'], 'group_name' => $mr['group_name'], 'current_score' => $score];
         if ($score <= SCORE_OUT_THRESHOLD) {
             $out[] = $info;
         } elseif ($score <= SCORE_REVIVAL_ELIGIBLE) {
