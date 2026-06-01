@@ -2265,7 +2265,9 @@ const BootcampApp = (() => {
         // 4b: 경고 멤버
         const sw = d.score_warnings;
         if (sw.approaching.length || sw.revival_eligible.length || sw.out.length) {
-            html += `<div class="db-section-title">주의 필요 멤버</div>`;
+            html += `<div class="db-section-title">주의 필요 멤버
+                <button type="button" class="btn btn-sm btn-secondary" id="db-warning-csv" style="margin-left:8px;vertical-align:middle">CSV 내보내기</button>
+            </div>`;
 
             if (sw.approaching.length) {
                 html += `<div class="db-warning-group">
@@ -2295,6 +2297,12 @@ const BootcampApp = (() => {
 
         body.innerHTML = html;
 
+        // 주의 필요 멤버 CSV 내보내기
+        const csvBtn = body.querySelector('#db-warning-csv');
+        if (csvBtn) {
+            csvBtn.addEventListener('click', () => downloadWarningCsv(sw));
+        }
+
         // 아코디언 이벤트 바인딩
         body.querySelectorAll('.db-group-row').forEach(row => {
             row.addEventListener('click', () => {
@@ -2313,6 +2321,53 @@ const BootcampApp = (() => {
     const SCORE_REVIVAL_CANDIDATE = -8;
     const SCORE_REVIVAL_ELIGIBLE = -10;
     const SCORE_OUT_THRESHOLD = -25;
+
+    // CSV 필드 이스케이프: 콤마/따옴표/줄바꿈 포함 시 따옴표로 감싸고 내부 따옴표는 두 번.
+    function csvField(val) {
+        const s = (val == null) ? '' : String(val);
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    // 주의 필요 멤버 → CSV 문자열 (헤더 + 행). 그룹 순서: 부활 후보 → 부활 대상 → OUT.
+    // 휴대폰번호는 하이픈 포맷으로 출력해 엑셀이 텍스트로 인식하게 한다(앞자리 0/과학표기 손상 방지).
+    function buildWarningCsv(sw) {
+        const groups = [
+            { tag: '부활 후보', list: (sw && sw.approaching) || [] },
+            { tag: '부활 대상', list: (sw && sw.revival_eligible) || [] },
+            { tag: 'OUT',       list: (sw && sw.out) || [] },
+        ];
+        const rows = [['닉네임', '이름', '조', '휴대폰번호', '점수', '태그', '담당 코치']];
+        groups.forEach(g => {
+            g.list.forEach(m => {
+                rows.push([
+                    m.nickname || '',
+                    m.real_name || '',
+                    m.group_name || '',
+                    m.phone ? App.formatPhone(m.phone) : '',
+                    m.current_score,
+                    g.tag,
+                    m.coach || '',
+                ]);
+            });
+        });
+        return rows.map(r => r.map(csvField).join(',')).join('\r\n');
+    }
+
+    // CSV 다운로드 (UTF-8 BOM 선두로 엑셀 한글 깨짐 방지).
+    function downloadWarningCsv(sw) {
+        const csv = buildWarningCsv(sw);
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const now = new Date();
+        const ymd = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `주의필요멤버_${ymd}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
 
     // 주의 필요 멤버 카드 (2줄: 이름·점수 / 조·번호)
     function renderWarningItem(m) {
