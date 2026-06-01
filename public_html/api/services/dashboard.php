@@ -307,7 +307,7 @@ function computeDashboardStats(
     $out = [];
     foreach ($memberResults as $mr) {
         $score = $mr['current_score'];
-        $info = ['id' => $mr['id'], 'nickname' => $mr['nickname'], 'real_name' => $mr['real_name'], 'phone' => $mr['phone'], 'group_name' => $mr['group_name'], 'current_score' => $score];
+        $info = ['id' => $mr['id'], 'nickname' => $mr['nickname'], 'real_name' => $mr['real_name'], 'phone' => $mr['phone'], 'group_name' => $mr['group_name'], 'current_score' => $score, 'coach' => $coachMap[$mr['group_id']] ?? ''];
         if ($score <= SCORE_OUT_THRESHOLD) {
             $out[] = $info;
         } elseif ($score <= SCORE_REVIVAL_ELIGIBLE) {
