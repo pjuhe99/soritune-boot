@@ -34,6 +34,7 @@
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <!-- Member 모듈 (로드 순서 중요: utils → tabs → 각 탭 → 메인) -->
     <script src="/js/member-utils.js<?= v('/js/member-utils.js') ?>"></script>
+    <script src="/js/zoom-credentials.js<?= v('/js/zoom-credentials.js') ?>"></script>
     <script src="/js/member-tabs.js<?= v('/js/member-tabs.js') ?>"></script>
     <script src="/js/member-home.js<?= v('/js/member-home.js') ?>"></script>
     <script src="/js/member-notices.js<?= v('/js/member-notices.js') ?>"></script>
