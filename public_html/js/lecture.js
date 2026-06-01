@@ -181,9 +181,7 @@ const LectureApp = (() => {
                     <a href="${App.esc(s.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>
                     <button class="lec-btn-copy" onclick="LectureApp._copyZoom('${App.esc(s.zoom_join_url)}')">Zoom 링크 복사</button>
             `;
-            if (s.zoom_password) {
-                body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(s.zoom_password)}</strong></div>`;
-            }
+            body += ZoomCreds.html(s);
             body += `</div>`;
         } else if (s.zoom_status === 'failed') {
             body += `<div class="lec-notice warning">Zoom 생성에 실패했습니다.${s.zoom_error_message ? ' (' + App.esc(s.zoom_error_message) + ')' : ''}</div>`;
@@ -220,6 +218,7 @@ const LectureApp = (() => {
         }
 
         App.openModal(s.title || '강의 상세', body);
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         // Bind events
         const editBtn = document.getElementById('btn-lec-edit-time');
@@ -844,9 +843,7 @@ const LectureApp = (() => {
                     <a href="${App.esc(ev.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>
                     <button class="lec-btn-copy" onclick="LectureApp._copyZoom('${App.esc(ev.zoom_join_url)}')">Zoom 링크 복사</button>
             `;
-            if (ev.zoom_password) {
-                body += `<div class="lec-host-guide">Zoom 비밀번호: <strong>${App.esc(ev.zoom_password)}</strong></div>`;
-            }
+            body += ZoomCreds.html(ev);
             body += `</div>`;
         } else if (ev.zoom_status === 'failed') {
             body += `<div class="lec-notice warning">Zoom 생성에 실패했습니다.${ev.zoom_error_message ? ' (' + App.esc(ev.zoom_error_message) + ')' : ''}</div>`;
@@ -871,6 +868,7 @@ const LectureApp = (() => {
         }
 
         App.openModal(ev.title || '이벤트 상세', body);
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         const retryBtn = document.getElementById('btn-evt-zoom-retry');
         if (retryBtn) retryBtn.onclick = () => retryEventZoom(parseInt(retryBtn.dataset.event));
