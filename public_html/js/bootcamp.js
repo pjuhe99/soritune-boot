@@ -2271,7 +2271,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-yellow">부활 후보</span> (${SCORE_REVIVAL_CANDIDATE} ~ ${SCORE_REVIVAL_CANDIDATE - 1}점)</div>`;
                 sw.approaching.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
                 });
                 html += `</div>`;
             }
@@ -2279,7 +2279,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-black">부활 대상</span> (${SCORE_REVIVAL_ELIGIBLE} ~ ${SCORE_OUT_THRESHOLD + 1}점)</div>`;
                 sw.revival_eligible.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
                 });
                 html += `</div>`;
             }
@@ -2287,7 +2287,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-out">OUT</span> (${SCORE_OUT_THRESHOLD}점 이하)</div>`;
                 sw.out.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span></div>`;
+                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
                 });
                 html += `</div>`;
             }
