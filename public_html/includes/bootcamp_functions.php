@@ -386,6 +386,7 @@ function adjustMemberScore($db, int $memberId, int $scoreChange, ?string $reason
  * @param ?string $passwordFallback 컬럼 비번이 없을 때 쓸 대체 비번
  * @return array{zoom_meeting_id_display: ?string, zoom_password_display: ?string}
  */
+if (!function_exists('zoomDisplayInfo')) {
 function zoomDisplayInfo(array $row, ?string $passwordFallback = null): array {
     $id = $row['zoom_meeting_id'] ?? null;
     if (($id === null || $id === '') && !empty($row['zoom_join_url'])) {
@@ -404,4 +405,5 @@ function zoomDisplayInfo(array $row, ?string $passwordFallback = null): array {
         'zoom_meeting_id_display' => $id,
         'zoom_password_display'   => $pw,
     ];
+}
 }
