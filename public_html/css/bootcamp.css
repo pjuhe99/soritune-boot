@@ -765,12 +765,39 @@
 }
 .db-warning-item {
     font-size: var(--text-sm);
-    padding: 3px 0;
     color: var(--color-text);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+    margin-bottom: var(--space-2);
+}
+.db-warning-line1 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+.db-warning-name { font-weight: var(--font-bold); }
+.db-warning-real {
+    font-weight: var(--font-normal);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+.db-warning-line2 {
+    margin-top: 2px;
+    font-size: var(--text-xs);
+    color: var(--color-text-sub);
+}
+.db-warning-dot { color: var(--color-text-muted); margin: 0 2px; }
+.db-warning-phone {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
 }
 .db-warning-item .score {
     font-weight: var(--font-bold);
     color: var(--color-danger);
+    white-space: nowrap;
 }
 
 /* Chevron icon for accordion */
