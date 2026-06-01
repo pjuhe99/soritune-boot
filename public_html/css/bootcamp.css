@@ -285,6 +285,11 @@
 }
 .bc-revival-row .revival-info { flex: 1; }
 .bc-revival-row .revival-name { font-weight: var(--font-bold); }
+.bc-revival-row .revival-realname {
+    font-weight: var(--font-normal);
+    color: var(--color-text-sub);
+    font-size: var(--text-sm);
+}
 .bc-revival-row .revival-detail {
     font-size: var(--text-sm);
     color: var(--color-text-sub);
