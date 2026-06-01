@@ -533,6 +533,12 @@ function handleAdminStudyDetail() {
 
     unset($session['password']);
 
+    // 코치/총괄 수동 입장용 회의 ID / 비밀번호 (회의 ID는 링크 /j/ 기준, 비번은 방별 맵)
+    $session = array_merge(
+        $session,
+        zoomDisplayInfo($session, zoomRoomPasswordFromMap(getSetting('zoom_room_passwords'), zoomRoomId($session)))
+    );
+
     // 참여자 목록
     $participants = [];
     if ($session['qr_session_id']) {
