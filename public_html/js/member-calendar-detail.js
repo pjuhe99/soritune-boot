@@ -89,6 +89,7 @@ const MemberCalendarDetail = (() => {
             if (s.zoom_status === 'ready' && s.zoom_join_url) {
                 actionItems.push(`<a href="${App.esc(s.zoom_join_url)}" target="_blank" class="lec-btn-zoom">Zoom 입장</a>`);
                 actionItems.push(`<button class="lec-btn-copy" id="btn-copy-zoom">Zoom 링크 복사</button>`);
+                actionItems.push(ZoomCreds.html(s));
             } else if (s.zoom_status === 'pending') {
                 actionItems.push('<div class="lec-notice muted">Zoom 준비 중입니다.</div>');
             } else if (s.zoom_status === 'failed' && isHost) {
@@ -116,6 +117,7 @@ const MemberCalendarDetail = (() => {
         }
 
         App.openModal(s.title || TYPE_CONFIG.study.defaultTitle, body);
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         // ── Bind events ──
         const copyBtn = document.getElementById('btn-copy-zoom');
@@ -303,11 +305,13 @@ const MemberCalendarDetail = (() => {
                     <button class="lec-btn-copy" id="btn-copy-zoom">Zoom 링크 복사</button>
                 </div>
             `;
+            body += ZoomCreds.html(s);
         } else if (s.zoom_status === 'pending') {
             body += '<div class="lec-notice muted">Zoom 준비 중입니다.</div>';
         }
 
         App.openModal(s.title || config.defaultTitle, body);
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         const btn = document.getElementById('btn-copy-zoom');
         if (btn && s.zoom_join_url) {
