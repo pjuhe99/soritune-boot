@@ -193,7 +193,8 @@ const AdminStudyApp = (() => {
 
         if (s.zoom_join_url) {
             body += `<div class="form-group"><label class="form-label">Zoom 링크</label>
-                <a href="${App.esc(s.zoom_join_url)}" target="_blank" style="word-break:break-all">${App.esc(s.zoom_join_url)}</a></div>`;
+                <a href="${App.esc(s.zoom_join_url)}" target="_blank" style="word-break:break-all">${App.esc(s.zoom_join_url)}</a>
+                ${window.ZoomCreds ? ZoomCreds.html(s) : ''}</div>`;
         }
 
         if (participants.length) {
@@ -208,6 +209,8 @@ const AdminStudyApp = (() => {
         }
 
         App.modal(App.esc(s.title), body);
+
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         if (canCancel) {
             document.getElementById('btn-admin-study-cancel').onclick = async () => {
