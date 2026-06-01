@@ -788,8 +788,8 @@ const BulkRegisterApp = (() => {
             <td>${App.esc(row.nickname || '')}</td>
             <td>${App.esc(row.user_id || '-')}</td>
             <td>${hasCorrectedPhone
-                ? `<span class="val-corrected" title="원본: ${App.esc(row.phone_raw)}">${App.esc(row.phone)}</span>`
-                : App.esc(row.phone || '-')}</td>
+                ? `<span class="val-corrected" title="원본: ${App.esc(row.phone_raw)}">${App.esc(App.formatPhone(row.phone))}</span>`
+                : App.esc(App.formatPhone(row.phone) || '-')}</td>
             <td>${hasCorrectedStage
                 ? `<span class="val-corrected" title="원본: ${App.esc(row.stage_raw)}">${row.stage_no}</span>`
                 : (row.stage_no || '-')}</td>

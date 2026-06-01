@@ -1119,7 +1119,7 @@ const BootcampApp = (() => {
                     <div class="revival-info">
                         <div class="revival-name">${App.esc(c.nickname)}${c.real_name ? ` <span class="revival-realname">(${App.esc(c.real_name)})</span>` : ''}</div>
                         <div class="revival-detail">${App.esc(c.group_name || '-')} · ${c.stage_no}단계 · ${App.esc(ROLE_LABELS[c.member_role] || '')}</div>
-                        <div class="revival-detail">전화: ${App.esc(c.phone || '-')}</div>
+                        <div class="revival-detail">전화: ${App.esc(App.formatPhone(c.phone) || '-')}</div>
                     </div>
                     <div class="revival-score">${c.current_score}</div>
                     <button class="btn btn-primary btn-sm btn-revival-manual" data-id="${c.id}" data-name="${App.esc(c.nickname)}">부활</button>

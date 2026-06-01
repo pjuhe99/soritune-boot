@@ -97,7 +97,7 @@ const AdminMultipassApp = (() => {
 
     function renderMemberCard(m) {
         const profile = (m.profiles && m.profiles[0]) || {};
-        const profStr = [profile.real_name, profile.nickname, profile.phone].filter(Boolean).join(' / ');
+        const profStr = [profile.real_name, profile.nickname, App.formatPhone(profile.phone)].filter(Boolean).join(' / ');
         const passes = m.passes || [];
         return `
             <div class="mp-member-card">

@@ -342,6 +342,20 @@ const App = (() => {
         return d.innerHTML;
     }
 
+    // ── 전화번호 표시 포맷 (010-1234-5678) ──
+    // 표시 전용. 저장/매칭/로그인용 정규화에는 사용하지 않음.
+    function formatPhone(raw) {
+        if (raw == null || raw === '') return raw == null ? '' : raw;
+        const d = String(raw).replace(/\D/g, '');
+        if (d.length === 11) return d.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3'); // 010-1234-5678
+        if (d.length === 10) {
+            if (d.startsWith('02')) return d.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3'); // 02-1234-5678
+            return d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3'); // 010-123-4567
+        }
+        if (d.length === 9 && d.startsWith('02')) return d.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3'); // 02-123-4567
+        return String(raw); // 알 수 없는 형식은 원본 유지
+    }
+
     // ── Debounce ──
     function debounce(fn, ms = 300) {
         let t;
@@ -353,7 +367,7 @@ const App = (() => {
         showLoading, hideLoading,
         openModal, closeModal, modal, confirm, toast,
         formatDate, formatDateKo, today,
-        initTabs, esc, debounce,
+        initTabs, esc, formatPhone, debounce,
     };
 })();
 
