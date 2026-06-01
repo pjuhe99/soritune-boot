@@ -130,8 +130,8 @@ const AdminNotify = (() => {
                     <table class="notify-preview-table">
                         <thead><tr><th>이름</th><th>전화</th><th>상태</th></tr></thead>
                         <tbody>
-                            ${p.candidates.map(c => `<tr><td>${App.esc(c.name)}</td><td>${App.esc(c.phone)}</td><td>발송예정</td></tr>`).join('')}
-                            ${p.skips.map(s => `<tr class="skip"><td>${App.esc(s.name)}</td><td>${App.esc(s.phone)}</td><td>스킵 (${App.esc(s.reason)})</td></tr>`).join('')}
+                            ${p.candidates.map(c => `<tr><td>${App.esc(c.name)}</td><td>${App.esc(App.formatPhone(c.phone))}</td><td>발송예정</td></tr>`).join('')}
+                            ${p.skips.map(s => `<tr class="skip"><td>${App.esc(s.name)}</td><td>${App.esc(App.formatPhone(s.phone))}</td><td>스킵 (${App.esc(s.reason)})</td></tr>`).join('')}
                         </tbody>
                     </table>
                     <div class="rendered">
@@ -253,7 +253,7 @@ const AdminNotify = (() => {
                     ${r.messages.map(m => `
                         <tr class="status-${App.esc(m.status)}">
                             <td>${App.esc(m.name || '')}</td>
-                            <td>${App.esc(m.phone)}</td>
+                            <td>${App.esc(App.formatPhone(m.phone))}</td>
                             <td>${App.esc(m.channel_used)}</td>
                             <td>${App.esc(m.status)}${m.status === 'unknown' ? ' (조사 필요)' : ''}</td>
                             <td>${App.esc(m.skip_reason || m.fail_reason || '')}</td>

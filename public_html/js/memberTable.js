@@ -127,7 +127,7 @@ const MemberTable = (() => {
                             <div class="mt-detail-items">
                                 <span>${stageBadge}</span>
                                 ${mode === 'operation' ? `<span>ID: ${App.esc(m.user_id || '-')}</span>` : ''}
-                                <span>전화: ${App.esc(m.phone || '-')}</span>
+                                <span>전화: ${App.esc(App.formatPhone(m.phone) || '-')}</span>
                                 ${m.cafe_member_key ? `<span>카페: 연동됨</span>` : ''}
                             </div>
                         </div>
