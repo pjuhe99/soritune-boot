@@ -2271,7 +2271,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-yellow">부활 후보</span> (${SCORE_REVIVAL_CANDIDATE} ~ ${SCORE_REVIVAL_CANDIDATE - 1}점)</div>`;
                 sw.approaching.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
+                    html += renderWarningItem(m);
                 });
                 html += `</div>`;
             }
@@ -2279,7 +2279,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-black">부활 대상</span> (${SCORE_REVIVAL_ELIGIBLE} ~ ${SCORE_OUT_THRESHOLD + 1}점)</div>`;
                 sw.revival_eligible.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
+                    html += renderWarningItem(m);
                 });
                 html += `</div>`;
             }
@@ -2287,7 +2287,7 @@ const BootcampApp = (() => {
                 html += `<div class="db-warning-group">
                     <div class="db-warning-title"><span class="badge-out">OUT</span> (${SCORE_OUT_THRESHOLD}점 이하)</div>`;
                 sw.out.forEach(m => {
-                    html += `<div class="db-warning-item">${App.esc(m.nickname)}${m.real_name ? ` <span style="color:#888;font-size:12px">(${App.esc(m.real_name)})</span>` : ''} <span style="color:var(--color-text-muted)">(${App.esc(m.group_name)})</span> <span class="score">${m.current_score}점</span>${m.phone ? ` <span style="color:#888;font-size:12px">${App.esc(m.phone)}</span>` : ''}</div>`;
+                    html += renderWarningItem(m);
                 });
                 html += `</div>`;
             }
@@ -2313,6 +2313,22 @@ const BootcampApp = (() => {
     const SCORE_REVIVAL_CANDIDATE = -8;
     const SCORE_REVIVAL_ELIGIBLE = -10;
     const SCORE_OUT_THRESHOLD = -25;
+
+    // 주의 필요 멤버 카드 (2줄: 이름·점수 / 조·번호)
+    function renderWarningItem(m) {
+        const realName = m.real_name ? ` <span class="db-warning-real">(${App.esc(m.real_name)})</span>` : '';
+        const phone = m.phone ? App.esc(App.formatPhone(m.phone)) : '';
+        const phoneHtml = phone ? ` <span class="db-warning-dot">·</span> <span class="db-warning-phone">${phone}</span>` : '';
+        return `<div class="db-warning-item">
+            <div class="db-warning-line1">
+                <span class="db-warning-name">${App.esc(m.nickname)}${realName}</span>
+                <span class="score">${m.current_score}점</span>
+            </div>
+            <div class="db-warning-line2">
+                <span class="db-warning-group">${App.esc(m.group_name)}</span>${phoneHtml}
+            </div>
+        </div>`;
+    }
 
     function renderGroupMembers(members, mode) {
         if (!members.length) return '<div class="empty-state" style="padding:var(--space-3)">멤버가 없습니다.</div>';
