@@ -39,12 +39,14 @@
     }
 
     function copyText(text, msg) {
-        if (window.MemberUtils && MemberUtils.copyToClipboard) {
+        if (typeof MemberUtils !== 'undefined' && MemberUtils.copyToClipboard) {
             MemberUtils.copyToClipboard(text, msg);
             return;
         }
-        if (navigator.clipboard) navigator.clipboard.writeText(text);
-        if (window.Toast) Toast.success(msg);
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text);
+        }
+        if (typeof Toast !== 'undefined') Toast.success(msg);
     }
 
     /**
