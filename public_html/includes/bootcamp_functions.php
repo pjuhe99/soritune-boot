@@ -375,3 +375,33 @@ function adjustMemberScore($db, int $memberId, int $scoreChange, ?string $reason
     }
 }
 }
+
+/**
+ * 줌 row에서 멤버에게 노출할 표시용 회의 ID / 비밀번호를 파생한다.
+ * - id: zoom_meeting_id 컬럼, 없으면 zoom_join_url의 /j/(숫자)에서 추출
+ * - password: zoom_password 컬럼, 없으면 $passwordFallback (복습 고정방 설정값)
+ * 값이 없으면 null (프론트는 null이면 줄 생략).
+ *
+ * @param array $row zoom_meeting_id, zoom_join_url, zoom_password 키를 가진 행
+ * @param ?string $passwordFallback 컬럼 비번이 없을 때 쓸 대체 비번
+ * @return array{zoom_meeting_id_display: ?string, zoom_password_display: ?string}
+ */
+function zoomDisplayInfo(array $row, ?string $passwordFallback = null): array {
+    $id = $row['zoom_meeting_id'] ?? null;
+    if (($id === null || $id === '') && !empty($row['zoom_join_url'])) {
+        if (preg_match('#/j/(\d+)#', $row['zoom_join_url'], $m)) {
+            $id = $m[1];
+        }
+    }
+    if ($id === '') $id = null;
+
+    $pw = $row['zoom_password'] ?? null;
+    if ($pw === null || $pw === '') {
+        $pw = ($passwordFallback !== null && $passwordFallback !== '') ? $passwordFallback : null;
+    }
+
+    return [
+        'zoom_meeting_id_display' => $id,
+        'zoom_password_display'   => $pw,
+    ];
+}
