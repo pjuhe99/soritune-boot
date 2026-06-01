@@ -2,7 +2,7 @@
    Service Worker — 소리튠 부트캠프 PWA
    전략: 정적 에셋은 Cache First, API는 Network Only
    ══════════════════════════════════════════════════════════════ */
-const CACHE_NAME = 'boot-v20260320';
+const CACHE_NAME = 'boot-v20260601';
 
 const STATIC_ASSETS = [
     '/',
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
     '/js/common.js',
     '/js/calendar.js',
     '/js/member-utils.js',
+    '/js/zoom-credentials.js',
     '/js/member-tabs.js',
     '/js/member-home.js',
     '/js/member-calendar.js',

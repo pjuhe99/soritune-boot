@@ -40,6 +40,7 @@
     <script src="/js/coin.js<?= v('/js/coin.js') ?>"></script>
     <script src="/js/calendar.js<?= v('/js/calendar.js') ?>"></script>
     <script src="/js/admin-study.js<?= v('/js/admin-study.js') ?>"></script>
+    <script src="/js/zoom-credentials.js<?= v('/js/zoom-credentials.js') ?>"></script>
     <script src="/js/lecture.js<?= v('/js/lecture.js') ?>"></script>
     <script src="/js/admin-issues.js<?= v('/js/admin-issues.js') ?>"></script>
     <script src="/js/admin-notices.js<?= v('/js/admin-notices.js') ?>"></script>

@@ -155,6 +155,7 @@ const StudyApp = (() => {
                 <div class="study-action-group">
                     <a href="${App.esc(s.zoom_join_url)}" target="_blank" class="btn btn-block study-btn-zoom" id="btn-zoom-join">Zoom 입장하기</a>
                     <button class="btn btn-secondary btn-block" id="btn-zoom-copy">Zoom 링크 복사하기</button>
+                    ${ZoomCreds.html(s)}
                 </div>
             `;
         } else if (s.zoom_status === 'pending') {
@@ -263,6 +264,8 @@ const StudyApp = (() => {
                 }
             };
         }
+
+        if (window.ZoomCreds) ZoomCreds.bind(document.body);
 
         const retryBtn = document.getElementById('btn-retry-zoom');
         if (retryBtn) {
