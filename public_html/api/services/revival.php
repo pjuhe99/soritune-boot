@@ -17,7 +17,7 @@ function handleRevivalCandidates() {
     if (!empty($_GET['stage_no'])) { $where[] = "bm.stage_no = ?"; $params[] = (int)$_GET['stage_no']; }
 
     $stmt = $db->prepare("
-        SELECT bm.id, bm.nickname, bm.real_name, bm.member_role, bm.stage_no,
+        SELECT bm.id, bm.nickname, bm.real_name, bm.phone, bm.member_role, bm.stage_no,
                bm.group_id, bg.name AS group_name,
                COALESCE(ms.current_score, 0) AS current_score
         FROM bootcamp_members bm
