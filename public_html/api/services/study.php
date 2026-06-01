@@ -133,10 +133,10 @@ function handleStudySessionDetail() {
     // 비밀번호 미노출
     unset($session['password']);
 
-    // 멤버 수동 입장용 회의 ID / 비밀번호 (복습 고정방은 설정 비번 fallback)
+    // 멤버 수동 입장용 회의 ID / 비밀번호 (회의 ID는 링크 /j/ 기준, 비번은 방별 맵)
     $session = array_merge(
         $session,
-        zoomDisplayInfo($session, getSetting('study_fixed_zoom_password'))
+        zoomDisplayInfo($session, zoomRoomPasswordFromMap(getSetting('zoom_room_passwords'), zoomRoomId($session)))
     );
 
     // 시간 기반 상태 계산

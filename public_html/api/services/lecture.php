@@ -261,8 +261,8 @@ function handleLectureSessionDetail() {
         unset($session['zoom_start_url']);
     }
 
-    // 멤버 수동 입장용 회의 ID / 비밀번호 (특강은 컬럼값, fallback 없음)
-    $session = array_merge($session, zoomDisplayInfo($session));
+    // 멤버 수동 입장용 회의 ID / 비밀번호 (회의 ID는 링크 /j/ 기준, 비번은 방별 맵 + 일치 회의 컬럼)
+    $session = array_merge($session, zoomDisplayInfo($session, zoomRoomPasswordFromMap(getSetting('zoom_room_passwords'), zoomRoomId($session))));
 
     jsonSuccess(['session' => $session]);
 }
@@ -609,8 +609,8 @@ function handleLectureEventDetail() {
         unset($event['zoom_start_url']);
     }
 
-    // 멤버 수동 입장용 회의 ID / 비밀번호
-    $event = array_merge($event, zoomDisplayInfo($event));
+    // 멤버 수동 입장용 회의 ID / 비밀번호 (회의 ID는 링크 /j/ 기준, 비번은 방별 맵 + 일치 회의 컬럼)
+    $event = array_merge($event, zoomDisplayInfo($event, zoomRoomPasswordFromMap(getSetting('zoom_room_passwords'), zoomRoomId($event))));
 
     jsonSuccess(['event' => $event]);
 }

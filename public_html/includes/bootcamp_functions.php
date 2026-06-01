@@ -376,29 +376,59 @@ function adjustMemberScore($db, int $memberId, int $scoreChange, ?string $reason
 }
 }
 
+if (!function_exists('zoomRoomId')) {
 /**
- * 줌 row에서 멤버에게 노출할 표시용 회의 ID / 비밀번호를 파생한다.
- * - id: zoom_meeting_id 컬럼, 없으면 zoom_join_url의 /j/(숫자)에서 추출
- * - password: zoom_password 컬럼, 없으면 $passwordFallback (복습 고정방 설정값)
- * 값이 없으면 null (프론트는 null이면 줄 생략).
+ * 실제 줌 방의 회의 ID. 링크의 /j/<숫자> 가 권위 있음(클릭 시 실제 입장하는 방).
+ * URL 에 /j/ 가 없을 때만 zoom_meeting_id 컬럼으로 폴백. 없으면 null.
+ * (공유/고정방은 zoom_meeting_id 컬럼에 버려진 회의 ID 가 남아있어 링크와 어긋남)
+ */
+function zoomRoomId(array $row): ?string {
+    if (!empty($row['zoom_join_url']) && preg_match('#/j/(\d+)#', $row['zoom_join_url'], $m)) {
+        return $m[1];
+    }
+    $id = $row['zoom_meeting_id'] ?? null;
+    return ($id === null || $id === '') ? null : (string)$id;
+}
+}
+
+if (!function_exists('zoomRoomPasswordFromMap')) {
+/**
+ * 방별 비번 맵(JSON: {"<roomId>":"<숫자비번>"}) 에서 해당 방 비번을 꺼낸다.
+ * 맵/방ID/값 없거나 빈 값이면 null.
+ */
+function zoomRoomPasswordFromMap(?string $mapJson, ?string $roomId): ?string {
+    if ($mapJson === null || $mapJson === '' || $roomId === null || $roomId === '') return null;
+    $map = json_decode($mapJson, true);
+    if (!is_array($map)) return null;
+    $pw = $map[$roomId] ?? null;
+    return ($pw === null || $pw === '') ? null : (string)$pw;
+}
+}
+
+if (!function_exists('zoomDisplayInfo')) {
+/**
+ * 멤버 수동 입장용 표시 회의 ID / 비밀번호.
+ * - id: zoomRoomId() (링크 /j/ 우선)
+ * - password: $roomPassword(방별 맵 값) 우선. 없으면 zoom_password 컬럼은
+ *   "컬럼 회의ID == 링크 방ID" 일 때만 신뢰(1회성 webhook 회의). 어긋나면(공유/고정방) 무시.
+ * 값 없으면 null → 프론트는 줄 생략.
  *
- * @param array $row zoom_meeting_id, zoom_join_url, zoom_password 키를 가진 행
- * @param ?string $passwordFallback 컬럼 비번이 없을 때 쓸 대체 비번
+ * @param array $row zoom_meeting_id, zoom_join_url, zoom_password
+ * @param ?string $roomPassword 방별 맵에서 조회한 이 방의 숫자 비번
  * @return array{zoom_meeting_id_display: ?string, zoom_password_display: ?string}
  */
-if (!function_exists('zoomDisplayInfo')) {
-function zoomDisplayInfo(array $row, ?string $passwordFallback = null): array {
-    $id = $row['zoom_meeting_id'] ?? null;
-    if (($id === null || $id === '') && !empty($row['zoom_join_url'])) {
-        if (preg_match('#/j/(\d+)#', $row['zoom_join_url'], $m)) {
-            $id = $m[1];
-        }
-    }
-    if ($id === '') $id = null;
+function zoomDisplayInfo(array $row, ?string $roomPassword = null): array {
+    $id = zoomRoomId($row);
 
-    $pw = $row['zoom_password'] ?? null;
-    if ($pw === null || $pw === '') {
-        $pw = ($passwordFallback !== null && $passwordFallback !== '') ? $passwordFallback : null;
+    $pw = ($roomPassword !== null && $roomPassword !== '') ? (string)$roomPassword : null;
+    if ($pw === null) {
+        $colId = $row['zoom_meeting_id'] ?? null;
+        $colPw = $row['zoom_password'] ?? null;
+        if ($colId !== null && $colId !== '' && $id !== null
+            && (string)$colId === $id
+            && $colPw !== null && $colPw !== '') {
+            $pw = (string)$colPw;
+        }
     }
 
     return [
