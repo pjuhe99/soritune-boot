@@ -261,6 +261,9 @@ function handleLectureSessionDetail() {
         unset($session['zoom_start_url']);
     }
 
+    // 멤버 수동 입장용 회의 ID / 비밀번호 (특강은 컬럼값, fallback 없음)
+    $session = array_merge($session, zoomDisplayInfo($session));
+
     jsonSuccess(['session' => $session]);
 }
 
@@ -605,6 +608,9 @@ function handleLectureEventDetail() {
     if (!$isAdmin) {
         unset($event['zoom_start_url']);
     }
+
+    // 멤버 수동 입장용 회의 ID / 비밀번호
+    $event = array_merge($event, zoomDisplayInfo($event));
 
     jsonSuccess(['event' => $event]);
 }

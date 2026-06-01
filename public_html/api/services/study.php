@@ -133,6 +133,12 @@ function handleStudySessionDetail() {
     // 비밀번호 미노출
     unset($session['password']);
 
+    // 멤버 수동 입장용 회의 ID / 비밀번호 (복습 고정방은 설정 비번 fallback)
+    $session = array_merge(
+        $session,
+        zoomDisplayInfo($session, getSetting('study_fixed_zoom_password'))
+    );
+
     // 시간 기반 상태 계산
     $now = new DateTime('now', new DateTimeZone('Asia/Seoul'));
     $startAt = new DateTime($session['study_date'] . ' ' . $session['start_time'], new DateTimeZone('Asia/Seoul'));
