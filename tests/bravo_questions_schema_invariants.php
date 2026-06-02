@@ -16,6 +16,22 @@ function t(string $name, bool $cond, string $detail = ''): void {
 
 $db = getDB();
 
+// ── 테이블 존재 가드 ──────────────────────────────────────────────────────────
+$tblStmt = $db->prepare("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?");
+
+$tblStmt->execute(['bravo_questions']);
+$qExists = (int)$tblStmt->fetchColumn() === 1;
+t('bravo_questions 테이블 존재', $qExists);
+
+$tblStmt->execute(['bravo_exam_ot']);
+$oExists = (int)$tblStmt->fetchColumn() === 1;
+t('bravo_exam_ot 테이블 존재', $oExists);
+
+if (!$qExists || !$oExists) {
+    echo "\n결과: {$pass} pass, {$fail} fail\n";
+    exit(1);
+}
+
 $qCols = [];
 foreach ($db->query("SHOW COLUMNS FROM bravo_questions") as $c) $qCols[$c['Field']] = $c;
 foreach (['id','question_type','bravo_level','source','korean_text','english_text','target_chunks',
@@ -29,7 +45,7 @@ t('is_active 기본 1', (string)$qCols['is_active']['Default'] === '1');
 
 $oCols = [];
 foreach ($db->query("SHOW COLUMNS FROM bravo_exam_ot") as $c) $oCols[$c['Field']] = $c;
-foreach (['id','exam_id','title','intro_text','video_url','type1_text','type2_text','type3_text','require_check'] as $col) {
+foreach (['id','exam_id','title','intro_text','video_url','type1_text','type2_text','type3_text','require_check','updated_by'] as $col) {
     t("bravo_exam_ot.{$col} 존재", isset($oCols[$col]));
 }
 $idx = $db->query("SHOW INDEX FROM bravo_exam_ot WHERE Key_name='uk_bravo_exam_ot_exam'")->fetchAll();
