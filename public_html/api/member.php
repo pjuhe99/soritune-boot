@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
+require_once __DIR__ . '/services/bravo.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -197,6 +198,12 @@ case 'save_nickname':
     updateMemberNickname($nickname);
 
     jsonSuccess(['nickname' => $nickname], '닉네임이 저장되었습니다.');
+    break;
+
+case 'bravo_status':
+    $s = requireMember();
+    $db = getDB();
+    jsonSuccess(bravoMemberStatus($db, (int)$s['member_id']));
     break;
 
 default:
