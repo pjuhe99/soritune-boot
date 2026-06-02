@@ -68,3 +68,69 @@ function bravoQuestionPersistData(array $d): array {
         'is_active'               => !empty($d['is_active']) ? 1 : 0,
     ];
 }
+
+/**
+ * 문제 목록. 선택 필터: question_type/bravo_level/difficulty/is_active/keyword.
+ */
+function bravoQuestionList(PDO $db, array $filters = []): array {
+    $where = []; $params = [];
+    if (!empty($filters['question_type'])) { $where[] = 'question_type = ?'; $params[] = (int)$filters['question_type']; }
+    if (!empty($filters['bravo_level']))   { $where[] = 'bravo_level = ?';   $params[] = (int)$filters['bravo_level']; }
+    if (!empty($filters['difficulty']) && in_array($filters['difficulty'], bravoQuestionDifficulties(), true)) {
+        $where[] = 'difficulty = ?'; $params[] = $filters['difficulty'];
+    }
+    if (isset($filters['is_active']) && $filters['is_active'] !== '' && $filters['is_active'] !== null) {
+        $where[] = 'is_active = ?'; $params[] = ((int)$filters['is_active'] ? 1 : 0);
+    }
+    if (!empty($filters['keyword'])) {
+        $where[] = '(korean_text LIKE ? OR english_text LIKE ?)';
+        $kw = '%' . $filters['keyword'] . '%';
+        $params[] = $kw; $params[] = $kw;
+    }
+    $sql = "SELECT * FROM bravo_questions";
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= ' ORDER BY id DESC';
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * 문제 생성. 정규화 후 INSERT, 신규 id 반환.
+ */
+function bravoQuestionCreate(PDO $db, array $d, int $adminId): int {
+    $c = bravoQuestionPersistData($d);
+    $db->prepare("
+        INSERT INTO bravo_questions
+            (question_type, bravo_level, source, korean_text, english_text, target_chunks,
+             accepted_answers, reference_speech_sec, response_time_limit_sec, difficulty, is_active, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ")->execute([
+        $c['question_type'], $c['bravo_level'], $c['source'], $c['korean_text'], $c['english_text'], $c['target_chunks'],
+        $c['accepted_answers'], $c['reference_speech_sec'], $c['response_time_limit_sec'], $c['difficulty'], $c['is_active'], $adminId,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * 문제 수정 (전체 필드).
+ */
+function bravoQuestionUpdate(PDO $db, int $id, array $d): void {
+    $c = bravoQuestionPersistData($d);
+    $db->prepare("
+        UPDATE bravo_questions SET
+            question_type=?, bravo_level=?, source=?, korean_text=?, english_text=?, target_chunks=?,
+            accepted_answers=?, reference_speech_sec=?, response_time_limit_sec=?, difficulty=?, is_active=?
+        WHERE id=?
+    ")->execute([
+        $c['question_type'], $c['bravo_level'], $c['source'], $c['korean_text'], $c['english_text'], $c['target_chunks'],
+        $c['accepted_answers'], $c['reference_speech_sec'], $c['response_time_limit_sec'], $c['difficulty'], $c['is_active'], $id,
+    ]);
+}
+
+/**
+ * 문제 삭제 (하드).
+ */
+function bravoQuestionDelete(PDO $db, int $id): void {
+    $db->prepare("DELETE FROM bravo_questions WHERE id = ?")->execute([$id]);
+}

@@ -52,5 +52,50 @@ t('reference_speech_sec 0 허용', bravoQuestionValidate(['reference_speech_sec'
 t('persist reference_speech_sec 0 → 0.0', bravoQuestionPersistData(['reference_speech_sec'=>'0'])['reference_speech_sec'] === 0.0);
 t('difficulty 미전달 → 에러 없음', bravoQuestionValidate(['question_type'=>1,'bravo_level'=>1,'korean_text'=>'k','english_text'=>'e']) === []);
 
+// ── 통합: CRUD (DEV DB, 트랜잭션 롤백) ──
+$db = getDB();
+$db->beginTransaction();
+try {
+    $tag = 'TQ_' . bin2hex(random_bytes(3));
+    $id1 = bravoQuestionCreate($db, [
+        'question_type'=>1,'bravo_level'=>1,'source'=>'VOD','korean_text'=>"{$tag} 안녕",'english_text'=>'hello',
+        'difficulty'=>'easy','is_active'=>1,'reference_speech_sec'=>'3.0',
+    ], 99);
+    $id2 = bravoQuestionCreate($db, [
+        'question_type'=>2,'bravo_level'=>3,'korean_text'=>"{$tag} 비활성",'english_text'=>'inactive',
+        'difficulty'=>'hard','is_active'=>0,
+    ], 99);
+    t('create id 반환', $id1 > 0 && $id2 > 0 && $id1 !== $id2);
+
+    $kw = bravoQuestionList($db, ['keyword'=>$tag]);
+    t('keyword 필터 2건', count($kw) === 2, 'count=' . count($kw));
+    t('정렬 id DESC', (int)$kw[0]['id'] === $id2);
+
+    $byLevel = bravoQuestionList($db, ['keyword'=>$tag, 'bravo_level'=>1]);
+    t('level 필터 1건', count($byLevel) === 1 && (int)$byLevel[0]['id'] === $id1);
+
+    $active = bravoQuestionList($db, ['keyword'=>$tag, 'is_active'=>0]);
+    t('is_active=0 필터 1건', count($active) === 1 && (int)$active[0]['id'] === $id2);
+
+    $byType = bravoQuestionList($db, ['keyword'=>$tag, 'question_type'=>2]);
+    t('type 필터 1건', count($byType) === 1 && (int)$byType[0]['id'] === $id2);
+
+    bravoQuestionUpdate($db, $id1, [
+        'question_type'=>3,'bravo_level'=>2,'korean_text'=>"{$tag} 수정",'english_text'=>'edited',
+        'difficulty'=>'normal','is_active'=>0,
+    ]);
+    $one = bravoQuestionList($db, ['keyword'=>$tag, 'question_type'=>3]);
+    t('update 반영', count($one) === 1 && $one[0]['english_text'] === 'edited' && (int)$one[0]['bravo_level'] === 2);
+
+    bravoQuestionDelete($db, $id1);
+    bravoQuestionDelete($db, $id2);
+    t('delete 후 0건', count(bravoQuestionList($db, ['keyword'=>$tag])) === 0);
+
+    $db->rollBack();
+} catch (Throwable $e) {
+    $db->rollBack();
+    t('통합 예외 없음', false, $e->getMessage());
+}
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);
