@@ -277,9 +277,10 @@ function bravoExamUpdate(PDO $db, int $id, array $d): void {
 }
 
 /**
- * 시험 삭제 (하드, 참조 테이블 없음).
+ * 시험 삭제 (하드). 연결된 OT(bravo_exam_ot) 도 함께 삭제.
  */
 function bravoExamDelete(PDO $db, int $id): void {
+    $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
 }
 
@@ -362,4 +363,63 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
         ],
         'levels' => $out,
     ];
+}
+
+/**
+ * OT 입력 검증. exam_id 필수, 나머지 필드는 모두 선택. 순수.
+ */
+function bravoOtValidate(array $d): array {
+    $errors = [];
+    $examId = isset($d['exam_id']) ? (int)$d['exam_id'] : 0;
+    if ($examId < 1) $errors[] = '시험을 지정해주세요.';
+    return $errors;
+}
+
+/**
+ * 폼 입력 → bravo_exam_ot 저장용 정규화. 빈 문자열은 NULL, require_check 0/1. 순수.
+ */
+function bravoOtPersistData(array $d): array {
+    $strOrNull = function ($v) {
+        if (!is_string($v)) return null;
+        $v = trim($v);
+        return $v === '' ? null : $v;
+    };
+    return [
+        'title'         => $strOrNull($d['title'] ?? null),
+        'intro_text'    => $strOrNull($d['intro_text'] ?? null),
+        'video_url'     => $strOrNull($d['video_url'] ?? null),
+        'type1_text'    => $strOrNull($d['type1_text'] ?? null),
+        'type2_text'    => $strOrNull($d['type2_text'] ?? null),
+        'type3_text'    => $strOrNull($d['type3_text'] ?? null),
+        'require_check' => !empty($d['require_check']) ? 1 : 0,
+    ];
+}
+
+/**
+ * 시험 OT 조회 (없으면 null).
+ */
+function bravoOtGet(PDO $db, int $examId): ?array {
+    $stmt = $db->prepare("SELECT * FROM bravo_exam_ot WHERE exam_id = ?");
+    $stmt->execute([$examId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * 시험 OT upsert (exam_id UNIQUE 기준).
+ */
+function bravoOtUpsert(PDO $db, int $examId, array $d, int $adminId): void {
+    $c = bravoOtPersistData($d);
+    $db->prepare("
+        INSERT INTO bravo_exam_ot
+            (exam_id, title, intro_text, video_url, type1_text, type2_text, type3_text, require_check, updated_by)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE
+            title=VALUES(title), intro_text=VALUES(intro_text), video_url=VALUES(video_url),
+            type1_text=VALUES(type1_text), type2_text=VALUES(type2_text), type3_text=VALUES(type3_text),
+            require_check=VALUES(require_check), updated_by=VALUES(updated_by)
+    ")->execute([
+        $examId, $c['title'], $c['intro_text'], $c['video_url'],
+        $c['type1_text'], $c['type2_text'], $c['type3_text'], $c['require_check'], $adminId,
+    ]);
 }
