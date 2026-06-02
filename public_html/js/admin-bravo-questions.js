@@ -61,7 +61,7 @@ const AdminBravoQuestionApp = (() => {
                 <td>BRAVO ${q.bravo_level}</td>
                 <td>${App.esc((q.korean_text || '').slice(0, 30))}</td>
                 <td>${App.esc((q.english_text || '').slice(0, 30))}</td>
-                <td>${DIFF[q.difficulty] || q.difficulty}</td>
+                <td>${DIFF[q.difficulty] || App.esc(q.difficulty)}</td>
                 <td>${parseInt(q.is_active, 10) ? '활성' : '비활성'}</td>
                 <td>
                     <button class="btn btn-sm bq-edit" data-id="${q.id}">수정</button>
