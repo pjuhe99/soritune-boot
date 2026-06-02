@@ -45,5 +45,12 @@ $p2 = bravoQuestionPersistData(['difficulty'=>'bogus']);
 t('persist difficulty 기본 normal', $p2['difficulty'] === 'normal');
 t('persist is_active 미전달 → 0', $p2['is_active'] === 0);
 
+// ── 순수: 경계값 커버리지 ──
+t('difficulties 집합', bravoQuestionDifficulties() === ['easy','normal','hard']);
+t('persist is_active 문자열 0 → 0', bravoQuestionPersistData(['is_active'=>'0'])['is_active'] === 0);
+t('reference_speech_sec 0 허용', bravoQuestionValidate(['reference_speech_sec'=>0]+$valid) === []);
+t('persist reference_speech_sec 0 → 0.0', bravoQuestionPersistData(['reference_speech_sec'=>'0'])['reference_speech_sec'] === 0.0);
+t('difficulty 미전달 → 에러 없음', bravoQuestionValidate(['question_type'=>1,'bravo_level'=>1,'korean_text'=>'k','english_text'=>'e']) === []);
+
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);
