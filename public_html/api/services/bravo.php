@@ -68,3 +68,71 @@ function bravoFormatGrantedLevels(array $levels): string {
     sort($keys);
     return implode(',', $keys);
 }
+
+/**
+ * bravo_levels 설정 로드 (자격계산 임계의 단일 진실원).
+ */
+function bravoLoadLevels(PDO $db): array {
+    return $db->query("SELECT level, name, required_review_count, passing_score, requires_previous_level FROM bravo_levels ORDER BY level")
+              ->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * 특정 기수 회원 목록 + 자동 completed_bootcamp_count + 계산된 응시가능 등급.
+ * 기존 member_list 조인 패턴 재사용 (user_id-row 우선, phone-row 폴백).
+ */
+function bravoMemberList(PDO $db, string $cohort): array {
+    $levels = bravoLoadLevels($db);
+    $stmt = $db->prepare("
+        SELECT bm.user_id, bm.real_name, bm.nickname, bm.phone,
+               COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
+               bms.review_count_override, bms.granted_levels, bms.notes
+        FROM bootcamp_members bm
+        JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
+        LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
+        LEFT JOIN bravo_member_settings bms ON bm.user_id = bms.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
+        WHERE c.cohort = ? AND bm.member_status NOT IN ('refunded','expelled')
+        ORDER BY bm.real_name
+    ");
+    $stmt->execute([$cohort]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $out = [];
+    foreach ($rows as $r) {
+        $override = $r['review_count_override'] !== null ? (int)$r['review_count_override'] : null;
+        $granted  = bravoParseGrantedLevels($r['granted_levels']);
+        $completed = (int)$r['completed_bootcamp_count'];
+        $out[] = [
+            'user_id'                  => $r['user_id'],
+            'real_name'                => $r['real_name'],
+            'nickname'                 => $r['nickname'],
+            'phone'                    => $r['phone'],
+            'completed_bootcamp_count' => $completed,
+            'review_count_override'    => $override,
+            'effective_review_count'   => bravoEffectiveReviewCount($override, $completed),
+            'granted_levels'           => $granted,
+            'notes'                    => $r['notes'],
+            'eligible_levels'          => bravoEligibleLevels($override, $completed, $granted, $levels),
+        ];
+    }
+    return $out;
+}
+
+/**
+ * 회원 BRAVO 설정 upsert (user_id 기준). override NULL = 자동복귀, grant [] = 비움.
+ */
+function bravoMemberUpsert(PDO $db, string $userId, ?int $override, array $grantedLevels, ?string $notes, ?int $adminId): void {
+    $grantedStr = bravoFormatGrantedLevels($grantedLevels);
+    $grantedVal = $grantedStr === '' ? null : $grantedStr;
+    $notesVal   = ($notes !== null && trim($notes) !== '') ? $notes : null;
+    $db->prepare("
+        INSERT INTO bravo_member_settings (user_id, review_count_override, granted_levels, notes, updated_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            review_count_override = VALUES(review_count_override),
+            granted_levels        = VALUES(granted_levels),
+            notes                 = VALUES(notes),
+            updated_by            = VALUES(updated_by)
+    ")->execute([$userId, $override, $grantedVal, $notesVal, $adminId]);
+}
