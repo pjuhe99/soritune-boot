@@ -50,6 +50,7 @@
     <script src="/js/notify.js<?= v('/js/notify.js') ?>"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/js/retention.js<?= v('/js/retention.js') ?>"></script>
+    <script src="/js/admin-bravo.js<?= v('/js/admin-bravo.js') ?>"></script>
     <script>AdminApp.init();</script>
 </body>
 </html>

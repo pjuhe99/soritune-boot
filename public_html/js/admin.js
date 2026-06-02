@@ -201,6 +201,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
                             <button class="tab" data-tab="#tab-notify" data-hash="notify">알림톡</button>
                             <button class="tab" data-tab="#tab-retention" data-hash="retention">리텐션 관리</button>
+                            <button class="tab" data-tab="#tab-bravo" data-hash="bravo">BRAVO 자격</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
@@ -226,6 +227,7 @@ const AdminApp = (() => {
                         <div class="tab-content" id="tab-reviews"></div>
                         <div class="tab-content" id="tab-notify"></div>
                         <div class="tab-content" id="tab-retention"></div>
+                        <div class="tab-content" id="tab-bravo"></div>
                     </div>
                     </div>
                     ` : role === 'coach' ? `
@@ -507,6 +509,20 @@ const AdminApp = (() => {
                         }
                     });
                     mpObserver.observe(mpTab, { attributes: true, attributeFilter: ['class'] });
+                }
+            }
+
+            // BRAVO 자격 탭 lazy load (operation)
+            if (typeof AdminBravoApp !== 'undefined') {
+                const bravoTab = document.getElementById('tab-bravo');
+                if (bravoTab) {
+                    const bravoObserver = new MutationObserver(() => {
+                        if (bravoTab.classList.contains('active') && !bravoTab.dataset.loaded) {
+                            bravoTab.dataset.loaded = '1';
+                            AdminBravoApp.init(admin, 'tab-bravo');
+                        }
+                    });
+                    bravoObserver.observe(bravoTab, { attributes: true, attributeFilter: ['class'] });
                 }
             }
 
