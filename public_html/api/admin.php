@@ -16,6 +16,7 @@ require_once __DIR__ . '/../includes/multipass/multipass_csv_parser.php';
 require_once __DIR__ . '/../includes/multipass/multipass_bulk.php';
 require_once __DIR__ . '/services/notice.php';
 require_once __DIR__ . '/services/bravo.php';
+require_once __DIR__ . '/services/bravo_questions.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -659,6 +660,65 @@ case 'bravo_exam_delete':
     $db = getDB();
     bravoExamDelete($db, $id);
     jsonSuccess([], '삭제되었습니다.');
+    break;
+
+case 'bravo_question_list':
+    requireAdmin(['operation']);
+    $db = getDB();
+    $filters = [];
+    if (!empty($_GET['question_type'])) $filters['question_type'] = (int)$_GET['question_type'];
+    if (!empty($_GET['bravo_level']))   $filters['bravo_level']   = (int)$_GET['bravo_level'];
+    if (!empty($_GET['difficulty']) && is_string($_GET['difficulty'])) $filters['difficulty'] = $_GET['difficulty'];
+    if (isset($_GET['is_active']) && $_GET['is_active'] !== '') $filters['is_active'] = (int)$_GET['is_active'];
+    if (!empty($_GET['keyword']) && is_string($_GET['keyword'])) $filters['keyword'] = $_GET['keyword'];
+    jsonSuccess(['questions' => bravoQuestionList($db, $filters)]);
+    break;
+
+case 'bravo_question_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $errors = bravoQuestionValidate($input);
+    if ($errors) jsonError($errors[0]);
+    $db = getDB();
+    $id = (isset($input['id']) && is_numeric($input['id']) && (int)$input['id'] > 0) ? (int)$input['id'] : 0;
+    if ($id > 0) {
+        bravoQuestionUpdate($db, $id, $input);
+        jsonSuccess(['id' => $id], '저장되었습니다.');
+    } else {
+        $newId = bravoQuestionCreate($db, $input, (int)$admin['admin_id']);
+        jsonSuccess(['id' => $newId], '저장되었습니다.');
+    }
+    break;
+
+case 'bravo_question_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (isset($input['id']) && is_numeric($input['id'])) ? (int)$input['id'] : 0;
+    if ($id < 1) jsonError('id가 필요합니다.');
+    $db = getDB();
+    bravoQuestionDelete($db, $id);
+    jsonSuccess([], '삭제되었습니다.');
+    break;
+
+case 'bravo_ot_get':
+    requireAdmin(['operation']);
+    $examId = (isset($_GET['exam_id']) && is_numeric($_GET['exam_id'])) ? (int)$_GET['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $db = getDB();
+    jsonSuccess(['ot' => bravoOtGet($db, $examId)]);
+    break;
+
+case 'bravo_ot_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $errors = bravoOtValidate($input);
+    if ($errors) jsonError($errors[0]);
+    $db = getDB();
+    bravoOtUpsert($db, (int)$input['exam_id'], $input, (int)$admin['admin_id']);
+    jsonSuccess([], '저장되었습니다.');
     break;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────
