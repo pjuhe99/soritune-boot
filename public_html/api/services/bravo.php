@@ -136,3 +136,59 @@ function bravoMemberUpsert(PDO $db, string $userId, ?int $override, array $grant
             updated_by            = VALUES(updated_by)
     ")->execute([$userId, $override, $grantedVal, $notesVal, $adminId]);
 }
+
+/**
+ * 날짜 문자열 → unix timestamp (빈/무효는 null). 검증/비교용 순수 헬퍼.
+ */
+function bravoTs(?string $v): ?int {
+    if ($v === null) return null;
+    $v = trim($v);
+    if ($v === '') return null;
+    // 관리자 입력: 포맷 강제 없이 strtotime 으로 관대하게 파싱 (date-picker 입력 전제)
+    $ts = strtotime($v);
+    return $ts === false ? null : $ts;
+}
+
+/**
+ * 시험 입력 검증. 에러 메시지 배열 반환 (빈 배열 = 통과). 순수 함수.
+ */
+function bravoValidateExam(array $d): array {
+    $errors = [];
+
+    $title = isset($d['title']) && is_string($d['title']) ? trim($d['title']) : '';
+    if ($title === '') $errors[] = '시험명을 입력해주세요.';
+
+    $level = isset($d['bravo_level']) ? (int)$d['bravo_level'] : 0;
+    if (!in_array($level, [1,2,3], true)) $errors[] = 'BRAVO 등급은 1/2/3 중 하나여야 합니다.';
+
+    $mode = $d['exam_mode'] ?? '';
+    if (!in_array($mode, ['period','always'], true)) $errors[] = '응시 방식이 올바르지 않습니다.';
+
+    // status 누락은 의도적으로 'preparing' 으로 허용 (DB 컬럼 기본값 + bravoExamPersistData 기본값과 일관). title/level 과 달리 안전한 기본값이 있음.
+    $status = $d['status'] ?? 'preparing';
+    if (!in_array($status, ['preparing','open','closed','released'], true)) $errors[] = '시험 상태가 올바르지 않습니다.';
+
+    $limit = isset($d['attempt_limit']) ? (int)$d['attempt_limit'] : 0;
+    if ($limit < 1) $errors[] = '응시 횟수는 1 이상이어야 합니다.';
+
+    $target = $d['target_type'] ?? '';
+    if (!in_array($target, ['all','cohort'], true)) {
+        $errors[] = '대상 유형이 올바르지 않습니다.';
+    } elseif ($target === 'cohort') {
+        $cid = isset($d['target_cohort_id']) ? (int)$d['target_cohort_id'] : 0;
+        if ($cid < 1) $errors[] = '특정 기수 대상일 때 기수를 선택해주세요.';
+    }
+
+    if ($mode === 'period') {
+        $s = bravoTs($d['start_at'] ?? null);
+        $e = bravoTs($d['end_at'] ?? null);
+        $r = bravoTs($d['result_release_at'] ?? null);
+        if ($s === null) $errors[] = '응시 시작일이 올바르지 않습니다.';
+        if ($e === null) $errors[] = '응시 종료일이 올바르지 않습니다.';
+        if ($r === null) $errors[] = '결과 발표일이 올바르지 않습니다.';
+        if ($s !== null && $e !== null && $s > $e) $errors[] = '응시 시작일은 종료일보다 앞서야 합니다.';
+        if ($e !== null && $r !== null && $r < $e) $errors[] = '결과 발표일은 응시 종료일 이후여야 합니다.';
+    }
+
+    return $errors;
+}
