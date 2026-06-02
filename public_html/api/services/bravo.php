@@ -192,3 +192,93 @@ function bravoValidateExam(array $d): array {
 
     return $errors;
 }
+
+/**
+ * 시험 날짜 문자열 → 'Y-m-d H:i:s' 정규화 (빈/무효는 null).
+ */
+function bravoFmtDt(?string $v): ?string {
+    $ts = bravoTs($v);
+    return $ts === null ? null : date('Y-m-d H:i:s', $ts);
+}
+
+/**
+ * 폼 입력 → bravo_exams 저장용 정규화 컬럼 배열.
+ * always 모드면 날짜 NULL, all 타겟이면 cohort_id NULL.
+ */
+function bravoExamPersistData(array $d): array {
+    $mode   = in_array($d['exam_mode'] ?? '', ['period','always'], true) ? $d['exam_mode'] : 'period';
+    $target = in_array($d['target_type'] ?? '', ['all','cohort'], true) ? $d['target_type'] : 'all';
+    $status = in_array($d['status'] ?? '', ['preparing','open','closed','released'], true) ? $d['status'] : 'preparing';
+    $isPeriod = $mode === 'period';
+    $cid = ($target === 'cohort') ? ((int)($d['target_cohort_id'] ?? 0) ?: null) : null;
+    return [
+        'title'             => trim((string)($d['title'] ?? '')),
+        'bravo_level'       => (int)($d['bravo_level'] ?? 0),
+        'exam_mode'         => $mode,
+        'start_at'          => $isPeriod ? bravoFmtDt($d['start_at'] ?? null) : null,
+        'end_at'            => $isPeriod ? bravoFmtDt($d['end_at'] ?? null) : null,
+        'result_release_at' => $isPeriod ? bravoFmtDt($d['result_release_at'] ?? null) : null,
+        'attempt_limit'     => max(1, (int)($d['attempt_limit'] ?? 3)),
+        'target_type'       => $target,
+        'target_cohort_id'  => $cid,
+        'status'            => $status,
+    ];
+}
+
+/**
+ * 시험 목록. level명/cohort라벨 조인. 선택 필터: status / bravo_level / target_cohort_id.
+ */
+function bravoExamList(PDO $db, array $filters = []): array {
+    $where = []; $params = [];
+    if (!empty($filters['status']))           { $where[] = 'e.status = ?';           $params[] = $filters['status']; }
+    if (!empty($filters['bravo_level']))      { $where[] = 'e.bravo_level = ?';      $params[] = (int)$filters['bravo_level']; }
+    if (!empty($filters['target_cohort_id'])) { $where[] = 'e.target_cohort_id = ?'; $params[] = (int)$filters['target_cohort_id']; }
+    $sql = "SELECT e.*, bl.name AS level_name, c.cohort AS target_cohort_label
+            FROM bravo_exams e
+            LEFT JOIN bravo_levels bl ON e.bravo_level = bl.level
+            LEFT JOIN cohorts c ON e.target_cohort_id = c.id";
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= ' ORDER BY e.id DESC';
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * 시험 생성. 정규화 후 INSERT, 신규 id 반환.
+ */
+function bravoExamCreate(PDO $db, array $d, int $adminId): int {
+    $c = bravoExamPersistData($d);
+    $db->prepare("
+        INSERT INTO bravo_exams
+            (title, bravo_level, exam_mode, start_at, end_at, result_release_at, attempt_limit, target_type, target_cohort_id, status, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    ")->execute([
+        $c['title'], $c['bravo_level'], $c['exam_mode'], $c['start_at'], $c['end_at'], $c['result_release_at'],
+        $c['attempt_limit'], $c['target_type'], $c['target_cohort_id'], $c['status'], $adminId,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * 시험 수정 (status 포함 전체 필드).
+ */
+function bravoExamUpdate(PDO $db, int $id, array $d): void {
+    $c = bravoExamPersistData($d);
+    $db->prepare("
+        UPDATE bravo_exams SET
+            title=?, bravo_level=?, exam_mode=?, start_at=?, end_at=?, result_release_at=?,
+            attempt_limit=?, target_type=?, target_cohort_id=?, status=?
+        WHERE id=?
+    ")->execute([
+        $c['title'], $c['bravo_level'], $c['exam_mode'], $c['start_at'], $c['end_at'], $c['result_release_at'],
+        $c['attempt_limit'], $c['target_type'], $c['target_cohort_id'], $c['status'], $id,
+    ]);
+}
+
+/**
+ * 시험 삭제 (하드, 참조 테이블 없음).
+ */
+function bravoExamDelete(PDO $db, int $id): void {
+    $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
+}
