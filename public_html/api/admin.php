@@ -618,6 +618,49 @@ case 'bravo_member_update':
     jsonSuccess([], '저장되었습니다.');
     break;
 
+case 'bravo_exam_list':
+    requireAdmin(['operation']);
+    $db = getDB();
+    $filters = [];
+    if (!empty($_GET['status']) && is_string($_GET['status'])) $filters['status'] = $_GET['status'];
+    if (!empty($_GET['bravo_level'])) $filters['bravo_level'] = (int)$_GET['bravo_level'];
+    if (!empty($_GET['target_cohort_id'])) $filters['target_cohort_id'] = (int)$_GET['target_cohort_id'];
+    $cohorts = $db->query("SELECT id, cohort FROM cohorts ORDER BY cohort")->fetchAll(PDO::FETCH_ASSOC);
+    jsonSuccess([
+        'exams'   => bravoExamList($db, $filters),
+        'levels'  => bravoLoadLevels($db),
+        'cohorts' => $cohorts,
+    ]);
+    break;
+
+case 'bravo_exam_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $errors = bravoValidateExam($input);
+    if ($errors) jsonError($errors[0]);
+    $db = getDB();
+    $id = (isset($input['id']) && is_numeric($input['id']) && (int)$input['id'] > 0) ? (int)$input['id'] : 0;
+    if ($id > 0) {
+        bravoExamUpdate($db, $id, $input);
+        jsonSuccess(['id' => $id], '저장되었습니다.');
+    } else {
+        $newId = bravoExamCreate($db, $input, (int)$admin['admin_id']);
+        jsonSuccess(['id' => $newId], '저장되었습니다.');
+    }
+    break;
+
+case 'bravo_exam_delete':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin(['operation']);
+    $input = getJsonInput();
+    $id = (isset($input['id']) && is_numeric($input['id'])) ? (int)$input['id'] : 0;
+    if ($id < 1) jsonError('id가 필요합니다.');
+    $db = getDB();
+    bravoExamDelete($db, $id);
+    jsonSuccess([], '삭제되었습니다.');
+    break;
+
 // ── Member CRUD (operation only) — uses bootcamp_members ────
 
 case 'member_list':
