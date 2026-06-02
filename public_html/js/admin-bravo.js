@@ -1,17 +1,50 @@
-/* ── BRAVO 자격 관리 (operation) ───────────────────────────── */
+/* ── BRAVO 관리 (operation) — 서브탭 셸: 회원 자격 / 시험 관리 ── */
 const AdminBravoApp = (() => {
-    let container = null;
+    let admin = null;
+    let root = null;
+    let active = 'qual';
+    let examsMounted = false;
+
+    // 회원 자격 뷰 상태
+    let qualContainer = null;
     let levels = [];
     let members = [];
 
     async function init(adminSession, containerId) {
-        container = document.getElementById(containerId);
-        if (!container) return;
-        await load();
-        render();
+        admin = adminSession;
+        root = document.getElementById(containerId);
+        if (!root) return;
+        active = 'qual';
+        examsMounted = false;
+        root.innerHTML = `
+            <div class="bravo-subtabs">
+                <button class="bravo-subtab active" data-sub="qual">회원 자격</button>
+                <button class="bravo-subtab" data-sub="exams">시험 관리</button>
+            </div>
+            <div class="bravo-sub" id="bravo-sub-qual"></div>
+            <div class="bravo-sub" id="bravo-sub-exams" style="display:none"></div>`;
+        root.querySelectorAll('.bravo-subtab').forEach(b =>
+            b.addEventListener('click', () => switchSub(b.dataset.sub)));
+        qualContainer = root.querySelector('#bravo-sub-qual');
+        await loadQual();
+        renderQual();
     }
 
-    async function load() {
+    function switchSub(sub) {
+        if (sub === active) return;
+        active = sub;
+        root.querySelectorAll('.bravo-subtab').forEach(b =>
+            b.classList.toggle('active', b.dataset.sub === sub));
+        root.querySelector('#bravo-sub-qual').style.display = sub === 'qual' ? '' : 'none';
+        root.querySelector('#bravo-sub-exams').style.display = sub === 'exams' ? '' : 'none';
+        if (sub === 'exams' && !examsMounted && typeof AdminBravoExamApp !== 'undefined') {
+            examsMounted = true;
+            AdminBravoExamApp.init(admin, 'bravo-sub-exams');
+        }
+    }
+
+    // ── 회원 자격 뷰 (슬라이스1 로직 보존) ──
+    async function loadQual() {
         const r = await App.get('/api/admin.php?action=bravo_member_list');
         if (!r || r.success === false) { members = []; levels = []; return; }
         members = r.members || [];
@@ -30,8 +63,8 @@ const AdminBravoApp = (() => {
         }).join(' ');
     }
 
-    function render() {
-        if (!container) return;
+    function renderQual() {
+        if (!qualContainer) return;
         const thresholdInfo = levels.map(l => `BRAVO ${l.level}: ${l.required_review_count}회독·${l.passing_score}점`).join(' / ');
         const rows = members.map(m => {
             const ov = m.review_count_override === null ? '' : m.review_count_override;
@@ -49,7 +82,7 @@ const AdminBravoApp = (() => {
             </tr>`;
         }).join('');
 
-        container.innerHTML = `
+        qualContainer.innerHTML = `
             <div class="bravo-admin">
                 <p class="bravo-help">응시 자격 임계 — ${App.esc(thresholdInfo)}. 회독수 override 비우면 자동(완주횟수) 사용. 수동부여는 계산과 무관하게 응시 허용.</p>
                 <table class="data-table bravo-table">
@@ -60,12 +93,12 @@ const AdminBravoApp = (() => {
                 </table>
             </div>`;
 
-        container.querySelectorAll('.bravo-save').forEach(btn => {
-            btn.addEventListener('click', onSave);
+        qualContainer.querySelectorAll('.bravo-save').forEach(btn => {
+            btn.addEventListener('click', onSaveQual);
         });
     }
 
-    async function onSave(e) {
+    async function onSaveQual(e) {
         const tr = e.target.closest('tr');
         if (!tr) return;
         const userId = tr.dataset.user;
@@ -81,8 +114,8 @@ const AdminBravoApp = (() => {
         const r = await App.post('/api/admin.php?action=bravo_member_update', payload);
         if (r && r.success !== false) {
             Toast.success('저장되었습니다.');
-            await load();
-            render();
+            await loadQual();
+            renderQual();
         } else {
             Toast.error((r && r.error) || '저장 실패');
         }

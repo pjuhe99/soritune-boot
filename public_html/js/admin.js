@@ -201,7 +201,7 @@ const AdminApp = (() => {
                             <button class="tab" data-tab="#tab-reviews" data-hash="reviews">후기</button>
                             <button class="tab" data-tab="#tab-notify" data-hash="notify">알림톡</button>
                             <button class="tab" data-tab="#tab-retention" data-hash="retention">리텐션 관리</button>
-                            <button class="tab" data-tab="#tab-bravo" data-hash="bravo">BRAVO 자격</button>
+                            <button class="tab" data-tab="#tab-bravo" data-hash="bravo">BRAVO</button>
                         </div>
                         <div class="tab-content active" id="bc-tab-dashboard"></div>
                         <div class="tab-content" id="tab-tasks-mgmt"></div>
