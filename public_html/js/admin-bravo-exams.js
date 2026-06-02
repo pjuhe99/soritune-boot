@@ -46,6 +46,7 @@ const AdminBravoExamApp = (() => {
                 <td>
                     <button class="btn btn-sm bravo-exam-edit" data-id="${e.id}">수정</button>
                     <button class="btn btn-sm btn-danger bravo-exam-del" data-id="${e.id}">삭제</button>
+                    <button class="btn btn-sm bravo-exam-ot" data-id="${e.id}">OT</button>
                 </td>
             </tr>`).join('');
 
@@ -68,6 +69,8 @@ const AdminBravoExamApp = (() => {
             b.addEventListener('click', () => openForm(parseInt(b.dataset.id, 10))));
         container.querySelectorAll('.bravo-exam-del').forEach(b =>
             b.addEventListener('click', () => onDelete(parseInt(b.dataset.id, 10))));
+        container.querySelectorAll('.bravo-exam-ot').forEach(b =>
+            b.addEventListener('click', () => openOt(parseInt(b.dataset.id, 10))));
     }
 
     function toLocal(v) { return v ? v.slice(0, 16).replace(' ', 'T') : ''; }
@@ -165,6 +168,46 @@ const AdminBravoExamApp = (() => {
         } else {
             Toast.error((r && r.error) || '삭제 실패');
         }
+    }
+
+    async function openOt(examId) {
+        const r = await App.get('/api/admin.php?action=bravo_ot_get&exam_id=' + examId);
+        const ot = (r && r.success !== false) ? (r.ot || {}) : {};
+        const v = k => ot && ot[k] != null ? App.esc(ot[k]) : '';
+        editingId = null; // 시험 편집 모드 해제(같은 host 공유)
+        const host = container.querySelector('#bravo-exam-form');
+        if (!host) return;
+        host.innerHTML = `
+            <div class="bravo-ot-form">
+                <h4>시험 #${examId} OT 안내</h4>
+                <label>OT 제목 <input type="text" id="ot-title" value="${v('title')}"></label>
+                <label class="ot-wide">전체 안내문 <textarea id="ot-intro" rows="3">${v('intro_text')}</textarea></label>
+                <label class="ot-wide">영상 URL <input type="text" id="ot-video" value="${v('video_url')}"></label>
+                <label class="ot-wide">유형 1 안내문 <textarea id="ot-t1" rows="2">${v('type1_text')}</textarea></label>
+                <label class="ot-wide">유형 2 안내문 <textarea id="ot-t2" rows="2">${v('type2_text')}</textarea></label>
+                <label class="ot-wide">유형 3 안내문 <textarea id="ot-t3" rows="2">${v('type3_text')}</textarea></label>
+                <label>필수 확인 체크 <input type="checkbox" id="ot-require" ${ot.require_check == null || parseInt(ot.require_check, 10) ? 'checked' : ''}></label>
+                <div><button class="btn btn-primary btn-sm" id="ot-save">OT 저장</button>
+                <button class="btn btn-sm" id="ot-cancel">닫기</button></div>
+            </div>`;
+        host.querySelector('#ot-save').addEventListener('click', () => saveOt(examId, host));
+        host.querySelector('#ot-cancel').addEventListener('click', () => { host.innerHTML = ''; });
+    }
+
+    async function saveOt(examId, host) {
+        const payload = {
+            exam_id: examId,
+            title: host.querySelector('#ot-title').value,
+            intro_text: host.querySelector('#ot-intro').value,
+            video_url: host.querySelector('#ot-video').value,
+            type1_text: host.querySelector('#ot-t1').value,
+            type2_text: host.querySelector('#ot-t2').value,
+            type3_text: host.querySelector('#ot-t3').value,
+            require_check: host.querySelector('#ot-require').checked ? 1 : 0,
+        };
+        const r = await App.post('/api/admin.php?action=bravo_ot_save', payload);
+        if (r && r.success !== false) { Toast.success('OT가 저장되었습니다.'); host.innerHTML = ''; }
+        else Toast.error((r && r.error) || 'OT 저장 실패');
     }
 
     return { init };
