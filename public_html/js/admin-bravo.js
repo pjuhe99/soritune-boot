@@ -4,6 +4,7 @@ const AdminBravoApp = (() => {
     let root = null;
     let active = 'qual';
     let examsMounted = false;
+    let questionsMounted = false;
 
     // 회원 자격 뷰 상태
     let qualContainer = null;
@@ -16,13 +17,16 @@ const AdminBravoApp = (() => {
         if (!root) return;
         active = 'qual';
         examsMounted = false;
+        questionsMounted = false;
         root.innerHTML = `
             <div class="bravo-subtabs">
                 <button class="bravo-subtab active" data-sub="qual">회원 자격</button>
                 <button class="bravo-subtab" data-sub="exams">시험 관리</button>
+                <button class="bravo-subtab" data-sub="questions">문제은행</button>
             </div>
             <div class="bravo-sub" id="bravo-sub-qual"></div>
-            <div class="bravo-sub" id="bravo-sub-exams" style="display:none"></div>`;
+            <div class="bravo-sub" id="bravo-sub-exams" style="display:none"></div>
+            <div class="bravo-sub" id="bravo-sub-questions" style="display:none"></div>`;
         root.querySelectorAll('.bravo-subtab').forEach(b =>
             b.addEventListener('click', () => switchSub(b.dataset.sub)));
         qualContainer = root.querySelector('#bravo-sub-qual');
@@ -37,9 +41,14 @@ const AdminBravoApp = (() => {
             b.classList.toggle('active', b.dataset.sub === sub));
         root.querySelector('#bravo-sub-qual').style.display = sub === 'qual' ? '' : 'none';
         root.querySelector('#bravo-sub-exams').style.display = sub === 'exams' ? '' : 'none';
+        root.querySelector('#bravo-sub-questions').style.display = sub === 'questions' ? '' : 'none';
         if (sub === 'exams' && !examsMounted && typeof AdminBravoExamApp !== 'undefined') {
             examsMounted = true;
             AdminBravoExamApp.init(admin, 'bravo-sub-exams');
+        }
+        if (sub === 'questions' && !questionsMounted && typeof AdminBravoQuestionApp !== 'undefined') {
+            questionsMounted = true;
+            AdminBravoQuestionApp.init(admin, 'bravo-sub-questions');
         }
     }
 
