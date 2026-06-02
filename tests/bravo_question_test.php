@@ -80,6 +80,11 @@ try {
     $byType = bravoQuestionList($db, ['keyword'=>$tag, 'question_type'=>2]);
     t('type 필터 1건', count($byType) === 1 && (int)$byType[0]['id'] === $id2);
 
+    $id3 = bravoQuestionCreate($db, ['question_type'=>1,'bravo_level'=>1,'korean_text'=>"{$tag} 50% 달성",'english_text'=>'half','difficulty'=>'easy','is_active'=>1], 99);
+    t('LIKE % 리터럴 매칭', count(bravoQuestionList($db, ['keyword'=>"{$tag} 50%"])) === 1);
+    t('LIKE % 와일드카드 비확장', count(bravoQuestionList($db, ['keyword'=>"{$tag} 5_%"])) === 0);
+    bravoQuestionDelete($db, $id3);
+
     bravoQuestionUpdate($db, $id1, [
         'question_type'=>3,'bravo_level'=>2,'korean_text'=>"{$tag} 수정",'english_text'=>'edited',
         'difficulty'=>'normal','is_active'=>0,

@@ -84,7 +84,7 @@ function bravoQuestionList(PDO $db, array $filters = []): array {
     }
     if (!empty($filters['keyword'])) {
         $where[] = '(korean_text LIKE ? OR english_text LIKE ?)';
-        $kw = '%' . $filters['keyword'] . '%';
+        $kw = '%' . addcslashes($filters['keyword'], '%_') . '%';
         $params[] = $kw; $params[] = $kw;
     }
     $sql = "SELECT * FROM bravo_questions";
