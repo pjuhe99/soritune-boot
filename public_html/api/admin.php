@@ -15,6 +15,7 @@ require_once __DIR__ . '/../includes/multipass/multipass_repo.php';
 require_once __DIR__ . '/../includes/multipass/multipass_csv_parser.php';
 require_once __DIR__ . '/../includes/multipass/multipass_bulk.php';
 require_once __DIR__ . '/services/notice.php';
+require_once __DIR__ . '/services/bravo.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -574,6 +575,47 @@ case 'cohort_activate':
     $db = getDB();
     $db->prepare('UPDATE cohorts SET is_active = 1 WHERE id = ?')->execute([$id]);
     jsonSuccess([], '기수가 활성화되었습니다.');
+    break;
+
+// ── Bravo (도전 등급 시험) ────────────────────────────────────
+
+case 'bravo_member_list':
+    $admin = requireAdmin(['operation']);
+    $cohort = getEffectiveCohort($admin);
+    $db = getDB();
+    jsonSuccess([
+        'members' => bravoMemberList($db, $cohort),
+        'levels'  => bravoLoadLevels($db),
+    ]);
+    break;
+
+case 'bravo_member_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $userId = is_string($input['user_id'] ?? null) ? trim($input['user_id']) : '';
+    if ($userId === '') jsonError('user_id가 필요합니다.');
+
+    // override: 빈 문자열/미전달 → NULL(자동), 숫자 → 0~99 정수
+    $override = null;
+    if (isset($input['review_count_override']) && $input['review_count_override'] !== '' && $input['review_count_override'] !== null && is_numeric($input['review_count_override'])) {
+        $override = (int)$input['review_count_override'];
+        if ($override < 0)  $override = 0;
+        if ($override > 99) $override = 99;
+    }
+    // granted_levels: 배열(또는 미전달 → [])
+    $granted = [];
+    if (isset($input['granted_levels']) && is_array($input['granted_levels'])) {
+        foreach ($input['granted_levels'] as $g) {
+            $gi = (int)$g;
+            if (in_array($gi, [1,2,3], true)) $granted[] = $gi;
+        }
+    }
+    $notes = isset($input['notes']) && is_string($input['notes']) ? $input['notes'] : null;
+
+    $db = getDB();
+    bravoMemberUpsert($db, $userId, $override, $granted, $notes, (int)$admin['admin_id']);
+    jsonSuccess([], '저장되었습니다.');
     break;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────
