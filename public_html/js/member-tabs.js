@@ -10,6 +10,7 @@ const MemberTabs = (() => {
         { id: 'assignments', label: '과제 이력',  icon: '✅' },
         { id: 'curriculum',  label: '진도 달력',  icon: '📖' },
         { id: 'members',     label: '부티즈 정보', icon: '👥' },
+        { id: 'bravo',       label: 'BRAVO 도전', icon: '🎖️' },
     ];
 
     // 탭별 핸들러 등록소 — 각 탭 모듈이 register()로 등록

@@ -48,6 +48,7 @@
     <script src="/js/member-assignments.js<?= v('/js/member-assignments.js') ?>"></script>
     <script src="/js/member-progress.js<?= v('/js/member-progress.js') ?>"></script>
     <script src="/js/member-bootees.js<?= v('/js/member-bootees.js') ?>"></script>
+    <script src="/js/member-bravo.js<?= v('/js/member-bravo.js') ?>"></script>
     <script src="/js/member.js<?= v('/js/member.js') ?>"></script>
     <script>
         MemberApp.init();
