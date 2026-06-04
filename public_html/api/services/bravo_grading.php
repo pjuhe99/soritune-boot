@@ -216,14 +216,19 @@ function bravoAttemptConfirm(PDO $db, array $attempt, array $exam, array $input,
     if ($overridden && $reason === '') return ['error' => '자동 판정과 다르게 확정하려면 사유가 필요합니다.'];
     $memo = isset($input['memo']) && is_string($input['memo']) && trim($input['memo']) !== '' ? trim($input['memo']) : null;
 
-    $db->prepare("
-        INSERT INTO bravo_attempt_grades
-            (attempt_id, total_score, passing_score, result, result_overridden, override_reason, memo, confirmed_by)
-        VALUES (?,?,?,?,?,?,?,?)
-    ")->execute([
-        $attemptId, $total, $passing, $result,
-        $overridden ? 1 : 0, $overridden ? mb_substr($reason, 0, 255) : null, $memo, $adminId,
-    ]);
+    try {
+        $db->prepare("
+            INSERT INTO bravo_attempt_grades
+                (attempt_id, total_score, passing_score, result, result_overridden, override_reason, memo, confirmed_by)
+            VALUES (?,?,?,?,?,?,?,?)
+        ")->execute([
+            $attemptId, $total, $passing, $result,
+            $overridden ? 1 : 0, $overridden ? mb_substr($reason, 0, 255) : null, $memo, $adminId,
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000') return ['error' => '이미 확정된 채점입니다.'];
+        throw $e;
+    }
 
     return ['total_score' => $total, 'result' => $result];
 }

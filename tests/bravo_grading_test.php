@@ -155,6 +155,7 @@ try {
 
     // cancel → 재확정 (오버라이드: auto=pass 를 fail 로 + 사유)
     $r = bravoAttemptConfirmCancel($db, $attempt, $exam);
+    // cancel 직후 — q3 삭제 전 시점이라 grade 3건 보존 확인
     t('cancel 정상 (판정 보존)', !isset($r['error']) && bravoAttemptGradeGet($db, (int)$attempt['id']) === null
         && (int)$db->query("SELECT COUNT(*) FROM bravo_answer_grades WHERE attempt_id=" . (int)$attempt['id'])->fetchColumn() === 3);
     $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'fail', 'override_reason' => '발음 불명확 재검토'], 99);
