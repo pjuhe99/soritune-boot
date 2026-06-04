@@ -8,6 +8,7 @@ require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
 require_once __DIR__ . '/services/bravo.php';
+require_once __DIR__ . '/services/bravo_attempts.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -204,6 +205,92 @@ case 'bravo_status':
     $s = requireMember();
     $db = getDB();
     jsonSuccess(bravoMemberStatus($db, (int)$s['member_id']));
+    break;
+
+case 'bravo_exam_intro':
+    $s = requireMember();
+    $examId = (isset($_GET['exam_id']) && is_numeric($_GET['exam_id'])) ? (int)$_GET['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $db = getDB();
+    $acc = bravoAttemptExamAccess($db, (int)$s['member_id'], $examId);
+    if (isset($acc['error'])) jsonError($acc['error'], $acc['code'] ?? 400);
+    $exam = $acc['exam'];
+    $ot = bravoOtGet($db, $examId);
+    jsonSuccess([
+        'exam' => [
+            'id' => (int)$exam['id'], 'title' => $exam['title'], 'bravo_level' => (int)$exam['bravo_level'],
+            'exam_mode' => $exam['exam_mode'], 'start_at' => $exam['start_at'], 'end_at' => $exam['end_at'],
+            'result_release_at' => $exam['result_release_at'], 'attempt_limit' => (int)$exam['attempt_limit'],
+        ],
+        'ot' => $ot ? [
+            'title' => $ot['title'], 'intro_text' => $ot['intro_text'], 'video_url' => $ot['video_url'],
+            'type1_text' => $ot['type1_text'], 'type2_text' => $ot['type2_text'], 'type3_text' => $ot['type3_text'],
+            'require_check' => (int)$ot['require_check'],
+        ] : null,
+        'question_count' => count(bravoExamQuestionAssignedIds($db, $examId)),
+        'attempts' => bravoStatusAttempts($db, $examId, $acc['member_key'], (int)$exam['attempt_limit']),
+    ]);
+    break;
+
+case 'bravo_attempt_start':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = requireMember();
+    $input = getJsonInput();
+    $examId = (isset($input['exam_id']) && is_numeric($input['exam_id'])) ? (int)$input['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $db = getDB();
+    $acc = bravoAttemptExamAccess($db, (int)$s['member_id'], $examId);
+    if (isset($acc['error'])) jsonError($acc['error'], $acc['code'] ?? 400);
+    $r = bravoAttemptStart($db, $acc['exam'], $acc['ctx']['row'], $acc['member_key'], !empty($input['ot_checked']));
+    if (isset($r['error'])) jsonError($r['error']);
+    $attempt = $r['attempt'];
+    jsonSuccess([
+        'attempt_id' => (int)$attempt['id'],
+        'attempt_no' => (int)$attempt['attempt_no'],
+        'resumed' => !empty($r['resumed']),
+        'questions' => bravoAttemptQuestions($db, $attempt),
+        'answered_ids' => bravoAttemptAnsweredIds($db, (int)$attempt['id']),
+    ]);
+    break;
+
+case 'bravo_answer_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = requireMember();
+    // multipart — getJsonInput 아님: $_POST + $_FILES
+    $attemptId = (isset($_POST['attempt_id']) && is_numeric($_POST['attempt_id'])) ? (int)$_POST['attempt_id'] : 0;
+    $questionId = (isset($_POST['question_id']) && is_numeric($_POST['question_id'])) ? (int)$_POST['question_id'] : 0;
+    if ($attemptId < 1 || $questionId < 1) jsonError('attempt_id/question_id가 필요합니다.');
+    $db = getDB();
+    $attempt = bravoAttemptForMember($db, $attemptId, (int)$s['member_id']);
+    if (!$attempt) jsonError('응시 기록을 찾을 수 없습니다.', 404);
+    if ($attempt['status'] !== 'in_progress') jsonError('이미 제출된 응시입니다.');
+    $exStmt = $db->prepare("SELECT * FROM bravo_exams WHERE id = ?");
+    $exStmt->execute([(int)$attempt['exam_id']]);
+    $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$exam || $exam['status'] !== 'open' || !bravoAttemptSavePeriodOk($exam)) {
+        jsonError('응시 기간이 종료되었습니다.');
+    }
+    if (empty($_FILES['audio'])) jsonError('녹음 파일이 없습니다.');
+    $v = bravoAnswerValidateUpload($_FILES['audio']);
+    if (isset($v['error'])) jsonError($v['error']);
+    $durationMs = (isset($_POST['duration_ms']) && is_numeric($_POST['duration_ms'])) ? (int)$_POST['duration_ms'] : null;
+    $r = bravoAnswerStore($db, $attempt, $questionId, $_FILES['audio']['tmp_name'], $v['mime'], $v['ext'], $durationMs, true);
+    if (isset($r['error'])) jsonError($r['error']);
+    jsonSuccess($r, '저장되었습니다.');
+    break;
+
+case 'bravo_attempt_submit':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = requireMember();
+    $input = getJsonInput();
+    $attemptId = (isset($input['attempt_id']) && is_numeric($input['attempt_id'])) ? (int)$input['attempt_id'] : 0;
+    if ($attemptId < 1) jsonError('attempt_id가 필요합니다.');
+    $db = getDB();
+    $attempt = bravoAttemptForMember($db, $attemptId, (int)$s['member_id']);
+    if (!$attempt) jsonError('응시 기록을 찾을 수 없습니다.', 404);
+    $r = bravoAttemptSubmit($db, $attempt); // 기간 체크 없음(의도 — 스펙 §5)
+    if (isset($r['error'])) jsonError($r['error']);
+    jsonSuccess(['submitted' => true], '제출되었습니다.');
     break;
 
 default:
