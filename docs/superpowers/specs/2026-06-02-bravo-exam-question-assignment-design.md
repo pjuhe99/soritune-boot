@@ -48,7 +48,7 @@ exam↔question 배정이라는 경계 도메인으로 분리한다(bravo.php·b
 
 - `bravoExamQuestionAssignedIds(PDO $db, int $examId): array` — 배정된 question_id 정수 배열(`ORDER BY display_order, id`).
 - `bravoExamQuestionList(PDO $db, int $examId): array` — 배정된 문제 행(bravo_questions 조인, `ORDER BY beq.display_order, beq.id`). 응시/검토용 전체 컬럼.
-- `bravoExamQuestionSet(PDO $db, int $examId, array $questionIds): void` — **트랜잭션 전체 교체**.
+- `bravoExamQuestionSet(PDO $db, int $examId, array $questionIds): int` — **트랜잭션 전체 교체**. 저장된(검증·dedup 후) 문항 수 반환 (구현 중 코드리뷰로 void→int 변경 — save 응답 count에 사용).
   1. `$questionIds`를 정수화·중복제거.
   2. `bravo_questions`에 실제 존재하는 id만 필터(미존재 id 무시 — 무결성).
   3. `DELETE FROM bravo_exam_questions WHERE exam_id = ?`.
