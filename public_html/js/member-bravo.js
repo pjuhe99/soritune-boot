@@ -82,8 +82,10 @@ const MemberBravo = (() => {
             b.addEventListener('click', () =>
                 MemberBravoExam.open(el, parseInt(b.dataset.examId, 10), () => mount(el, member))));
         el.querySelectorAll('.bravo-finalize').forEach(b =>
-            b.addEventListener('click', () =>
-                MemberBravoExam.finalize(parseInt(b.dataset.attemptId, 10), () => mount(el, member))));
+            b.addEventListener('click', () => {
+                b.disabled = true;
+                MemberBravoExam.finalize(parseInt(b.dataset.attemptId, 10), () => mount(el, member));
+            }));
     }
 
     async function mount(el, member) {

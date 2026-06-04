@@ -12,6 +12,8 @@ const MemberBravoExam = (() => {
     let mimeType = '';
     let recorder = null, chunks = [], recTimer = null, recStartedAt = 0;
     let st = null;              // { examId, intro, attemptId, questions, answered:Set, idx, retakeDone, blob, durationMs }
+    let micPreviewUrl = null;   // 마이크테스트 blob URL (revoke용)
+    let opening = false;        // open() 싱글톤 가드
 
     function pickMime() {
         if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return '';
@@ -26,9 +28,11 @@ const MemberBravoExam = (() => {
         if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
         if (recTimer) { clearInterval(recTimer); recTimer = null; }
         recorder = null;
+        if (micPreviewUrl) { URL.revokeObjectURL(micPreviewUrl); micPreviewUrl = null; }
     }
 
     function exit() {
+        opening = false;
         releaseStream();
         st = null;
         if (onExit) onExit();
@@ -36,9 +40,12 @@ const MemberBravoExam = (() => {
 
     // ── 진입: intro 로드 → OT 화면 ──
     async function open(container, examId, exitCb) {
+        if (opening) return;
+        opening = true;
         el = container; onExit = exitCb;
         el.innerHTML = '<div class="bravo-exam"><p>불러오는 중...</p></div>';
         const r = await App.get('/api/member.php?action=bravo_exam_intro', { exam_id: examId });
+        opening = false;
         if (!r || r.success === false) { exit(); return; }
         st = { examId, intro: r, attemptId: null, questions: [], answered: new Set(), idx: -1, retakeDone: false, blob: null, durationMs: 0 };
         renderOt();
@@ -51,7 +58,7 @@ const MemberBravoExam = (() => {
         const otHtml = ot ? `
             ${ot.title ? `<h4>${App.esc(ot.title)}</h4>` : ''}
             ${ot.intro_text ? `<p class="bx-pre">${App.esc(ot.intro_text)}</p>` : ''}
-            ${ot.video_url ? `<p><a href="${App.esc(ot.video_url)}" target="_blank" rel="noopener">OT 영상 보기</a></p>` : ''}
+            ${ot.video_url && /^https?:\/\//i.test(ot.video_url) ? `<p><a href="${App.esc(ot.video_url)}" target="_blank" rel="noopener">OT 영상 보기</a></p>` : ''}
             ${[1, 2, 3].map(n => ot['type' + n + '_text'] ? `<div class="bx-type-guide"><strong>유형 ${n}</strong><p class="bx-pre">${App.esc(ot['type' + n + '_text'])}</p></div>` : '').join('')}
         ` : '<p>시험 안내가 곧 등록됩니다.</p>';
         const needCheck = !!(ot && parseInt(ot.require_check, 10) === 1) && !resuming;
@@ -107,7 +114,9 @@ const MemberBravoExam = (() => {
             rec.onstop = () => {
                 const blob = new Blob(buf, { type: mimeType });
                 const player = el.querySelector('#bx-mic-play');
-                player.src = URL.createObjectURL(blob);
+                if (micPreviewUrl) URL.revokeObjectURL(micPreviewUrl);
+                micPreviewUrl = URL.createObjectURL(blob);
+                player.src = micPreviewUrl;
                 player.style.display = '';
                 el.querySelector('#bx-mic-ok-wrap').style.display = '';
                 el.querySelector('#bx-mic-ok').addEventListener('change', refreshStart);
@@ -151,7 +160,7 @@ const MemberBravoExam = (() => {
                 <p>다음 문제를 누르면 <strong>문제 공개와 동시에 녹음이 시작</strong>됩니다.<br>준비되면 눌러주세요.</p>
                 <div class="bx-actions"><button class="btn btn-primary" id="bx-next">다음 문제</button></div>
             </div>`;
-        el.querySelector('#bx-next').addEventListener('click', () => { st.idx = ni; st.retakeDone = false; renderQuestion(); });
+        el.querySelector('#bx-next').addEventListener('click', (e) => { e.currentTarget.disabled = true; st.idx = ni; st.retakeDone = false; renderQuestion(); });
     }
 
     function typeLabel(t) {
@@ -186,7 +195,15 @@ const MemberBravoExam = (() => {
         chunks = [];
         recorder = new MediaRecorder(stream, { mimeType });
         recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        // 트랙이 예기치 않게 끊겨도(권한 회수/기기 전환) onstop 이 업로드로 이어지도록 선할당
+        recorder.onstop = () => {
+            if (recTimer) { clearInterval(recTimer); recTimer = null; }
+            if (!st.durationMs) st.durationMs = Date.now() - recStartedAt;
+            st.blob = new Blob(chunks, { type: mimeType });
+            uploadCurrent();
+        };
         recStartedAt = Date.now();
+        st.durationMs = 0;
         recorder.start();
         const elapsedEl = el.querySelector('#bx-elapsed');
         recTimer = setInterval(() => {
@@ -200,11 +217,7 @@ const MemberBravoExam = (() => {
         if (!recorder || recorder.state === 'inactive') return;
         if (recTimer) { clearInterval(recTimer); recTimer = null; }
         st.durationMs = Date.now() - recStartedAt;
-        recorder.onstop = () => {
-            st.blob = new Blob(chunks, { type: mimeType });
-            uploadCurrent();
-        };
-        recorder.stop();
+        recorder.stop(); // onstop 은 startRecording 에서 선할당됨
     }
 
     async function uploadCurrent(isManualRetry) {
@@ -224,7 +237,8 @@ const MemberBravoExam = (() => {
         fd.append('duration_ms', st.durationMs);
         const ext = mimeType.indexOf('mp4') !== -1 ? 'm4a' : 'webm';
         fd.append('audio', st.blob, 'answer.' + ext);
-        return App.post('/api/member.php?action=bravo_answer_save', fd);
+        // showError: false — 실패 UI는 renderUploadRetry가 담당, 토스트 소음 제거
+        return App.api('/api/member.php?action=bravo_answer_save', { method: 'POST', data: fd, showError: false });
     }
 
     function renderUploadRetry() {
@@ -249,7 +263,7 @@ const MemberBravoExam = (() => {
                 </div>
             </div>`;
         const rt = el.querySelector('#bx-retake');
-        if (rt) rt.addEventListener('click', () => { st.retakeDone = true; renderQuestion(); });
+        if (rt) rt.addEventListener('click', () => { rt.disabled = true; st.retakeDone = true; renderQuestion(); });
         el.querySelector('#bx-go-next').addEventListener('click', () => renderInterstitial());
     }
 
