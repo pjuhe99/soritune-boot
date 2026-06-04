@@ -282,6 +282,7 @@ function bravoExamUpdate(PDO $db, int $id, array $d): void {
 function bravoAttemptMemberKey(array $memberRow): string {
     $uid = trim((string)($memberRow['user_id'] ?? ''));
     if ($uid !== '') return $uid;
+    // phone 도 빈 회원은 로그인 경계에서 차단됨 — 'p:' 단독 키는 도달 불가
     return 'p:' . trim((string)($memberRow['phone'] ?? ''));
 }
 
@@ -343,14 +344,15 @@ function bravoStatusAttempts(PDO $db, int $examId, string $memberKey, int $limit
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $used = count($rows); $submitted = false; $inProgress = null;
+    $cntStmt = $db->prepare("SELECT COUNT(*) FROM bravo_answers WHERE attempt_id = ?");
     foreach ($rows as $a) {
         if ($a['status'] === 'submitted') {
             $submitted = true;
         } elseif ($a['status'] === 'in_progress') {
             $total = count(json_decode((string)$a['question_ids'], true) ?: []);
-            $cnt = $db->prepare("SELECT COUNT(*) FROM bravo_answers WHERE attempt_id = ?");
-            $cnt->execute([(int)$a['id']]);
-            $inProgress = ['attempt_id' => (int)$a['id'], 'answered' => (int)$cnt->fetchColumn(), 'total' => $total];
+            $cntStmt->execute([(int)$a['id']]);
+            // in_progress 가 이론상 복수면 마지막(최대 attempt_no) 채택 — bravoAttemptFindInProgress 의 ORDER BY attempt_no DESC 와 일치
+            $inProgress = ['attempt_id' => (int)$a['id'], 'answered' => (int)$cntStmt->fetchColumn(), 'total' => $total];
         }
     }
     return ['exam_id' => $examId, 'used' => $used, 'limit' => $limit, 'in_progress' => $inProgress, 'submitted' => $submitted];
@@ -364,18 +366,27 @@ function bravoExamDelete(PDO $db, int $id): void {
     $aStmt = $db->prepare("SELECT id FROM bravo_attempts WHERE exam_id = ?");
     $aStmt->execute([$id]);
     $attemptIds = array_map('intval', $aStmt->fetchAll(PDO::FETCH_COLUMN));
-    if ($attemptIds) {
-        $place = implode(',', array_fill(0, count($attemptIds), '?'));
-        $db->prepare("DELETE FROM bravo_answers WHERE attempt_id IN ($place)")->execute($attemptIds);
-        $db->prepare("DELETE FROM bravo_attempts WHERE exam_id = ?")->execute([$id]);
-        // 녹음 파일 정리 — bravo_attempts.php 가 로드된 경우에만 (bravo.php 단독 사용 시 DB 만 정리)
-        if (function_exists('bravoAttemptPurgeFiles')) {
-            foreach ($attemptIds as $aid) bravoAttemptPurgeFiles($aid);
+
+    $owns = !$db->inTransaction();
+    if ($owns) $db->beginTransaction();
+    try {
+        if ($attemptIds) {
+            $place = implode(',', array_fill(0, count($attemptIds), '?'));
+            $db->prepare("DELETE FROM bravo_answers WHERE attempt_id IN ($place)")->execute($attemptIds);
+            $db->prepare("DELETE FROM bravo_attempts WHERE exam_id = ?")->execute([$id]);
         }
+        $db->prepare("DELETE FROM bravo_exam_questions WHERE exam_id = ?")->execute([$id]);
+        $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
+        $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
+        if ($owns) $db->commit();
+    } catch (Throwable $e) {
+        if ($owns) $db->rollBack();
+        throw $e;
     }
-    $db->prepare("DELETE FROM bravo_exam_questions WHERE exam_id = ?")->execute([$id]);
-    $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
-    $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
+    // 녹음 파일 정리는 DB 확정 후 (bravo_attempts.php 로드 시에만)
+    if ($attemptIds && function_exists('bravoAttemptPurgeFiles')) {
+        foreach ($attemptIds as $aid) bravoAttemptPurgeFiles($aid);
+    }
 }
 
 /**
