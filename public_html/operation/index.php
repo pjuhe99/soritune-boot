@@ -52,6 +52,7 @@
     <script src="/js/retention.js<?= v('/js/retention.js') ?>"></script>
     <script src="/js/admin-bravo-exams.js<?= v('/js/admin-bravo-exams.js') ?>"></script>
     <script src="/js/admin-bravo-questions.js<?= v('/js/admin-bravo-questions.js') ?>"></script>
+    <script src="/js/admin-bravo-grading.js<?= v('/js/admin-bravo-grading.js') ?>"></script>
     <script src="/js/admin-bravo.js<?= v('/js/admin-bravo.js') ?>"></script>
     <script>AdminApp.init();</script>
 </body>
