@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/multipass/multipass_bulk.php';
 require_once __DIR__ . '/services/notice.php';
 require_once __DIR__ . '/services/bravo.php';
 require_once __DIR__ . '/services/bravo_questions.php';
+require_once __DIR__ . '/services/bravo_exam_questions.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -719,6 +720,50 @@ case 'bravo_ot_save':
     $db = getDB();
     bravoOtUpsert($db, (int)$input['exam_id'], $input, (int)$admin['admin_id']);
     jsonSuccess([], '저장되었습니다.');
+    break;
+
+case 'bravo_exam_question_list':
+    requireAdmin(['operation']);
+    $examId = (isset($_GET['exam_id']) && is_numeric($_GET['exam_id'])) ? (int)$_GET['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $db = getDB();
+    $stmt = $db->prepare("SELECT id, title, bravo_level FROM bravo_exams WHERE id = ?");
+    $stmt->execute([$examId]);
+    $examRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$examRow) jsonError('시험을 찾을 수 없습니다.', 404);
+
+    $assignedRows = bravoExamQuestionList($db, $examId);
+    $assignedIds = array_map(function ($r) { return (int)$r['id']; }, $assignedRows);
+
+    $showAll = !empty($_GET['show_all']);
+    $filters = $showAll ? [] : ['bravo_level' => (int)$examRow['bravo_level'], 'is_active' => 1];
+    $candidates = bravoQuestionList($db, $filters);
+
+    // 후보 = 필터결과 ∪ 현재 배정 (배정된 문제가 필터 밖이어도 항상 패널에 보이도록)
+    $byId = [];
+    foreach ($candidates as $c) $byId[(int)$c['id']] = $c;
+    foreach ($assignedRows as $r) {
+        $rid = (int)$r['id'];
+        if (!isset($byId[$rid])) { unset($r['display_order']); $byId[$rid] = $r; }
+    }
+    $merged = array_values($byId);
+    usort($merged, function ($a, $b) {
+        return [(int)$a['question_type'], (int)$a['id']] <=> [(int)$b['question_type'], (int)$b['id']];
+    });
+
+    jsonSuccess(['exam' => $examRow, 'assigned_ids' => $assignedIds, 'candidates' => $merged]);
+    break;
+
+case 'bravo_exam_question_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    requireAdmin(['operation']);
+    $input = getJsonInput();
+    $examId = (isset($input['exam_id']) && is_numeric($input['exam_id'])) ? (int)$input['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $qids = (isset($input['question_ids']) && is_array($input['question_ids'])) ? $input['question_ids'] : [];
+    $db = getDB();
+    bravoExamQuestionSet($db, $examId, $qids);
+    jsonSuccess(['count' => count(bravoExamQuestionAssignedIds($db, $examId))], '저장되었습니다.');
     break;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────
