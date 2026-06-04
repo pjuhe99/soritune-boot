@@ -796,12 +796,8 @@ case 'bravo_grading_detail':
     $exStmt->execute([(int)$attempt['exam_id']]);
     $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
     if (!$exam) jsonError('시험을 찾을 수 없습니다.', 404);
-    $mStmt = $db->prepare("
-        SELECT bm.real_name, c.cohort FROM bravo_attempts a
-        JOIN bootcamp_members bm ON a.member_id = bm.id
-        JOIN cohorts c ON bm.cohort_id = c.id WHERE a.id = ?
-    ");
-    $mStmt->execute([$attemptId]);
+    $mStmt = $db->prepare("SELECT bm.real_name, c.cohort FROM bootcamp_members bm JOIN cohorts c ON bm.cohort_id = c.id WHERE bm.id = ?");
+    $mStmt->execute([(int)$attempt['member_id']]);
     $member = $mStmt->fetch(PDO::FETCH_ASSOC) ?: ['real_name' => null, 'cohort' => null];
     jsonSuccess(bravoGradingDetail($db, $attempt, $exam) + ['member' => ['name' => $member['real_name'], 'cohort' => $member['cohort']]]);
     break;
@@ -818,6 +814,7 @@ case 'bravo_answer_grade_save':
     $attemptId = (int)$aStmt->fetchColumn();
     if ($attemptId < 1) jsonError('답안을 찾을 수 없습니다.', 404);
     $attempt = bravoAttemptGet($db, $attemptId);
+    if (!$attempt) jsonError('응시를 찾을 수 없습니다.', 404);
     $exStmt = $db->prepare("SELECT id, bravo_level FROM bravo_exams WHERE id = ?");
     $exStmt->execute([(int)$attempt['exam_id']]);
     $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
@@ -866,21 +863,27 @@ case 'bravo_answer_audio':
         jsonError('녹음 파일이 없습니다.', 404);
     }
     $size = (int)filesize($real);
-    // JSON 아님 — 바이너리 스트리밍 (admin.php 상단의 JSON Content-Type 을 덮어씀)
-    header('Content-Type: ' . $row['audio_mime']);
-    header('Accept-Ranges: bytes');
-    header('Cache-Control: private, max-age=3600');
+    if ($size < 1) jsonError('녹음 파일이 없습니다.', 404);
     $range = bravoAudioRangeParse($_SERVER['HTTP_RANGE'] ?? null, $size);
+    // JSON 아님 — 바이너리 스트리밍 (admin.php 상단의 JSON Content-Type 을 덮어씀)
+    // 헤더 전송 전에 fopen 검증 (이후 jsonError 는 audio mime 로 오염됨)
     if ($range !== null) {
         [$start, $end] = $range;
+        $fp = fopen($real, 'rb');
+        if ($fp === false) jsonError('녹음 파일을 읽을 수 없습니다.', 500);
+        header('Content-Type: ' . $row['audio_mime']);
+        header('Accept-Ranges: bytes');
+        header('Cache-Control: private, max-age=3600');
         http_response_code(206);
         header("Content-Range: bytes {$start}-{$end}/{$size}");
         header('Content-Length: ' . ($end - $start + 1));
-        $fp = fopen($real, 'rb');
         fseek($fp, $start);
         echo fread($fp, $end - $start + 1);
         fclose($fp);
     } else {
+        header('Content-Type: ' . $row['audio_mime']);
+        header('Accept-Ranges: bytes');
+        header('Cache-Control: private, max-age=3600');
         header('Content-Length: ' . $size);
         readfile($real);
     }

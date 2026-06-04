@@ -146,12 +146,13 @@ function bravoGradeSave(PDO $db, array $attempt, array $exam, int $answerId, arr
     if (!in_array((int)$ans['question_id'], $validQids, true)) return ['error' => '채점 대상 문항이 아닙니다.'];
 
     $level = (int)$exam['bravo_level'];
+    $w = BRAVO_GRADE_WEIGHTS[$level] ?? null;
+    if (!$w) return ['error' => '지원하지 않는 등급입니다.'];
     $errors = bravoGradeValidate($level, $input);
     if ($errors) return ['error' => implode(' ', $errors)];
 
     $n = count($validQids);
     $score = bravoGradeScore($level, $n, $input);
-    $w = BRAVO_GRADE_WEIGHTS[$level];
     $completion = $w['completion'] > 0 ? (int)$input['completion_ok'] : null;
     $memo = isset($input['memo']) && is_string($input['memo']) && trim($input['memo']) !== '' ? mb_substr(trim($input['memo']), 0, 255) : null;
 
@@ -238,6 +239,7 @@ function bravoAttemptConfirm(PDO $db, array $attempt, array $exam, array $input,
  */
 function bravoAttemptConfirmCancel(PDO $db, array $attempt, array $exam): array {
     $attemptId = (int)$attempt['id'];
+    if (($attempt['status'] ?? '') !== 'submitted') return ['error' => '제출된 응시가 아닙니다.'];
     if (!bravoAttemptGradeGet($db, $attemptId)) return ['error' => '확정된 채점이 없습니다.'];
     if (($exam['status'] ?? '') === 'released') return ['error' => '결과가 발표된 시험은 확정을 취소할 수 없습니다.'];
     $db->prepare("DELETE FROM bravo_attempt_grades WHERE attempt_id = ?")->execute([$attemptId]);
