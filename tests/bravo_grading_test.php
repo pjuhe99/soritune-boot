@@ -126,6 +126,85 @@ try {
     $sum = bravoGradingSummary($db, $attempt, 2);
     t('summary 진행중', $sum['graded_count'] === 1 && $sum['total_count'] === 3 && $sum['auto_result'] === null);
 
+    // ── confirm: 미완 거부 → 완료 → 자동 합불·passing_score 스냅샷 ──
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'pass'], 99);
+    t('미완 confirm 거부', isset($r['error']) && $r['missing_count'] === 2);
+
+    // 나머지 2문항 판정: q1=0점(이미 재판정으로 wrong), q2/q3 만점 → 총점 0 + 33.33 + 33.33 = 66.66 ≥ 65 → pass
+    foreach ([$qids[1], $qids[2]] as $q) {
+        bravoGradeSave($db, $attempt, $exam, $answerIds[$q], $J, 99);
+    }
+    $sum = bravoGradingSummary($db, $attempt, 2);
+    t('전 문항 판정 후 auto_result', $sum['auto_result'] === 'pass' && $sum['total_so_far'] === 66.66, json_encode($sum));
+
+    // 오버라이드 사유 누락 거부 (auto=pass 인데 fail 요청)
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'fail'], 99);
+    t('오버라이드 사유 누락 거부', isset($r['error']));
+
+    // 정상 확정 (auto 그대로)
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'pass', 'memo' => '전체 메모'], 99);
+    t('confirm 정상', !isset($r['error']) && $r['total_score'] === 66.66 && $r['result'] === 'pass', json_encode($r));
+    $cg = bravoAttemptGradeGet($db, (int)$attempt['id']);
+    t('확정 행 (passing_score 스냅샷·비오버라이드)', $cg && (float)$cg['passing_score'] === 65.0 && (int)$cg['result_overridden'] === 0 && $cg['memo'] === '전체 메모');
+
+    // 확정 후 판정 save 거부 / 중복 확정 거부
+    $g = bravoGradeSave($db, $attempt, $exam, $answerIds[$qids[0]], $J, 99);
+    t('확정 후 save 거부', isset($g['error']));
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'pass'], 99);
+    t('중복 확정 거부', isset($r['error']));
+
+    // cancel → 재확정 (오버라이드: auto=pass 를 fail 로 + 사유)
+    $r = bravoAttemptConfirmCancel($db, $attempt, $exam);
+    t('cancel 정상 (판정 보존)', !isset($r['error']) && bravoAttemptGradeGet($db, (int)$attempt['id']) === null
+        && (int)$db->query("SELECT COUNT(*) FROM bravo_answer_grades WHERE attempt_id=" . (int)$attempt['id'])->fetchColumn() === 3);
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'fail', 'override_reason' => '발음 불명확 재검토'], 99);
+    t('오버라이드 확정', !isset($r['error']) && $r['result'] === 'fail');
+    $cg = bravoAttemptGradeGet($db, (int)$attempt['id']);
+    t('오버라이드 기록', (int)$cg['result_overridden'] === 1 && $cg['override_reason'] === '발음 불명확 재검토');
+
+    // released 후 cancel 거부
+    $db->prepare("UPDATE bravo_exams SET status='released' WHERE id=?")->execute([$examId]);
+    $examReleased = $db->query("SELECT * FROM bravo_exams WHERE id=" . (int)$examId)->fetch(PDO::FETCH_ASSOC);
+    $r = bravoAttemptConfirmCancel($db, $attempt, $examReleased);
+    t('released 후 cancel 거부', isset($r['error']));
+    $db->prepare("UPDATE bravo_exams SET status='closed' WHERE id=?")->execute([$examId]);
+
+    // ── 문항 삭제 엣지: 유령 grade 제외 + 자동 재환산 ──
+    bravoAttemptConfirmCancel($db, $attempt, $db->query("SELECT * FROM bravo_exams WHERE id=" . (int)$examId)->fetch(PDO::FETCH_ASSOC));
+    bravoQuestionDelete($db, $qids[2]); // q3 삭제 → N: 3→2, q3 grade 는 유령
+    $sum = bravoGradingSummary($db, $attempt, 2);
+    t('유령 grade 제외 집계', $sum['total_count'] === 2 && $sum['graded_count'] === 2);
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'pass'], 99);
+    // 재환산: q1=wrong(0점, N=2 여도 0), q2=만점 → 100/2=50. 총점 50 ≥ 65? 아니오 → auto=fail. pass 요청은 오버라이드 사유 필요 → 거부
+    t('재환산 후 auto 변동 → 오버라이드 사유 요구', isset($r['error']));
+    $r = bravoAttemptConfirm($db, $attempt, $exam, ['result' => 'fail'], 99);
+    t('재환산 확정 (단일 N)', !isset($r['error']) && $r['total_score'] === 50.0, json_encode($r));
+    $regraded = $db->query("SELECT n_denominator FROM bravo_answer_grades g JOIN bravo_answers a ON g.answer_id=a.id WHERE g.attempt_id=" . (int)$attempt['id'] . " AND a.question_id=" . (int)$qids[1])->fetchColumn();
+    t('재환산 n_denominator 갱신', (int)$regraded === 2);
+
+    // ── 목록 ──
+    $exams = bravoGradingExamList($db);
+    $mine = null;
+    foreach ($exams as $e) { if ((int)$e['id'] === $examId) $mine = $e; }
+    t('exam_list 포함 + 카운트', $mine !== null && (int)$mine['counts']['total'] === 1 && (int)$mine['counts']['confirmed'] === 1);
+
+    $list = bravoGradingAttemptList($db, $examId);
+    t('attempt_list', count($list) === 1 && $list[0]['member_name'] === "{$tag}응시자"
+        && (int)$list[0]['graded_count'] === 2 && (int)$list[0]['total_count'] === 2
+        && $list[0]['confirmed'] !== null && $list[0]['confirmed']['result'] === 'fail');
+
+    // ── detail ──
+    $d = bravoGradingDetail($db, $attempt, $exam);
+    t('detail items (현존 2문항 + 정답 포함)', count($d['items']) === 2
+        && $d['items'][0]['question']['english_text'] === 'answer 1'
+        && $d['items'][0]['grade'] !== null && $d['items'][1]['grade'] !== null);
+    t('detail 메타', $d['passing_score'] === 65.0 && isset($d['weights']['accuracy']) && $d['confirmed'] !== null);
+
+    // ── cascade: 시험 삭제 → grades 정리 ──
+    bravoExamDelete($db, $examId);
+    t('시험 삭제 → answer_grades 0건', (int)$db->query("SELECT COUNT(*) FROM bravo_answer_grades WHERE attempt_id=" . (int)$attempt['id'])->fetchColumn() === 0);
+    t('시험 삭제 → attempt_grades 0건', (int)$db->query("SELECT COUNT(*) FROM bravo_attempt_grades WHERE attempt_id=" . (int)$attempt['id'])->fetchColumn() === 0);
+
     $db->rollBack();
 } catch (Throwable $e) {
     $db->rollBack();

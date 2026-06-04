@@ -170,3 +170,196 @@ function bravoGradeSave(PDO $db, array $attempt, array $exam, int $answerId, arr
 
     return ['score' => $score] + bravoGradingSummary($db, $attempt, $level);
 }
+
+/**
+ * 채점 확정. 전 문항(현존 기준) 판정 필수 → N 불일치 grade 자동 재환산 → 유효 grade 합산
+ * → passing_score 스냅샷 → 오버라이드 검증 → INSERT.
+ * 성공: ['total_score'=>, 'result'=>], 실패: ['error'=>(, 'missing_count'=>)]
+ */
+function bravoAttemptConfirm(PDO $db, array $attempt, array $exam, array $input, int $adminId): array {
+    if (($attempt['status'] ?? '') !== 'submitted') return ['error' => '제출된 응시만 확정할 수 있습니다.'];
+    $attemptId = (int)$attempt['id'];
+    if (bravoAttemptGradeGet($db, $attemptId)) return ['error' => '이미 확정된 채점입니다.'];
+
+    $level = (int)$exam['bravo_level'];
+    $validQids = bravoGradingQuestionIds($db, $attempt);
+    $n = count($validQids);
+    if ($n === 0) return ['error' => '채점 대상 문항이 없습니다.'];
+
+    $grades = bravoGradingValidGrades($db, $attempt);
+    $missing = $n - count($grades);
+    if ($missing > 0) return ['error' => "판정되지 않은 문항이 {$missing}개 있습니다.", 'missing_count' => $missing];
+
+    // N 불일치 grade 자동 재환산 (저장된 판정값 + 현재 가중치·N — 한 attempt 안에서 단일 N 보장)
+    $upd = $db->prepare("UPDATE bravo_answer_grades SET score = ?, n_denominator = ? WHERE id = ?");
+    foreach ($grades as $qid => $g) {
+        if ((int)$g['n_denominator'] !== $n) {
+            $j = [
+                'accuracy' => $g['accuracy'], 'chunk_ok' => (int)$g['chunk_ok'],
+                'response_rating' => $g['response_rating'], 'fluency_rating' => $g['fluency_rating'],
+                'completion_ok' => $g['completion_ok'] !== null ? (int)$g['completion_ok'] : 0,
+            ];
+            $score = bravoGradeScore($level, $n, $j);
+            $upd->execute([$score, $n, (int)$g['id']]);
+            $grades[$qid]['score'] = $score;
+        }
+    }
+
+    $total = round(array_sum(array_map(fn($g) => (float)$g['score'], $grades)), 2);
+    $passing = bravoGradingPassingScore($db, $level);
+    $auto = $total >= $passing ? 'pass' : 'fail';
+
+    $result = $input['result'] ?? '';
+    if (!in_array($result, ['pass', 'fail'], true)) return ['error' => '합불 판정을 선택해주세요.'];
+    $overridden = $result !== $auto;
+    $reason = isset($input['override_reason']) && is_string($input['override_reason']) ? trim($input['override_reason']) : '';
+    if ($overridden && $reason === '') return ['error' => '자동 판정과 다르게 확정하려면 사유가 필요합니다.'];
+    $memo = isset($input['memo']) && is_string($input['memo']) && trim($input['memo']) !== '' ? trim($input['memo']) : null;
+
+    $db->prepare("
+        INSERT INTO bravo_attempt_grades
+            (attempt_id, total_score, passing_score, result, result_overridden, override_reason, memo, confirmed_by)
+        VALUES (?,?,?,?,?,?,?,?)
+    ")->execute([
+        $attemptId, $total, $passing, $result,
+        $overridden ? 1 : 0, $overridden ? mb_substr($reason, 0, 255) : null, $memo, $adminId,
+    ]);
+
+    return ['total_score' => $total, 'result' => $result];
+}
+
+/**
+ * 확정 취소 (released 전만). 판정(answer_grades)은 보존.
+ */
+function bravoAttemptConfirmCancel(PDO $db, array $attempt, array $exam): array {
+    $attemptId = (int)$attempt['id'];
+    if (!bravoAttemptGradeGet($db, $attemptId)) return ['error' => '확정된 채점이 없습니다.'];
+    if (($exam['status'] ?? '') === 'released') return ['error' => '결과가 발표된 시험은 확정을 취소할 수 없습니다.'];
+    $db->prepare("DELETE FROM bravo_attempt_grades WHERE attempt_id = ?")->execute([$attemptId]);
+    return ['cancelled' => true];
+}
+
+/**
+ * 채점 대상 시험 목록 (submitted attempt ≥1) + 카운트.
+ */
+function bravoGradingExamList(PDO $db): array {
+    $rows = $db->query("
+        SELECT e.id, e.title, e.bravo_level, e.status,
+               COUNT(*) AS total,
+               SUM(ag.id IS NOT NULL) AS confirmed_cnt,
+               SUM(ag.id IS NULL AND COALESCE(g.c, 0) = 0) AS ungraded_cnt,
+               SUM(ag.id IS NULL AND COALESCE(g.c, 0) > 0) AS grading_cnt
+        FROM bravo_attempts a
+        JOIN bravo_exams e ON a.exam_id = e.id
+        LEFT JOIN bravo_attempt_grades ag ON ag.attempt_id = a.id
+        LEFT JOIN (SELECT attempt_id, COUNT(*) c FROM bravo_answer_grades GROUP BY attempt_id) g ON g.attempt_id = a.id
+        WHERE a.status = 'submitted'
+        GROUP BY e.id, e.title, e.bravo_level, e.status
+        ORDER BY e.id DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    return array_map(fn($r) => [
+        'id' => (int)$r['id'], 'title' => $r['title'], 'bravo_level' => (int)$r['bravo_level'], 'status' => $r['status'],
+        'counts' => ['total' => (int)$r['total'], 'ungraded' => (int)$r['ungraded_cnt'], 'grading' => (int)$r['grading_cnt'], 'confirmed' => (int)$r['confirmed_cnt']],
+    ], $rows);
+}
+
+/**
+ * 시험의 채점 대상 응시 목록 (submitted). 진행도는 attempt 별 현존 N 기준.
+ */
+function bravoGradingAttemptList(PDO $db, int $examId): array {
+    $stmt = $db->prepare("
+        SELECT a.id, a.attempt_no, a.submitted_at, a.question_ids, a.member_id,
+               bm.real_name, c.cohort,
+               ag.total_score, ag.result
+        FROM bravo_attempts a
+        JOIN bootcamp_members bm ON a.member_id = bm.id
+        JOIN cohorts c ON bm.cohort_id = c.id
+        LEFT JOIN bravo_attempt_grades ag ON ag.attempt_id = a.id
+        WHERE a.exam_id = ? AND a.status = 'submitted'
+        ORDER BY a.submitted_at, a.id
+    ");
+    $stmt->execute([$examId]);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $attemptRow = ['id' => (int)$r['id'], 'question_ids' => $r['question_ids']];
+        $validQids = bravoGradingQuestionIds($db, $attemptRow);
+        $grades = bravoGradingValidGrades($db, $attemptRow);
+        $out[] = [
+            'attempt_id' => (int)$r['id'],
+            'member_name' => $r['real_name'],
+            'cohort' => $r['cohort'],
+            'attempt_no' => (int)$r['attempt_no'],
+            'submitted_at' => $r['submitted_at'],
+            'graded_count' => count($grades),
+            'total_count' => count($validQids),
+            'confirmed' => $r['total_score'] !== null ? ['total_score' => (float)$r['total_score'], 'result' => $r['result']] : null,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * 채점 상세: 문항 카드 데이터 (정답 포함 — 관리자 전용) + 기존 판정 + 확정 정보.
+ */
+function bravoGradingDetail(PDO $db, array $attempt, array $exam): array {
+    $attemptId = (int)$attempt['id'];
+    $level = (int)$exam['bravo_level'];
+    $validQids = bravoGradingQuestionIds($db, $attempt);
+    $grades = bravoGradingValidGrades($db, $attempt);
+
+    $items = [];
+    if ($validQids) {
+        $place = implode(',', array_fill(0, count($validQids), '?'));
+        $qStmt = $db->prepare("
+            SELECT id, question_type, korean_text, english_text, accepted_answers, target_chunks,
+                   reference_speech_sec, response_time_limit_sec
+            FROM bravo_questions WHERE id IN ($place)
+        ");
+        $qStmt->execute($validQids);
+        $qById = [];
+        foreach ($qStmt->fetchAll(PDO::FETCH_ASSOC) as $q) $qById[(int)$q['id']] = $q;
+
+        $aStmt = $db->prepare("SELECT id, question_id, audio_mime, duration_ms, retake_used, answered_at FROM bravo_answers WHERE attempt_id = ?");
+        $aStmt->execute([$attemptId]);
+        $aByQid = [];
+        foreach ($aStmt->fetchAll(PDO::FETCH_ASSOC) as $a) $aByQid[(int)$a['question_id']] = $a;
+
+        foreach ($validQids as $seq => $qid) {
+            if (!isset($qById[$qid]) || !isset($aByQid[$qid])) continue;
+            $g = $grades[$qid] ?? null;
+            $items[] = [
+                'answer_id' => (int)$aByQid[$qid]['id'],
+                'seq' => $seq,
+                'question' => $qById[$qid],
+                'answer' => [
+                    'audio_mime' => $aByQid[$qid]['audio_mime'],
+                    'duration_ms' => $aByQid[$qid]['duration_ms'] !== null ? (int)$aByQid[$qid]['duration_ms'] : null,
+                    'retake_used' => (int)$aByQid[$qid]['retake_used'],
+                    'answered_at' => $aByQid[$qid]['answered_at'],
+                ],
+                'grade' => $g ? [
+                    'accuracy' => $g['accuracy'], 'chunk_ok' => (int)$g['chunk_ok'],
+                    'response_rating' => $g['response_rating'], 'fluency_rating' => $g['fluency_rating'],
+                    'completion_ok' => $g['completion_ok'] !== null ? (int)$g['completion_ok'] : null,
+                    'score' => (float)$g['score'], 'memo' => $g['memo'],
+                ] : null,
+            ];
+        }
+    }
+
+    $confirmed = bravoAttemptGradeGet($db, $attemptId);
+    return [
+        'attempt' => ['id' => $attemptId, 'attempt_no' => (int)$attempt['attempt_no'], 'submitted_at' => $attempt['submitted_at']],
+        'exam' => ['id' => (int)$exam['id'], 'title' => $exam['title'], 'bravo_level' => $level, 'status' => $exam['status']],
+        'passing_score' => bravoGradingPassingScore($db, $level),
+        'weights' => BRAVO_GRADE_WEIGHTS[$level] ?? null,
+        'items' => $items,
+        'summary' => bravoGradingSummary($db, $attempt, $level),
+        'confirmed' => $confirmed ? [
+            'total_score' => (float)$confirmed['total_score'], 'passing_score' => (float)$confirmed['passing_score'],
+            'result' => $confirmed['result'], 'result_overridden' => (int)$confirmed['result_overridden'],
+            'override_reason' => $confirmed['override_reason'], 'memo' => $confirmed['memo'],
+            'confirmed_at' => $confirmed['confirmed_at'],
+        ] : null,
+    ];
+}

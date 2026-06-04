@@ -360,7 +360,7 @@ function bravoStatusAttempts(PDO $db, int $examId, string $memberKey, int $limit
 
 /**
  * 시험 삭제 (하드). 연결된 문제 배정(bravo_exam_questions)·OT(bravo_exam_ot)·
- * 응시 기록(bravo_attempts/bravo_answers + 녹음 파일) 도 함께 삭제.
+ * 응시 기록(bravo_attempts/bravo_answers/bravo_answer_grades/bravo_attempt_grades + 녹음 파일) 도 함께 삭제.
  */
 function bravoExamDelete(PDO $db, int $id): void {
     $aStmt = $db->prepare("SELECT id FROM bravo_attempts WHERE exam_id = ?");
@@ -372,6 +372,8 @@ function bravoExamDelete(PDO $db, int $id): void {
     try {
         if ($attemptIds) {
             $place = implode(',', array_fill(0, count($attemptIds), '?'));
+            $db->prepare("DELETE FROM bravo_answer_grades WHERE attempt_id IN ($place)")->execute($attemptIds);
+            $db->prepare("DELETE FROM bravo_attempt_grades WHERE attempt_id IN ($place)")->execute($attemptIds);
             $db->prepare("DELETE FROM bravo_answers WHERE attempt_id IN ($place)")->execute($attemptIds);
             $db->prepare("DELETE FROM bravo_attempts WHERE exam_id = ?")->execute([$id]);
         }
