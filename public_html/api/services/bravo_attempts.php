@@ -13,6 +13,8 @@ if (!defined('BRAVO_UPLOAD_ROOT')) {
 }
 
 const BRAVO_AUDIO_MAX_BYTES = 10 * 1024 * 1024; // 10MB (1분 opus/aac ≈ 0.5~1MB)
+// ⚠️ php upload_max_filesize/post_max_size 가 이 값 이상이어야 함 (미만이면 $_FILES 가 비어
+//    "녹음 파일이 없습니다" 로 떨어짐 — 현재 서버 2G 확인됨)
 
 /**
  * 실측 MIME → 저장 확장자. 미지원이면 null.

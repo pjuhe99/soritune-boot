@@ -264,7 +264,7 @@ case 'bravo_answer_save':
     $attempt = bravoAttemptForMember($db, $attemptId, (int)$s['member_id']);
     if (!$attempt) jsonError('응시 기록을 찾을 수 없습니다.', 404);
     if ($attempt['status'] !== 'in_progress') jsonError('이미 제출된 응시입니다.');
-    $exStmt = $db->prepare("SELECT * FROM bravo_exams WHERE id = ?");
+    $exStmt = $db->prepare("SELECT id, exam_mode, start_at, end_at, status FROM bravo_exams WHERE id = ?");
     $exStmt->execute([(int)$attempt['exam_id']]);
     $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
     if (!$exam || $exam['status'] !== 'open' || !bravoAttemptSavePeriodOk($exam)) {
