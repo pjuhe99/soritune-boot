@@ -78,14 +78,16 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 | 상태 | 표시 |
 |------|------|
 | 응시가능 + open + 잔여>0 + in_progress 없음 | [도전하기] 버튼 (+ `n/limit회 사용` 표기) |
-| in_progress attempt 존재 | [이어하기] 버튼 + 진행도 `답변 k / 총 N` |
+| in_progress attempt 존재 (기간 내) | [이어하기] 버튼 + 진행도 `답변 k / 총 N` |
+| in_progress + **전 문항 답안 완료** (기간 무관) | [제출 마무리] 버튼 — submit만 호출 (마감 직전 마지막 업로드 후 제출 못 누른 케이스 구제. §5 submit은 기간 체크 없음) |
+| in_progress + 미완료 + 기간 만료 | "응시 기간 종료 (미제출)" — 이어하기 불가, 부분 답안은 보존 |
 | 해당 시험에 submitted attempt 존재 | "제출완료 — 결과 발표 대기" (+발표일). 잔여 횟수가 남아도 같은 시험 재응시 버튼은 미노출(합격 후 재응시 불가 취지 — 채점 전이므로 보수적으로 잠금; 불합격 재응시는 결과 공개 슬라이스에서) |
 | 잔여 0회 | "응시 횟수 소진 (limit/limit)" |
 
 ### 4-2. OT 화면 ([도전하기] 클릭)
 
 1. `bravo_exam_ot` 표시: intro_text, type1/2/3_text(해당 등급에 출제되는 유형만), video_url 있으면 외부 링크.
-2. **마이크 테스트 (필수 관문):** 3초 녹음 → 로컬 재생(업로드 없음). MediaRecorder 포맷 협상(`audio/webm;codecs=opus` → 미지원 시 `audio/mp4`)이 여기서 함께 검증됨. 성공해야 다음 단계 활성화. getUserMedia 거부/미지원 시 안내 문구 + 진행 차단.
+2. **마이크 테스트 (UX 관문 — 클라이언트 강제):** 3초 녹음 → 로컬 재생(업로드 없음). MediaRecorder 포맷 협상(`audio/webm;codecs=opus` → 미지원 시 `audio/mp4`)이 여기서 함께 검증됨. 성공해야 다음 단계 활성화. getUserMedia 거부/미지원 시 안내 문구 + 진행 차단. **서버는 마이크테스트 통과 여부를 검증하지 않음(의도된 설계)** — 프론트 우회로 start를 직접 호출해 건너뛸 수 있으나, 녹음 불가 상태로 응시하면 불이익은 본인 귀책이며 보안·데이터 무결성과 무관.
 3. **필수 확인 체크** (`require_check=1`인 시험만): 체크해야 [응시 시작] 활성화.
 4. 시작 직전 경고: "시작하면 응시 1회가 차감됩니다. 중도 이탈 시 시험 기간 내 이어하기가 가능합니다."
 5. OT 레코드가 없는 시험은 OT 내용 없이 마이크테스트+시작 단계만 표시.
@@ -115,13 +117,13 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 | case | method | 요청 → 응답 | 추가 검증 |
 |------|--------|------------|----------|
 | `bravo_exam_intro` | GET | `exam_id` → `{exam, ot, question_count, attempts:{used,limit,remaining}, resume:{attempt_id,answered_count}|null}` | 공통 검증만 |
-| `bravo_attempt_start` | POST | `{exam_id, ot_checked}` → `{attempt_id, attempt_no, questions:[...], answered_ids:[...]}` | **in_progress 존재 시 그 attempt 반환(이어하기 겸용, 새 차감 없음)**. 신규 생성 시: 잔여>0 (`SELECT COUNT(*) ... FOR UPDATE` 트랜잭션 가드), require_check=1이면 ot_checked truthy 필수(ot_checked_at 기록), 배정 스냅샷 생성(0건이면 거부) |
-| `bravo_answer_save` | POST multipart | `attempt_id, question_id, duration_ms, retake(0/1), audio(file)` → `{saved:true, answered_count}` | attempt 소유(user_id 일치)+in_progress+기간내, question_id ∈ 스냅샷, 신규 저장 또는 재녹음 교체(기존 행 retake_used=0일 때만), MIME 화이트리스트(webm/mp4/ogg — 서버는 finfo 실측+확장자 매핑)+크기≤10MB+is_uploaded_file |
-| `bravo_attempt_submit` | POST | `{attempt_id}` → `{submitted:true}` | 소유+in_progress+기간내, **스냅샷 전 문항 답안 존재** (미답 시 `missing:[qid...]` 반환 거부), status=submitted+submitted_at |
-| `bravo_status` (기존 확장) | GET | levels[]에 `attempts:{used,limit,in_progress:{attempt_id,answered,total}|null,submitted:bool}` 추가 | 기존 필드 무변경 |
+| `bravo_attempt_start` | POST | `{exam_id, ot_checked}` → `{attempt_id, attempt_no, questions:[...], answered_ids:[...]}` | **in_progress 존재 시 그 attempt 반환(이어하기 겸용, 새 차감 없음)**. 신규 생성 시: 잔여>0 (`SELECT COUNT(*) ... FOR UPDATE` 트랜잭션 가드), require_check=1이면 ot_checked truthy 필수(ot_checked_at 기록), 배정 스냅샷 생성(0건이면 거부). **동시 시작 race**: 첫 attempt가 없는 상태의 동시 요청은 FOR UPDATE 만으로 직렬화가 보장되지 않으므로(빈 범위), INSERT 가 UNIQUE(exam_id,user_id,attempt_no) duplicate key(SQLSTATE 23000)로 실패하면 **catch 후 해당 (exam_id,user_id)의 in_progress attempt 를 재조회해 반환** (재조회도 없으면 1회 attempt_no 재계산 재시도 후 에러) |
+| `bravo_answer_save` | POST multipart | `attempt_id, question_id, duration_ms, retake(0/1), audio(file)` → `{saved:true, answered_count, all_answered:bool}` | attempt 소유(user_id 일치)+in_progress+**기간내**, question_id ∈ 스냅샷, 신규 저장 또는 재녹음 교체(기존 행 retake_used=0일 때만), MIME 화이트리스트(webm/mp4/ogg — 서버는 finfo 실측+확장자 매핑)+크기≤10MB+is_uploaded_file |
+| `bravo_attempt_submit` | POST | `{attempt_id}` → `{submitted:true}` | 소유+in_progress, **스냅샷 전 문항 답안 존재** (미답 시 `missing:[qid...]` 반환 거부), status=submitted+submitted_at. **기간 체크 없음(의도)**: 답안은 기간 내에만 저장 가능(save가 가드)하므로 전 문항 완비 자체가 기간 내 완료의 증명 — 마감 몇 초 차이로 [최종 제출]이 막혀 차감만 남는 봉쇄를 방지. 미완료 attempt는 기간 후 save 가 막히므로 영원히 제출 불가(=미제출 종료) |
+| `bravo_status` (기존 확장) | GET | levels[]에 `attempts:{exam_id,used,limit,in_progress:{attempt_id,answered,total}|null,submitted:bool}` 추가 | 기존 필드 무변경. **attempts 의 기준 축 = 그 레벨 카드에 표시된 단일 시험(exam_id)** — bravoMemberStatus 는 레벨당 시험 1건(open 우선→최신 id)만 고르므로 used/in_progress/submitted 전부 그 exam_id 로 한정 집계. 매칭 시험이 없으면 attempts=null |
 
 - 문제 응답 필드 최소화: `id, seq, question_type, korean_text, target_chunks, reference_speech_sec, response_time_limit_sec`. **english_text/accepted_answers 미포함.**
-- 기간 만료 시 intro/start/save/submit 전부 거부. in_progress인 채 만료된 attempt는 그대로 방치(차감 유지, 부분 답안 보존 — 다음 슬라이스에서 관리자 열람).
+- 기간 만료 시 intro/start/save 거부 (submit 은 위 표대로 기간 체크 없음 — 완비된 attempt 의 마무리 제출 허용). 미완료인 채 만료된 attempt 는 그대로 종료(차감 유지, 부분 답안 보존 — 다음 슬라이스에서 관리자 열람).
 - jsonSuccess 평탄화 주의: JS는 `r.attempt_id` 등 직접 접근 (`r.data.*` 아님).
 
 ## 6. 녹음 (프론트, 신규 `js/member-bravo-exam.js`)
@@ -142,7 +144,8 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 
 ## 8. 에러 처리·엣지 케이스
 
-- 동시 시작(중복 클릭/탭 2개): UNIQUE(exam_id,user_id,attempt_no) + FOR UPDATE COUNT → 한쪽만 생성, 다른 쪽은 기존 in_progress 반환.
+- 동시 시작(중복 클릭/탭 2개): UNIQUE(exam_id,user_id,attempt_no) + FOR UPDATE COUNT + **duplicate key catch→in_progress 재조회 반환** (§5 start 참조) → 한쪽만 생성, 다른 쪽은 기존 attempt 수신.
+- 마감 직전 완주: 마지막 답안이 기간 내 업로드됐다면 [최종 제출]은 기간 후에도 성공 (§5 submit). 카드의 [제출 마무리] 버튼이 동일 경로 — 제출 화면을 못 본 채 이탈해도 구제됨.
 - 재녹음 2회 시도(클라이언트 우회): 서버가 retake_used=1 행 교체 거부.
 - 스냅샷 밖 question_id 업로드: 거부.
 - 다른 회원 attempt 접근: user_id 불일치 거부.
@@ -156,7 +159,8 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 - `tests/bravo_attempts_schema_invariants.php`: 2테이블 컬럼/NOT NULL/UNIQUE/인덱스.
 - `tests/bravo_attempt_test.php` (서비스 통합):
   - 공통 검증: 미존재/preparing/closed 시험, 기간 밖, cohort 대상 불일치, 자격 미달 → 거부
-  - start: 정상 생성+스냅샷 동결, 배정 0건 거부, require_check 미체크 거부, in_progress 재호출 시 동일 attempt 반환(차감 없음), limit 도달 시 거부, attempt_no 증가
+  - start: 정상 생성+스냅샷 동결, 배정 0건 거부, require_check 미체크 거부, in_progress 재호출 시 동일 attempt 반환(차감 없음), limit 도달 시 거부, attempt_no 증가, duplicate key 시 기존 in_progress 반환(단위 테스트로 catch 경로 검증)
+  - submit 기간 무관: 전 문항 완비 attempt 는 기간 만료 후에도 submit 성공, 미완비는 기간 내라도 missing 거부
   - answer: 정상 저장, 스냅샷 밖 거부, 재녹음 1회 교체+2회 거부, 타인 attempt 거부, submitted 후 거부 (파일 I/O는 tmp 경로 주입으로 검증)
   - submit: 전 문항 완료 시 성공, 미답 목록 반환 거부, 중복 submit 거부
   - cascade: bravoExamDelete → attempts/answers 0건
