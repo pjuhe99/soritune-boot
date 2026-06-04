@@ -8,6 +8,8 @@ const AdminBravoGradingApp = (() => {
     let detail = null;           // bravo_grading_detail 응답
     let currentAttemptId = 0;
     let pending = {};            // answer_id → 진행 중 판정 선택값 (저장 전)
+    let saving = {};             // answer_id → true (POST in-flight)
+    let cancelling = false;      // 확정 취소 더블클릭 가드
 
     const ACCURACY = [['correct', '정답'], ['partial', '부분'], ['wrong', '오답']];
     const RATING = [['good', '좋음'], ['normal', '보통'], ['poor', '미흡']];
@@ -193,6 +195,31 @@ const AdminBravoGradingApp = (() => {
         });
     }
 
+    function highlightJudge(answerId, field, val) {
+        const card = root.querySelector(`.grading-card[data-answer="${answerId}"]`);
+        if (!card) return;
+        card.querySelectorAll(`.grading-judge[data-field="${field}"]`).forEach(btn => {
+            const isSel = (field === 'chunk_ok' || field === 'completion_ok')
+                ? parseInt(btn.dataset.val, 10) === val
+                : btn.dataset.val === val;
+            btn.classList.toggle('on', isSel);
+            btn.classList.toggle('btn-primary', isSel);
+        });
+    }
+
+    function refreshProgress() {
+        const s = detail.summary;
+        const el = root.querySelector('#grading-progress');
+        if (el) el.textContent = s.auto_result === null
+            ? `판정 ${s.graded_count}/${s.total_count} — 전 문항 판정 후 확정 가능`
+            : `총점 ${s.total_so_far} / 합격선 ${detail.passing_score} → 자동 판정: ${s.auto_result === 'pass' ? '합격' : '불합격'}`;
+        const btn = root.querySelector('#grading-confirm-btn');
+        if (btn) btn.disabled = s.auto_result === null;
+        const resultSel = root.querySelector('#grading-result');
+        const reason = root.querySelector('#grading-reason');
+        if (resultSel && reason) reason.style.display = (resultSel.value && resultSel.value !== s.auto_result) ? '' : 'none';
+    }
+
     function judgmentComplete(sel, level) {
         return ['accuracy', 'chunk_ok', 'response_rating', 'fluency_rating']
             .every(k => sel[k] !== undefined && sel[k] !== null)
@@ -214,21 +241,40 @@ const AdminBravoGradingApp = (() => {
         } : {};
         pending[answerId] = Object.assign({}, base, pending[answerId] || {}, { [field]: val });
 
-        if (!judgmentComplete(pending[answerId], level)) { renderDetail(); return; }
+        // 판정 미완료 — 버튼 강조만 인라인 갱신, 재렌더 없음
+        if (!judgmentComplete(pending[answerId], level)) {
+            highlightJudge(answerId, field, val);
+            return;
+        }
 
+        // POST in-flight 가드
+        if (saving[answerId]) return;
+        saving[answerId] = true;
+        highlightJudge(answerId, field, val);
+
+        const snapshot = Object.assign({}, pending[answerId]);
         const memoEl = root.querySelector(`.grading-memo[data-answer="${answerId}"]`);
-        const payload = Object.assign({ answer_id: answerId, memo: memoEl ? memoEl.value : '' }, pending[answerId]);
+        const payload = Object.assign({ answer_id: answerId, memo: memoEl ? memoEl.value : '' }, snapshot);
         const r = await App.post('/api/admin.php?action=bravo_answer_grade_save', payload);
+        delete saving[answerId];
+
+        // POST 실패 시에만 전면 재렌더 (서버 상태로 복원 — 오디오 끊김보다 정확성 우선)
         if (!r || r.success === false) { renderDetail(); return; }
-        item.grade = Object.assign({}, pending[answerId], { score: r.score, memo: payload.memo || null });
+
+        item.grade = Object.assign({}, snapshot, { score: r.score, memo: payload.memo || null });
         delete pending[answerId];
         detail.summary = { graded_count: r.graded_count, total_count: r.total_count, total_so_far: r.total_so_far, auto_result: r.auto_result };
-        renderDetail();
+
+        // 인라인 갱신 (전면 재렌더 금지 — 오디오 재생 보존)
+        const card = root.querySelector(`.grading-card[data-answer="${answerId}"]`);
+        if (card) card.querySelector('.grading-score').innerHTML = '점수 <strong>' + r.score + '</strong>';
+        refreshProgress();
     }
 
     async function onMemoBlur(e) {
         const inp = e.currentTarget;
         const answerId = parseInt(inp.dataset.answer, 10);
+        if (saving[answerId]) return; // 판정 POST와 메모 POST 경합 방지
         const item = detail.items.find(i => i.answer_id === answerId);
         if (!item || !item.grade) return; // 판정 전 메모는 판정 저장 시 함께 전송됨
         if ((item.grade.memo || '') === inp.value) return;
@@ -260,7 +306,10 @@ const AdminBravoGradingApp = (() => {
     }
 
     async function onCancelConfirm() {
+        if (cancelling) return;
+        cancelling = true;
         const r = await App.post('/api/admin.php?action=bravo_attempt_confirm', { attempt_id: currentAttemptId, action: 'cancel' });
+        cancelling = false;
         if (!r || r.success === false) return;
         Toast.success('확정이 취소되었습니다.');
         await openDetail(currentAttemptId);
