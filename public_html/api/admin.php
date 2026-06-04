@@ -19,6 +19,7 @@ require_once __DIR__ . '/services/bravo.php';
 require_once __DIR__ . '/services/bravo_questions.php';
 require_once __DIR__ . '/services/bravo_exam_questions.php';
 require_once __DIR__ . '/services/bravo_attempts.php';
+require_once __DIR__ . '/services/bravo_grading.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -769,6 +770,121 @@ case 'bravo_exam_question_save':
     $count = bravoExamQuestionSet($db, $examId, $qids);
     jsonSuccess(['count' => $count], '저장되었습니다.');
     break;
+
+case 'bravo_grading_exam_list':
+    requireAdmin(['operation']);
+    $db = getDB();
+    jsonSuccess(['exams' => bravoGradingExamList($db)]);
+    break;
+
+case 'bravo_grading_attempt_list':
+    requireAdmin(['operation']);
+    $examId = (isset($_GET['exam_id']) && is_numeric($_GET['exam_id'])) ? (int)$_GET['exam_id'] : 0;
+    if ($examId < 1) jsonError('exam_id가 필요합니다.');
+    $db = getDB();
+    jsonSuccess(['attempts' => bravoGradingAttemptList($db, $examId)]);
+    break;
+
+case 'bravo_grading_detail':
+    requireAdmin(['operation']);
+    $attemptId = (isset($_GET['attempt_id']) && is_numeric($_GET['attempt_id'])) ? (int)$_GET['attempt_id'] : 0;
+    if ($attemptId < 1) jsonError('attempt_id가 필요합니다.');
+    $db = getDB();
+    $attempt = bravoAttemptGet($db, $attemptId);
+    if (!$attempt || $attempt['status'] !== 'submitted') jsonError('채점 대상 응시를 찾을 수 없습니다.', 404);
+    $exStmt = $db->prepare("SELECT id, title, bravo_level, status FROM bravo_exams WHERE id = ?");
+    $exStmt->execute([(int)$attempt['exam_id']]);
+    $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$exam) jsonError('시험을 찾을 수 없습니다.', 404);
+    $mStmt = $db->prepare("
+        SELECT bm.real_name, c.cohort FROM bravo_attempts a
+        JOIN bootcamp_members bm ON a.member_id = bm.id
+        JOIN cohorts c ON bm.cohort_id = c.id WHERE a.id = ?
+    ");
+    $mStmt->execute([$attemptId]);
+    $member = $mStmt->fetch(PDO::FETCH_ASSOC) ?: ['real_name' => null, 'cohort' => null];
+    jsonSuccess(bravoGradingDetail($db, $attempt, $exam) + ['member' => ['name' => $member['real_name'], 'cohort' => $member['cohort']]]);
+    break;
+
+case 'bravo_answer_grade_save':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $answerId = (isset($input['answer_id']) && is_numeric($input['answer_id'])) ? (int)$input['answer_id'] : 0;
+    if ($answerId < 1) jsonError('answer_id가 필요합니다.');
+    $db = getDB();
+    $aStmt = $db->prepare("SELECT attempt_id FROM bravo_answers WHERE id = ?");
+    $aStmt->execute([$answerId]);
+    $attemptId = (int)$aStmt->fetchColumn();
+    if ($attemptId < 1) jsonError('답안을 찾을 수 없습니다.', 404);
+    $attempt = bravoAttemptGet($db, $attemptId);
+    $exStmt = $db->prepare("SELECT id, bravo_level FROM bravo_exams WHERE id = ?");
+    $exStmt->execute([(int)$attempt['exam_id']]);
+    $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$exam) jsonError('시험을 찾을 수 없습니다.', 404);
+    $r = bravoGradeSave($db, $attempt, $exam, $answerId, $input, (int)$admin['admin_id']);
+    if (isset($r['error'])) jsonError($r['error']);
+    jsonSuccess($r, '저장되었습니다.');
+    break;
+
+case 'bravo_attempt_confirm':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $attemptId = (isset($input['attempt_id']) && is_numeric($input['attempt_id'])) ? (int)$input['attempt_id'] : 0;
+    if ($attemptId < 1) jsonError('attempt_id가 필요합니다.');
+    $db = getDB();
+    $attempt = bravoAttemptGet($db, $attemptId);
+    if (!$attempt) jsonError('응시를 찾을 수 없습니다.', 404);
+    $exStmt = $db->prepare("SELECT id, title, bravo_level, status FROM bravo_exams WHERE id = ?");
+    $exStmt->execute([(int)$attempt['exam_id']]);
+    $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$exam) jsonError('시험을 찾을 수 없습니다.', 404);
+    if (($input['action'] ?? '') === 'cancel') {
+        $r = bravoAttemptConfirmCancel($db, $attempt, $exam);
+        if (isset($r['error'])) jsonError($r['error']);
+        jsonSuccess($r, '확정이 취소되었습니다.');
+    }
+    $r = bravoAttemptConfirm($db, $attempt, $exam, $input, (int)$admin['admin_id']);
+    if (isset($r['error'])) jsonError($r['error']);
+    jsonSuccess($r, '확정되었습니다.');
+    break;
+
+case 'bravo_answer_audio':
+    requireAdmin(['operation']);
+    $answerId = (isset($_GET['answer_id']) && is_numeric($_GET['answer_id'])) ? (int)$_GET['answer_id'] : 0;
+    if ($answerId < 1) jsonError('answer_id가 필요합니다.');
+    $db = getDB();
+    $aStmt = $db->prepare("SELECT audio_path, audio_mime FROM bravo_answers WHERE id = ?");
+    $aStmt->execute([$answerId]);
+    $row = $aStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) jsonError('답안을 찾을 수 없습니다.', 404);
+    $path = BRAVO_UPLOAD_ROOT . '/' . $row['audio_path'];
+    $real = realpath($path);
+    $root = realpath(BRAVO_UPLOAD_ROOT);
+    if ($real === false || $root === false || !str_starts_with($real, $root . DIRECTORY_SEPARATOR)) {
+        jsonError('녹음 파일이 없습니다.', 404);
+    }
+    $size = (int)filesize($real);
+    // JSON 아님 — 바이너리 스트리밍 (admin.php 상단의 JSON Content-Type 을 덮어씀)
+    header('Content-Type: ' . $row['audio_mime']);
+    header('Accept-Ranges: bytes');
+    header('Cache-Control: private, max-age=3600');
+    $range = bravoAudioRangeParse($_SERVER['HTTP_RANGE'] ?? null, $size);
+    if ($range !== null) {
+        [$start, $end] = $range;
+        http_response_code(206);
+        header("Content-Range: bytes {$start}-{$end}/{$size}");
+        header('Content-Length: ' . ($end - $start + 1));
+        $fp = fopen($real, 'rb');
+        fseek($fp, $start);
+        echo fread($fp, $end - $start + 1);
+        fclose($fp);
+    } else {
+        header('Content-Length: ' . $size);
+        readfile($real);
+    }
+    exit;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────
 
