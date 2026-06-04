@@ -27,10 +27,16 @@ foreach (['id','exam_id','question_id','display_order','created_at'] as $col) {
 }
 t('exam_id NOT NULL', $cols['exam_id']['Null'] === 'NO');
 t('question_id NOT NULL', $cols['question_id']['Null'] === 'NO');
+t('display_order NOT NULL', $cols['display_order']['Null'] === 'NO');
+t('created_at NOT NULL', $cols['created_at']['Null'] === 'NO');
 t('display_order 기본 0', (string)$cols['display_order']['Default'] === '0');
 
 $idx = $db->query("SHOW INDEX FROM bravo_exam_questions WHERE Key_name='uk_beq_exam_question'")->fetchAll();
 t('(exam_id,question_id) UNIQUE', count($idx) === 2 && (int)$idx[0]['Non_unique'] === 0);
+$ix1 = $db->query("SHOW INDEX FROM bravo_exam_questions WHERE Key_name='idx_beq_exam'")->fetchAll();
+t('idx_beq_exam 인덱스 존재', count($ix1) === 1);
+$ix2 = $db->query("SHOW INDEX FROM bravo_exam_questions WHERE Key_name='idx_beq_question'")->fetchAll();
+t('idx_beq_question 인덱스 존재', count($ix2) === 1);
 
 echo "\n결과: {$pass} pass, {$fail} fail\n";
 exit($fail > 0 ? 1 : 0);
