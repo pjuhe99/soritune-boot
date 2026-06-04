@@ -198,6 +198,18 @@ try {
     $own = bravoAttemptForMember($db, (int)$pAttempt['id'], $memberId2);
     t('타인 attempt 거부', $own === null);
 
+    // ── 응시 횟수 한도 (FOR UPDATE 경로): submitted 잠금이 먼저 걸리지 않는 인위 상태로 검증 ──
+    // 현 상태값 체계(in_progress/submitted)에선 submitted 잠금이 limit 보다 먼저 걸려 자연 도달 불가.
+    // 불합격 재응시(결과 공개 슬라이스)가 열리면 이 경로가 활성화됨.
+    // 여기선 submitted 행을 미리 삽입한 상태에서 재시작 시도 → 잠금 우선 거부를 명시 단언.
+    $limitExam = bravoExamCreate($db, ['title'=>"{$tag} 한도",'bravo_level'=>1,'exam_mode'=>'always','attempt_limit'=>1,'target_type'=>'all','status'=>'open'], 99);
+    bravoExamQuestionSet($db, $limitExam, [$q1]);
+    $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids, status, submitted_at) VALUES (?,?,?,1,'[]','submitted',NOW())")
+       ->execute([$limitExam, $mk, $memberId]);
+    $lAcc = bravoAttemptExamAccess($db, $memberId, $limitExam);
+    $r = bravoAttemptStart($db, $lAcc['exam'], $mrow, $mk, false);
+    t('한도 소진+제출 → 잠금 우선 거부', isset($r['error']));
+
     // ── cascade: 시험 삭제 → attempts/answers/파일 정리 ──
     $delDir = BRAVO_UPLOAD_ROOT . '/answers/' . (int)$pAttempt['id'];
     t('cascade 전 파일 존재', is_dir($delDir));
@@ -207,6 +219,20 @@ try {
     $cnt = (int)$db->query("SELECT COUNT(*) FROM bravo_answers WHERE attempt_id = " . (int)$pAttempt['id'])->fetchColumn();
     t('시험 삭제 → answers 0건', $cnt === 0);
     t('시험 삭제 → 녹음 디렉토리 정리', !is_dir($delDir));
+
+    // ── submit: 문제 전부 삭제 후 → 빈 출제 가드 거부 ──
+    // bravoAttemptQuestions 는 스냅샷 question_ids ∩ 현존 bravo_questions 기준이므로
+    // 문제 행 자체를 삭제해야 빈 배열로 유도됨 (exam_questions 배정 제거만으론 불충분).
+    $noqExam = bravoExamCreate($db, ['title'=>"{$tag} 빈출제submit",'bravo_level'=>1,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'open'], 99);
+    $tmpQ = bravoQuestionCreate($db, ['question_type'=>1,'bravo_level'=>1,'korean_text'=>"{$tag} tmpq",'english_text'=>'tmpq','difficulty'=>'easy','is_active'=>1], 99);
+    bravoExamQuestionSet($db, $noqExam, [$tmpQ]);
+    $nqAcc = bravoAttemptExamAccess($db, $memberId, $noqExam);
+    $r = bravoAttemptStart($db, $nqAcc['exam'], $mrow, $mk, false);
+    $nqAttempt = $r['attempt'];
+    // 문제 행 자체 삭제 → bravoAttemptQuestions 가 빈 배열 반환
+    bravoQuestionDelete($db, $tmpQ);
+    $r = bravoAttemptSubmit($db, $nqAttempt);
+    t('빈 출제 submit 거부', isset($r['error']) && !isset($r['missing']));
 
     // ── 업로드 검증 헬퍼 (finfo 는 실파일 기반이라 dummy 텍스트는 거부되는 것이 정상) ──
     $f = makeTmpAudio('plain-text');

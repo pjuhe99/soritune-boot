@@ -34,8 +34,8 @@ function bravoAnswerValidateUpload(array $file): array {
     if (!isset($file['tmp_name']) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         return ['error' => '녹음 업로드에 실패했습니다. 다시 시도해주세요.'];
     }
-    $size = (int)($file['size'] ?? 0);
-    if ($size <= 0 || $size > BRAVO_AUDIO_MAX_BYTES) {
+    $size = filesize($file['tmp_name']);
+    if ($size === false || $size <= 0 || $size > BRAVO_AUDIO_MAX_BYTES) {
         return ['error' => '녹음 파일 크기가 올바르지 않습니다.'];
     }
     $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']) ?: '';
@@ -55,7 +55,7 @@ function bravoAttemptExamAccess(PDO $db, int $memberId, int $examId): array {
     $ctx = bravoMemberContext($db, $memberId);
     if (!$ctx) return ['error' => '회원 정보를 찾을 수 없습니다.', 'code' => 404];
 
-    $stmt = $db->prepare("SELECT * FROM bravo_exams WHERE id = ?");
+    $stmt = $db->prepare("SELECT id, title, bravo_level, exam_mode, start_at, end_at, result_release_at, attempt_limit, target_type, target_cohort_id, status FROM bravo_exams WHERE id = ?");
     $stmt->execute([$examId]);
     $exam = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$exam) return ['error' => '시험을 찾을 수 없습니다.', 'code' => 404];
@@ -144,6 +144,8 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
     if ($owns) $db->beginTransaction();
     try {
         // 횟수 차감 race 가드 (코인 한도 FOR UPDATE 패턴)
+        // NOTE: 현 슬라이스 상태값(in_progress/submitted)에선 submitted 잠금이 먼저 걸려
+        // 이 분기 자연 도달 불가 — 불합격 재응시(결과 공개 슬라이스)가 열리면 활성화되는 방어선.
         $cnt = $db->prepare("SELECT COUNT(*) FROM bravo_attempts WHERE exam_id = ? AND member_key = ? FOR UPDATE");
         $cnt->execute([$examId, $memberKey]);
         $used = (int)$cnt->fetchColumn();
@@ -226,7 +228,7 @@ function bravoAnswerStore(PDO $db, array $attempt, int $questionId, string $srcP
     }
 
     $dir = BRAVO_UPLOAD_ROOT . '/answers/' . $attemptId;
-    if (!is_dir($dir) && !mkdir($dir, 0750, true)) {
+    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
         return ['error' => '저장 공간 오류입니다. 관리자에게 문의해주세요.'];
     }
     $dest = $dir . '/' . $questionId . '.' . $ext;
@@ -271,6 +273,9 @@ function bravoAttemptSubmit(PDO $db, array $attempt): array {
     }
     $attemptId = (int)$attempt['id'];
     $required = array_map(fn($q) => (int)$q['id'], bravoAttemptQuestions($db, $attempt));
+    if (!$required) {
+        return ['error' => '출제된 문제가 없습니다. 관리자에게 문의해주세요.'];
+    }
     $answered = bravoAttemptAnsweredIds($db, $attemptId);
     $missing = array_values(array_diff($required, $answered));
     if ($missing) {
@@ -288,7 +293,7 @@ function bravoAttemptPurgeFiles(int $attemptId): void {
     $dir = BRAVO_UPLOAD_ROOT . '/answers/' . $attemptId;
     $real = realpath($dir);
     $root = realpath(BRAVO_UPLOAD_ROOT);
-    if ($real === false || $root === false || strpos($real, $root) !== 0) return;
+    if ($real === false || $root === false || !str_starts_with($real, $root . DIRECTORY_SEPARATOR)) return;
     foreach (glob($dir . '/*') ?: [] as $f) @unlink($f);
     @rmdir($dir);
 }
