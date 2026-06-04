@@ -277,33 +277,28 @@ function bravoExamUpdate(PDO $db, int $id, array $d): void {
 }
 
 /**
- * 시험 삭제 (하드). 연결된 문제 배정(bravo_exam_questions)·OT(bravo_exam_ot) 도 함께 삭제.
+ * 횟수 집계 키: user_id 우선, 없으면 p:<전화> 폴백. 순수.
  */
-function bravoExamDelete(PDO $db, int $id): void {
-    $db->prepare("DELETE FROM bravo_exam_questions WHERE exam_id = ?")->execute([$id]);
-    $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
-    $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
+function bravoAttemptMemberKey(array $memberRow): string {
+    $uid = trim((string)($memberRow['user_id'] ?? ''));
+    if ($uid !== '') return $uid;
+    return 'p:' . trim((string)($memberRow['phone'] ?? ''));
 }
 
 /**
- * 회원(bootcamp_members.id) 의 BRAVO 도전 상태.
- * 슬라이스1 자격 순수함수 재사용 + 등급별 매칭 시험(open 우선, preparing 비공개) 조회.
- * 반환: ['member'=>{real_name,nickname,cohort,effective_review_count}|null, 'levels'=>[{level,name,required_review_count,eligible,status,exam|null}]]
+ * 회원 BRAVO 컨텍스트: 회원행 + 유효회독 + 수동부여 + 자격 레벨. 회원 없으면 null.
+ * row: id, user_id, phone, cohort_id, real_name, nickname, cohort
  */
-function bravoMemberStatus(PDO $db, int $memberId): array {
+function bravoMemberContext(PDO $db, int $memberId): ?array {
     $mStmt = $db->prepare("
-        SELECT bm.user_id, bm.phone, bm.cohort_id, bm.real_name, bm.nickname, c.cohort
+        SELECT bm.id, bm.user_id, bm.phone, bm.cohort_id, bm.real_name, bm.nickname, c.cohort
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         WHERE bm.id = ?
     ");
     $mStmt->execute([$memberId]);
     $m = $mStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$m) {
-        return ['member' => null, 'levels' => []];
-    }
-    $userId   = $m['user_id'];
-    $cohortId = (int)$m['cohort_id'];
+    if (!$m) return null;
 
     $cStmt = $db->prepare("
         SELECT COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed
@@ -316,9 +311,9 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
     $completed = (int)$cStmt->fetchColumn();
 
     $override = null; $granted = [];
-    if (!empty($userId)) {
+    if (!empty($m['user_id'])) {
         $sStmt = $db->prepare("SELECT review_count_override, granted_levels FROM bravo_member_settings WHERE user_id = ?");
-        $sStmt->execute([$userId]);
+        $sStmt->execute([$m['user_id']]);
         $set = $sStmt->fetch(PDO::FETCH_ASSOC);
         if ($set) {
             $override = $set['review_count_override'] !== null ? (int)$set['review_count_override'] : null;
@@ -329,8 +324,77 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
     $levels   = bravoLoadLevels($db);
     $eligible = bravoEligibleLevels($override, $completed, $granted, $levels);
 
+    return [
+        'row'       => $m,
+        'completed' => $completed,
+        'override'  => $override,
+        'granted'   => $granted,
+        'levels'    => $levels,
+        'eligible'  => $eligible,
+    ];
+}
+
+/**
+ * 한 시험에 대한 이 사람(member_key)의 응시 현황 (status 카드용).
+ */
+function bravoStatusAttempts(PDO $db, int $examId, string $memberKey, int $limit): array {
+    $stmt = $db->prepare("SELECT id, status, question_ids FROM bravo_attempts WHERE exam_id = ? AND member_key = ? ORDER BY attempt_no");
+    $stmt->execute([$examId, $memberKey]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $used = count($rows); $submitted = false; $inProgress = null;
+    foreach ($rows as $a) {
+        if ($a['status'] === 'submitted') {
+            $submitted = true;
+        } elseif ($a['status'] === 'in_progress') {
+            $total = count(json_decode((string)$a['question_ids'], true) ?: []);
+            $cnt = $db->prepare("SELECT COUNT(*) FROM bravo_answers WHERE attempt_id = ?");
+            $cnt->execute([(int)$a['id']]);
+            $inProgress = ['attempt_id' => (int)$a['id'], 'answered' => (int)$cnt->fetchColumn(), 'total' => $total];
+        }
+    }
+    return ['exam_id' => $examId, 'used' => $used, 'limit' => $limit, 'in_progress' => $inProgress, 'submitted' => $submitted];
+}
+
+/**
+ * 시험 삭제 (하드). 연결된 문제 배정(bravo_exam_questions)·OT(bravo_exam_ot)·
+ * 응시 기록(bravo_attempts/bravo_answers + 녹음 파일) 도 함께 삭제.
+ */
+function bravoExamDelete(PDO $db, int $id): void {
+    $aStmt = $db->prepare("SELECT id FROM bravo_attempts WHERE exam_id = ?");
+    $aStmt->execute([$id]);
+    $attemptIds = array_map('intval', $aStmt->fetchAll(PDO::FETCH_COLUMN));
+    if ($attemptIds) {
+        $place = implode(',', array_fill(0, count($attemptIds), '?'));
+        $db->prepare("DELETE FROM bravo_answers WHERE attempt_id IN ($place)")->execute($attemptIds);
+        $db->prepare("DELETE FROM bravo_attempts WHERE exam_id = ?")->execute([$id]);
+        // 녹음 파일 정리 — bravo_attempts.php 가 로드된 경우에만 (bravo.php 단독 사용 시 DB 만 정리)
+        if (function_exists('bravoAttemptPurgeFiles')) {
+            foreach ($attemptIds as $aid) bravoAttemptPurgeFiles($aid);
+        }
+    }
+    $db->prepare("DELETE FROM bravo_exam_questions WHERE exam_id = ?")->execute([$id]);
+    $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
+    $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
+}
+
+/**
+ * 회원(bootcamp_members.id) 의 BRAVO 도전 상태.
+ * 슬라이스1 자격 순수함수 재사용 + 등급별 매칭 시험(open 우선, preparing 비공개) 조회.
+ * 반환: ['member'=>{real_name,nickname,cohort,effective_review_count}|null,
+ *        'levels'=>[{level,name,required_review_count,eligible,status,exam|null,attempts|null}]]
+ * exam 에 id/attempt_limit 포함(slice6), attempts 는 그 카드 시험(exam_id) 기준 집계.
+ */
+function bravoMemberStatus(PDO $db, int $memberId): array {
+    $ctx = bravoMemberContext($db, $memberId);
+    if (!$ctx) {
+        return ['member' => null, 'levels' => []];
+    }
+    $m = $ctx['row'];
+    $memberKey = bravoAttemptMemberKey($m);
+
     $exStmt = $db->prepare("
-        SELECT title, exam_mode, start_at, end_at, result_release_at, status
+        SELECT id, title, exam_mode, start_at, end_at, result_release_at, status, attempt_limit
         FROM bravo_exams
         WHERE bravo_level = ?
           AND (target_type = 'all' OR target_cohort_id = ?)
@@ -340,11 +404,12 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
     ");
 
     $out = [];
-    foreach ($levels as $lv) {
+    foreach ($ctx['levels'] as $lv) {
         $L = (int)$lv['level'];
-        $isElig = in_array($L, $eligible, true);
-        $exStmt->execute([$L, $cohortId]);
+        $isElig = in_array($L, $ctx['eligible'], true);
+        $exStmt->execute([$L, (int)$m['cohort_id']]);
         $exam = $exStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        $attempts = $exam ? bravoStatusAttempts($db, (int)$exam['id'], $memberKey, (int)$exam['attempt_limit']) : null;
         $out[] = [
             'level'                 => $L,
             'name'                  => $lv['name'],
@@ -352,6 +417,7 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
             'eligible'              => $isElig,
             'status'                => $isElig ? 'eligible' : 'ineligible',
             'exam'                  => $exam,
+            'attempts'              => $attempts,
         ];
     }
 
@@ -360,7 +426,7 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
             'real_name'              => $m['real_name'],
             'nickname'               => $m['nickname'],
             'cohort'                 => $m['cohort'],
-            'effective_review_count' => bravoEffectiveReviewCount($override, $completed),
+            'effective_review_count' => bravoEffectiveReviewCount($ctx['override'], $ctx['completed']),
         ],
         'levels' => $out,
     ];
