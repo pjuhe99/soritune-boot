@@ -18,6 +18,7 @@ require_once __DIR__ . '/services/notice.php';
 require_once __DIR__ . '/services/bravo.php';
 require_once __DIR__ . '/services/bravo_questions.php';
 require_once __DIR__ . '/services/bravo_exam_questions.php';
+require_once __DIR__ . '/services/bravo_attempts.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
