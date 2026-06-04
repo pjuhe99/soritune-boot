@@ -7,6 +7,8 @@ const AdminBravoExamApp = (() => {
     const STATUS = { preparing:'준비중', open:'오픈', closed:'종료', released:'결과발표' };
     const STATUS_KEYS = ['preparing','open','closed','released'];
 
+    const EQ_RECOMMENDED = { 1: {1:15,2:5,3:0}, 2: {1:8,2:7,3:5}, 3: {1:8,2:7,3:5} };
+
     async function init(adminSession, containerId) {
         container = document.getElementById(containerId);
         if (!container) return;
@@ -47,6 +49,7 @@ const AdminBravoExamApp = (() => {
                     <button class="btn btn-sm bravo-exam-edit" data-id="${e.id}">수정</button>
                     <button class="btn btn-sm btn-danger bravo-exam-del" data-id="${e.id}">삭제</button>
                     <button class="btn btn-sm bravo-exam-ot" data-id="${e.id}">OT</button>
+                    <button class="btn btn-sm bravo-exam-eq" data-id="${e.id}">문제</button>
                 </td>
             </tr>`).join('');
 
@@ -71,6 +74,8 @@ const AdminBravoExamApp = (() => {
             b.addEventListener('click', () => onDelete(parseInt(b.dataset.id, 10))));
         container.querySelectorAll('.bravo-exam-ot').forEach(b =>
             b.addEventListener('click', () => openOt(parseInt(b.dataset.id, 10))));
+        container.querySelectorAll('.bravo-exam-eq').forEach(b =>
+            b.addEventListener('click', () => openExamQuestions(parseInt(b.dataset.id, 10), false)));
     }
 
     function toLocal(v) { return v ? v.slice(0, 16).replace(' ', 'T') : ''; }
@@ -208,6 +213,60 @@ const AdminBravoExamApp = (() => {
         const r = await App.post('/api/admin.php?action=bravo_ot_save', payload);
         if (r && r.success !== false) { Toast.success('OT가 저장되었습니다.'); host.innerHTML = ''; }
         else Toast.error((r && r.error) || 'OT 저장 실패');
+    }
+
+    async function openExamQuestions(examId, showAll) {
+        const url = '/api/admin.php?action=bravo_exam_question_list&exam_id=' + examId + (showAll ? '&show_all=1' : '');
+        const r = await App.get(url);
+        if (!r || r.success === false) { Toast.error((r && r.error) || '불러오기 실패'); return; }
+        const assigned = new Set((r.assigned_ids || []).map(Number));
+        const cands = r.candidates || [];
+        const level = r.exam ? parseInt(r.exam.bravo_level, 10) : 0;
+        const host = container.querySelector('#bravo-exam-form');
+        if (!host) return;
+        editingId = null; // 시험 편집 모드 해제(같은 host 공유)
+        const rows = cands.map(q => `
+            <label class="bravo-eq-row">
+                <input type="checkbox" class="eq-chk" data-qid="${q.id}" data-type="${q.question_type}" ${assigned.has(parseInt(q.id, 10)) ? 'checked' : ''}>
+                유형 ${q.question_type} · BRAVO ${q.bravo_level} · ${App.esc((q.korean_text || '').slice(0, 30))} <small>(${App.esc(q.difficulty)})</small>
+            </label>`).join('');
+        host.innerHTML = `
+            <div class="bravo-eq-panel">
+                <h4>시험 #${examId} 문제 배정</h4>
+                <label><input type="checkbox" id="eq-showall" ${showAll ? 'checked' : ''}> 전체 등급·비활성 포함 보기</label>
+                <small class="eq-note">※ 보기 전환 시 저장 안 한 체크 변경은 초기화됩니다.</small>
+                <div class="eq-summary" id="eq-summary"></div>
+                <div class="eq-list">${rows || '<p>후보 문제가 없습니다.</p>'}</div>
+                <div><button class="btn btn-primary btn-sm" id="eq-save">배정 저장</button>
+                <button class="btn btn-sm" id="eq-cancel">닫기</button></div>
+            </div>`;
+        host.querySelector('#eq-showall').addEventListener('change', e => openExamQuestions(examId, e.target.checked));
+        host.querySelectorAll('.eq-chk').forEach(c => c.addEventListener('change', () => renderEqSummary(host, level)));
+        host.querySelector('#eq-save').addEventListener('click', () => saveExamQuestions(examId, host));
+        host.querySelector('#eq-cancel').addEventListener('click', () => { host.innerHTML = ''; });
+        renderEqSummary(host, level);
+    }
+
+    function renderEqSummary(host, level) {
+        const counts = { 1: 0, 2: 0, 3: 0 };
+        host.querySelectorAll('.eq-chk:checked').forEach(c => {
+            const t = parseInt(c.dataset.type, 10);
+            if (counts[t] !== undefined) counts[t]++;
+        });
+        const rec = EQ_RECOMMENDED[level] || { 1: 0, 2: 0, 3: 0 };
+        const total = counts[1] + counts[2] + counts[3];
+        const el = host.querySelector('#eq-summary');
+        if (el) el.textContent = `유형1 ${counts[1]}/${rec[1]} · 유형2 ${counts[2]}/${rec[2]} · 유형3 ${counts[3]}/${rec[3]} · 총 ${total}문항`;
+    }
+
+    async function saveExamQuestions(examId, host) {
+        const ids = Array.from(host.querySelectorAll('.eq-chk:checked')).map(c => parseInt(c.dataset.qid, 10));
+        const r = await App.post('/api/admin.php?action=bravo_exam_question_save', { exam_id: examId, question_ids: ids });
+        if (r && r.success !== false) {
+            Toast.success('배정되었습니다 (' + (r.count != null ? r.count : ids.length) + '문항).');
+        } else {
+            Toast.error((r && r.error) || '저장 실패');
+        }
     }
 
     return { init };
