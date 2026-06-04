@@ -31,7 +31,7 @@
 CREATE TABLE IF NOT EXISTS bravo_attempts (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     exam_id       INT UNSIGNED NOT NULL COMMENT 'bravo_exams.id',
-    user_id       VARCHAR(100) NOT NULL COMMENT '소리튠 아이디 — 횟수 집계 키',
+    member_key    VARCHAR(120) NOT NULL COMMENT '횟수 집계 키: user_id, 없으면 p:<전화> 폴백',
     member_id     INT UNSIGNED NOT NULL COMMENT '세션의 bootcamp_members.id (기수 맥락)',
     attempt_no    TINYINT UNSIGNED NOT NULL COMMENT '이 시험에서 이 사람의 n번째 응시 (1~attempt_limit)',
     question_ids  TEXT NOT NULL COMMENT '시작 시점 배정 문제 스냅샷 JSON [qid,...] (순서 보존)',
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS bravo_attempts (
     ot_checked_at DATETIME NULL COMMENT '필수확인체크 시각 (require_check=1인 시험만)',
     started_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     submitted_at  DATETIME NULL,
-    UNIQUE KEY uk_ba_exam_user_no (exam_id, user_id, attempt_no),
-    KEY idx_ba_exam_user (exam_id, user_id),
+    UNIQUE KEY uk_ba_exam_user_no (exam_id, member_key, attempt_no),
+    KEY idx_ba_exam_user (exam_id, member_key),
     KEY idx_ba_member (member_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ```
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 
 ### 3-3. 핵심 결정
 
-- **횟수 집계 키 = user_id.** 자격(회독수·`bravo_member_settings` 수동부여)이 user_id 기준이므로 응시 가능한 회원은 user_id 보유가 보장됨(자격 계산 자체가 user_id 경유). 기수가 달라져도 같은 사람의 횟수 합산. user_id 없는 회원은 자격 단계에서 이미 응시불가.
+- **횟수 집계 키 = member_key (user_id 우선, phone 폴백).** 코드 확인 결과 회독수 조회는 `COALESCE(user_id 매칭, phone 매칭)`이라 user_id 없이 phone만으로도 자격 성립 가능 → user_id NOT NULL 보장 불가. `member_key = user_id ?: 'p:'.phone` 단일 컬럼으로 사람 단위 집계(기수가 달라져도 합산). 수동부여(granted)는 user_id 없으면 어차피 불가 — 폴백 케이스는 자동 자격만.
 - **문제 스냅샷.** start 시점의 `bravo_exam_questions`(display_order 순)를 `question_ids` JSON으로 동결. 응시 중 관리자가 배정을 바꿔도 이어하기·submit 검증이 깨지지 않음. 스냅샷이 빈 시험(배정 0건)은 start 거부.
 - **이어하기 판정 = answers 행 존재 여부.** 스냅샷 순서상 첫 미답변 문제부터 재개. 포인터 컬럼 없음.
 - **재녹음 = 같은 행 교체.** UNIQUE(attempt_id, question_id), 파일도 같은 경로에 덮어씀. `retake_used=1`로 마킹 후 추가 교체 거부(=총 2회).
@@ -117,8 +117,8 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 | case | method | 요청 → 응답 | 추가 검증 |
 |------|--------|------------|----------|
 | `bravo_exam_intro` | GET | `exam_id` → `{exam, ot, question_count, attempts:{used,limit,remaining}, resume:{attempt_id,answered_count}|null}` | 공통 검증만 |
-| `bravo_attempt_start` | POST | `{exam_id, ot_checked}` → `{attempt_id, attempt_no, questions:[...], answered_ids:[...]}` | **in_progress 존재 시 그 attempt 반환(이어하기 겸용, 새 차감 없음)**. 신규 생성 시: 잔여>0 (`SELECT COUNT(*) ... FOR UPDATE` 트랜잭션 가드), require_check=1이면 ot_checked truthy 필수(ot_checked_at 기록), 배정 스냅샷 생성(0건이면 거부). **동시 시작 race**: 첫 attempt가 없는 상태의 동시 요청은 FOR UPDATE 만으로 직렬화가 보장되지 않으므로(빈 범위), INSERT 가 UNIQUE(exam_id,user_id,attempt_no) duplicate key(SQLSTATE 23000)로 실패하면 **catch 후 해당 (exam_id,user_id)의 in_progress attempt 를 재조회해 반환** (재조회도 없으면 1회 attempt_no 재계산 재시도 후 에러) |
-| `bravo_answer_save` | POST multipart | `attempt_id, question_id, duration_ms, retake(0/1), audio(file)` → `{saved:true, answered_count, all_answered:bool}` | attempt 소유(user_id 일치)+in_progress+**기간내**, question_id ∈ 스냅샷, 신규 저장 또는 재녹음 교체(기존 행 retake_used=0일 때만), MIME 화이트리스트(webm/mp4/ogg — 서버는 finfo 실측+확장자 매핑)+크기≤10MB+is_uploaded_file |
+| `bravo_attempt_start` | POST | `{exam_id, ot_checked}` → `{attempt_id, attempt_no, questions:[...], answered_ids:[...]}` | **in_progress 존재 시 그 attempt 반환(이어하기 겸용, 새 차감 없음)**. 신규 생성 시: 잔여>0 (`SELECT COUNT(*) ... FOR UPDATE` 트랜잭션 가드), require_check=1이면 ot_checked truthy 필수(ot_checked_at 기록), 배정 스냅샷 생성(0건이면 거부). **동시 시작 race**: 첫 attempt가 없는 상태의 동시 요청은 FOR UPDATE 만으로 직렬화가 보장되지 않으므로(빈 범위), INSERT 가 UNIQUE(exam_id,member_key,attempt_no) duplicate key(SQLSTATE 23000)로 실패하면 **catch 후 해당 (exam_id,member_key)의 in_progress attempt 를 재조회해 반환** (재조회도 없으면 1회 attempt_no 재계산 재시도 후 에러) |
+| `bravo_answer_save` | POST multipart | `attempt_id, question_id, duration_ms, retake(0/1), audio(file)` → `{saved:true, answered_count, all_answered:bool}` | attempt 소유(member_key 일치)+in_progress+**기간내**, question_id ∈ 스냅샷, 신규 저장 또는 재녹음 교체(기존 행 retake_used=0일 때만), MIME 화이트리스트(webm/mp4/ogg — 서버는 finfo 실측+확장자 매핑)+크기≤10MB+is_uploaded_file |
 | `bravo_attempt_submit` | POST | `{attempt_id}` → `{submitted:true}` | 소유+in_progress, **스냅샷 전 문항 답안 존재** (미답 시 `missing:[qid...]` 반환 거부), status=submitted+submitted_at. **기간 체크 없음(의도)**: 답안은 기간 내에만 저장 가능(save가 가드)하므로 전 문항 완비 자체가 기간 내 완료의 증명 — 마감 몇 초 차이로 [최종 제출]이 막혀 차감만 남는 봉쇄를 방지. 미완료 attempt는 기간 후 save 가 막히므로 영원히 제출 불가(=미제출 종료) |
 | `bravo_status` (기존 확장) | GET | levels[]에 `attempts:{exam_id,used,limit,in_progress:{attempt_id,answered,total}|null,submitted:bool}` 추가 | 기존 필드 무변경. **attempts 의 기준 축 = 그 레벨 카드에 표시된 단일 시험(exam_id)** — bravoMemberStatus 는 레벨당 시험 1건(open 우선→최신 id)만 고르므로 used/in_progress/submitted 전부 그 exam_id 로 한정 집계. 매칭 시험이 없으면 attempts=null |
 
@@ -144,13 +144,13 @@ CREATE TABLE IF NOT EXISTS bravo_answers (
 
 ## 8. 에러 처리·엣지 케이스
 
-- 동시 시작(중복 클릭/탭 2개): UNIQUE(exam_id,user_id,attempt_no) + FOR UPDATE COUNT + **duplicate key catch→in_progress 재조회 반환** (§5 start 참조) → 한쪽만 생성, 다른 쪽은 기존 attempt 수신.
+- 동시 시작(중복 클릭/탭 2개): UNIQUE(exam_id,member_key,attempt_no) + FOR UPDATE COUNT + **duplicate key catch→in_progress 재조회 반환** (§5 start 참조) → 한쪽만 생성, 다른 쪽은 기존 attempt 수신.
 - 마감 직전 완주: 마지막 답안이 기간 내 업로드됐다면 [최종 제출]은 기간 후에도 성공 (§5 submit). 카드의 [제출 마무리] 버튼이 동일 경로 — 제출 화면을 못 본 채 이탈해도 구제됨.
 - 재녹음 2회 시도(클라이언트 우회): 서버가 retake_used=1 행 교체 거부.
 - 스냅샷 밖 question_id 업로드: 거부.
-- 다른 회원 attempt 접근: user_id 불일치 거부.
+- 다른 회원 attempt 접근: member_key 불일치 거부.
 - submitted attempt에 save/submit: 거부.
-- 시험이 응시 중 closed/기간만료: save/submit 거부 — 안내 문구("응시 기간이 종료되었습니다").
+- 시험이 응시 중 closed/기간만료: save 거부 — 안내 문구("응시 기간이 종료되었습니다"). submit 은 전 문항 완비 시 closed/만료와 무관하게 허용(§5).
 - LEFT JOIN NULL → `e()` TypeError 방지: OT 텍스트 등 nullable 컬럼은 `?? ''` 평탄화 (boot 기존 사고 패턴).
 - 업로드 부분 실패로 고아 파일: 행 INSERT 전 파일 저장 → INSERT 실패 시 파일 삭제 시도. 잔여 고아는 attempt 디렉토리 단위라 cascade 정리에 포섭.
 
