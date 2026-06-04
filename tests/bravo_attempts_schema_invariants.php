@@ -40,7 +40,7 @@ t('attempts.submitted_at NULL 허용', $cols['submitted_at']['Null'] === 'YES');
 $idx = $db->query("SHOW INDEX FROM bravo_attempts WHERE Key_name='uk_ba_exam_user_no'")->fetchAll();
 t('(exam_id,member_key,attempt_no) UNIQUE', count($idx) === 3 && (int)$idx[0]['Non_unique'] === 0);
 $ix1 = $db->query("SHOW INDEX FROM bravo_attempts WHERE Key_name='idx_ba_exam_user'")->fetchAll();
-t('idx_ba_exam_user 인덱스 존재', count($ix1) === 2);
+t('idx_ba_exam_user 중복 인덱스 없음 (UNIQUE prefix 로 커버)', count($ix1) === 0);
 $ix2 = $db->query("SHOW INDEX FROM bravo_attempts WHERE Key_name='idx_ba_member'")->fetchAll();
 t('idx_ba_member 인덱스 존재', count($ix2) === 1);
 
