@@ -31,8 +31,9 @@ function bravoExamQuestionList(PDO $db, int $examId): array {
 /**
  * 시험 배정 전체 교체. 입력 순서대로 display_order(0,1,2,...) 부여. 존재하는 question_id만.
  * caller 가 이미 트랜잭션 안이면 중첩 begin/commit 생략 (PDO 중첩 트랜잭션 미지원).
+ * @return 저장된 문항 수
  */
-function bravoExamQuestionSet(PDO $db, int $examId, array $questionIds): void {
+function bravoExamQuestionSet(PDO $db, int $examId, array $questionIds): int {
     // 정수화 + 순서보존 중복제거
     $ids = [];
     foreach ($questionIds as $qid) {
@@ -57,6 +58,7 @@ function bravoExamQuestionSet(PDO $db, int $examId, array $questionIds): void {
             foreach ($ids as $i => $qid) $ins->execute([$examId, $qid, $i]);
         }
         if ($owns) $db->commit();
+        return count($ids);
     } catch (Throwable $e) {
         if ($owns) $db->rollBack();
         throw $e;

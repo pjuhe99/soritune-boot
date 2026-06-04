@@ -760,10 +760,13 @@ case 'bravo_exam_question_save':
     $input = getJsonInput();
     $examId = (isset($input['exam_id']) && is_numeric($input['exam_id'])) ? (int)$input['exam_id'] : 0;
     if ($examId < 1) jsonError('exam_id가 필요합니다.');
-    $qids = (isset($input['question_ids']) && is_array($input['question_ids'])) ? $input['question_ids'] : [];
     $db = getDB();
-    bravoExamQuestionSet($db, $examId, $qids);
-    jsonSuccess(['count' => count(bravoExamQuestionAssignedIds($db, $examId))], '저장되었습니다.');
+    $stmt = $db->prepare("SELECT id FROM bravo_exams WHERE id = ?");
+    $stmt->execute([$examId]);
+    if (!$stmt->fetchColumn()) jsonError('시험을 찾을 수 없습니다.', 404);
+    $qids = (isset($input['question_ids']) && is_array($input['question_ids'])) ? $input['question_ids'] : [];
+    $count = bravoExamQuestionSet($db, $examId, $qids);
+    jsonSuccess(['count' => $count], '저장되었습니다.');
     break;
 
 // ── Member CRUD (operation only) — uses bootcamp_members ────

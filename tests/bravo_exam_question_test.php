@@ -33,8 +33,8 @@ try {
     // 배정 없음
     t('초기 배정 없음', bravoExamQuestionAssignedIds($db, $examId) === []);
 
-    // set [q1, q3] — 순서 보존
-    bravoExamQuestionSet($db, $examId, [$q1, $q3]);
+    // set [q1, q3] — 순서 보존, 반환 count 검증
+    t('set 반환 count', bravoExamQuestionSet($db, $examId, [$q1, $q3]) === 2);
     t('set 후 assignedIds 순서', bravoExamQuestionAssignedIds($db, $examId) === [$q1, $q3], json_encode(bravoExamQuestionAssignedIds($db, $examId)));
     $list = bravoExamQuestionList($db, $examId);
     t('list 2건 + 조인내용', count($list)===2 && $list[0]['english_text']==='q1' && (int)$list[0]['display_order']===0 && $list[1]['english_text']==='q3' && (int)$list[1]['display_order']===1);
