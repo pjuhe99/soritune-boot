@@ -129,8 +129,9 @@ function bravoQuestionUpdate(PDO $db, int $id, array $d): void {
 }
 
 /**
- * 문제 삭제 (하드).
+ * 문제 삭제 (하드). 모든 시험 배정(bravo_exam_questions) 에서도 제거.
  */
 function bravoQuestionDelete(PDO $db, int $id): void {
+    $db->prepare("DELETE FROM bravo_exam_questions WHERE question_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM bravo_questions WHERE id = ?")->execute([$id]);
 }

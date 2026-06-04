@@ -37,7 +37,7 @@ try {
     bravoExamQuestionSet($db, $examId, [$q1, $q3]);
     t('set 후 assignedIds 순서', bravoExamQuestionAssignedIds($db, $examId) === [$q1, $q3], json_encode(bravoExamQuestionAssignedIds($db, $examId)));
     $list = bravoExamQuestionList($db, $examId);
-    t('list 2건 + 조인내용', count($list)===2 && $list[0]['english_text']==='q1' && (int)$list[0]['display_order']===0 && $list[1]['english_text']==='q3');
+    t('list 2건 + 조인내용', count($list)===2 && $list[0]['english_text']==='q1' && (int)$list[0]['display_order']===0 && $list[1]['english_text']==='q3' && (int)$list[1]['display_order']===1);
 
     // re-set [q2, q1, q3] — 멱등 교체, 중복 없음, display_order 갱신
     bravoExamQuestionSet($db, $examId, [$q2, $q1, $q3]);
@@ -57,6 +57,18 @@ try {
     // 중복 입력 → 1건으로
     bravoExamQuestionSet($db, $examId, [$q1, $q1, $q2]);
     t('중복 입력 dedup', bravoExamQuestionAssignedIds($db, $examId) === [$q1, $q2]);
+
+    // ── cascade: 시험 삭제 시 junction 제거 ──
+    bravoExamQuestionSet($db, $examId, [$q1, $q2, $q3]);
+    t('cascade 전 3건', count(bravoExamQuestionAssignedIds($db, $examId)) === 3);
+    bravoExamDelete($db, $examId);
+    t('시험 삭제 → junction 0건', (int)$db->query("SELECT COUNT(*) FROM bravo_exam_questions WHERE exam_id=".(int)$examId)->fetchColumn() === 0);
+
+    // ── cascade: 문제 삭제 시 모든 배정에서 제거 ──
+    $examId2 = bravoExamCreate($db, ['title'=>"{$tag} 시험2",'bravo_level'=>1,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'preparing'], 99);
+    bravoExamQuestionSet($db, $examId2, [$q1, $q2]);
+    bravoQuestionDelete($db, $q1);
+    t('문제 삭제 → 해당 배정 제거', bravoExamQuestionAssignedIds($db, $examId2) === [$q2], json_encode(bravoExamQuestionAssignedIds($db, $examId2)));
 
     $db->rollBack();
 } catch (Throwable $e) {

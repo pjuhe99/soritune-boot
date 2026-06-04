@@ -277,9 +277,10 @@ function bravoExamUpdate(PDO $db, int $id, array $d): void {
 }
 
 /**
- * 시험 삭제 (하드). 연결된 OT(bravo_exam_ot) 도 함께 삭제.
+ * 시험 삭제 (하드). 연결된 문제 배정(bravo_exam_questions)·OT(bravo_exam_ot) 도 함께 삭제.
  */
 function bravoExamDelete(PDO $db, int $id): void {
+    $db->prepare("DELETE FROM bravo_exam_questions WHERE exam_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM bravo_exam_ot WHERE exam_id = ?")->execute([$id]);
     $db->prepare("DELETE FROM bravo_exams WHERE id = ?")->execute([$id]);
 }
