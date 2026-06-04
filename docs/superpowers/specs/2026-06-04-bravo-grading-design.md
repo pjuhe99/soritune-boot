@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS bravo_answer_grades (
     fluency_rating  ENUM('good','normal','poor') NOT NULL COMMENT '유창성 (1/0.5/0)',
     completion_ok   TINYINT(1) NULL COMMENT '발화완성도 — B2/B3만, B1은 NULL',
     score           DECIMAL(5,2) NOT NULL COMMENT '판정 시점 환산 점수 스냅샷',
+    n_denominator   SMALLINT UNSIGNED NOT NULL COMMENT '환산에 사용한 분모 N (확정 시 일관성 검증/재환산용)',
     memo            VARCHAR(255) NULL COMMENT '문항 메모',
     graded_by       INT UNSIGNED NOT NULL,
     graded_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS bravo_attempt_grades (
     id                INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     attempt_id        INT UNSIGNED NOT NULL COMMENT 'bravo_attempts.id',
     total_score       DECIMAL(5,2) NOT NULL COMMENT '확정 시점 합산 스냅샷',
+    passing_score     DECIMAL(5,2) NOT NULL COMMENT '확정 시점 합격선 스냅샷 (bravo_levels 변경과 무관하게 판정 근거 보존)',
     result            ENUM('pass','fail') NOT NULL,
     result_overridden TINYINT(1) NOT NULL DEFAULT 0,
     override_reason   VARCHAR(255) NULL COMMENT '오버라이드 시 필수',
@@ -66,7 +68,7 @@ CREATE TABLE IF NOT EXISTS bravo_attempt_grades (
 ### 3-3. 핵심 결정
 
 - **진행 상태는 행 분포로 표현.** 미채점 = answer_grades 0건. 채점중 = 일부 판정 + attempt_grades 없음. 확정 = attempt_grades 행 존재. 별도 status 컬럼 불필요(ENUM('confirmed') 같은 단일값 컬럼도 두지 않음).
-- **score는 판정 시점 스냅샷.** 배점표(코드 상수)가 미래에 바뀌어도 기존 채점 불변. total_score도 확정 시점 합산 스냅샷.
+- **score는 판정 시점 스냅샷.** 보호 대상은 **가중치 상수 변경**(미래에 바뀌어도 기존 채점 불변). 분모 N 변경은 보호 대상이 아님 — 판정 원본(accuracy 등)이 저장돼 있으므로 확정 시점에 순수함수로 자동 재환산(§4). total_score·passing_score도 확정 시점 스냅샷.
 - **확정 취소 = attempt_grades 행 삭제** (answer_grades 보존 → 재확정 빠름). 시험 `released` 전까지만 허용.
 - **B1의 completion_ok = NULL** (가중치 0, UI 토글 숨김). B2/B3는 NOT NULL 의미 검증을 서비스에서(판정 완성 조건에 포함).
 - FK 없음, 앱 레벨 cascade: `bravoExamDelete`에 answer_grades(attempt 경유)/attempt_grades 삭제 추가. `bravoQuestionDelete`는 무관(answer 자체가 보존되므로 grades도 보존).
@@ -86,8 +88,9 @@ BRAVO_GRADE_WEIGHTS = [
 
 - **N = 그 attempt의 채점 대상 문항수** = 스냅샷(question_ids) ∩ 현존 bravo_questions (slice6 submit 완비 판정과 동일 기준).
 - 문항별 요소 만점 = 가중치 ÷ N. 문항 점수 = Σ(요소 만점 × 계수), DECIMAL(5,2) 반올림.
-- 총점 = Σ 문항 score (이론 최대 100±반올림 오차 수준). 자동 합불 = 총점 ≥ `bravo_levels.passing_score` (50/65/80).
-- 반올림 정책: 문항 score를 소수 2자리로 반올림해 저장, 총점은 저장된 score 합산(재계산 없음 — 표시값과 확정값 불일치 방지).
+- 총점(확정 시) = **현존 채점 대상 문항에 대응하는 grade만** 합산 — 채점 후 문항이 삭제돼 화면에 안 보이는 "유령 grade"는 합산에서 제외. 자동 합불 = 총점 ≥ 확정 시점의 `bravo_levels.passing_score` (50/65/80), 그 값을 `attempt_grades.passing_score`에 스냅샷 저장. 확정 취소→재확정은 새로운 확정 행위로서 그 시점 기준을 다시 적용(스냅샷에 근거 기록).
+- **N 일관성 (확정 시 자동 재환산):** grade의 `n_denominator`가 현재 N과 다른 행은 저장된 판정값으로 현재 가중치·N 기준 재환산해 UPDATE 후 합산 — 한 attempt 안에서 문항 만점 기준이 항상 단일 N으로 일관됨. 재판정 불필요.
+- 반올림 정책: 문항 score를 소수 2자리로 반올림해 저장, 총점은 (재환산 반영 후) 저장된 score 합산 — 표시값과 확정값 불일치 방지.
 
 ## 5. 관리자 화면 흐름 (BRAVO 셸 4번째 서브탭 "채점", `js/admin-bravo-grading.js`)
 
@@ -116,15 +119,15 @@ BRAVO_GRADE_WEIGHTS = [
 | `bravo_grading_attempt_list` | GET | `exam_id` → `{attempts:[{attempt_id,member_name,cohort,attempt_no,submitted_at,graded_count,total_count,confirmed:{total_score,result}|null}]}` |
 | `bravo_grading_detail` | GET | `attempt_id` → `{attempt:{...}, member:{name,cohort}, exam:{id,title,bravo_level,status}, passing_score, weights, items:[{answer_id,seq,question:{korean_text,english_text,accepted_answers,target_chunks,question_type,reference_speech_sec,response_time_limit_sec}, answer:{audio_mime,duration_ms,retake_used,answered_at}, grade:{...}|null}], confirmed:{...}|null}` |
 | `bravo_answer_grade_save` | POST | `{answer_id, accuracy, chunk_ok, response_rating, fluency_rating, completion_ok?, memo?}` → 검증·환산·upsert → `{score, graded_count, total_count, total_so_far, auto_result}` |
-| `bravo_attempt_confirm` | POST | `{attempt_id, result, override_reason?, memo?}` → 전 문항 판정 검증 → total 합산(저장된 score 합) → 자동 판정 대비 오버라이드 검증(다르면 사유 필수) → attempt_grades INSERT → `{total_score, result}`. `{attempt_id, action:'cancel'}` → released 전 검증 → 행 삭제 |
-| `bravo_answer_audio` | GET | `answer_id` → **JSON 아님** — 오디오 바이너리 (Content-Type=audio_mime, Content-Length, realpath 루트 검증 후 readfile; Range 미지원 — Accept-Ranges: none) |
+| `bravo_attempt_confirm` | POST | `{attempt_id, result, override_reason?, memo?}` → 전 문항(현존 기준) 판정 검증 → n_denominator 불일치 grade 자동 재환산 → total 합산(**현존 문항 대응 grade만** — 유령 grade 제외) → 자동 판정(확정 시점 passing_score, 스냅샷 저장) 대비 오버라이드 검증(다르면 사유 필수) → attempt_grades INSERT → `{total_score, result}`. `{attempt_id, action:'cancel'}` → released 전 검증 → 행 삭제 |
+| `bravo_answer_audio` | GET | `answer_id` → **JSON 아님** — 오디오 바이너리 (Content-Type=audio_mime, realpath 루트 검증; **HTTP Range 단일 범위 지원** — `bytes=start-end` 요청 시 206 Partial Content + Content-Range, 그 외 200 전체 응답, `Accept-Ranges: bytes`. 채점 중 탐색(scrub)·iOS 재생 안정성 필수 요건) |
 
 서비스 검증: 채점/확정은 attempt.status='submitted'만. 확정된 attempt의 판정 save 거부("확정 취소 후 수정"). cancel은 attempt_grades 존재 + exam.status≠released. completion_ok는 B1이면 무시(NULL 저장), B2/B3면 필수. answer_id가 attempt 스냅샷의 현존 문항에 속하는지 검증.
 
 ## 7. 엣지 케이스
 
 - 스냅샷 문항 일부가 은행에서 삭제된 attempt: 현존 문항만 채점 대상(N도 현존 기준 — slice6 submit과 동일 원칙). detail의 items도 현존 문항만.
-- **채점 도중 문항 삭제**(이미 일부 판정 저장 후 N이 줄어든 경우): 저장된 score는 스냅샷 원칙대로 불변(옛 N 기준), 이후 판정은 새 N 기준 — 문항 간 만점 불일치가 생길 수 있으나 보존 원칙 우선. 채점자가 해당 문항들을 재판정하면 새 N으로 갱신됨. 응시 데이터가 있는 시험의 문제 삭제 자체가 비정상 운영이므로 가드 추가는 YAGNI.
+- **채점 도중 문항 삭제**(일부 판정 저장 후 N이 줄어든 경우): 중간 상태에선 화면 표시 점수가 잠정치일 수 있으나, **확정 시 n_denominator 불일치 grade를 저장된 판정으로 자동 재환산**(§4)하므로 확정 총점은 항상 단일 N 기준으로 일관. 삭제된 문항의 유령 grade는 합산 제외. 재판정 불필요, 확정 차단 불필요.
 - 오디오 행은 있는데 파일 유실: `bravo_answer_audio` 404 → 카드에 "파일 없음" 표시, 판정은 가능(채점자 재량).
 - 확정 후 판정 save → 거부. released 후 cancel → 거부. override 사유 누락 → 거부. 미완 문항 있는 confirm → 거부(`missing_count` 안내).
 - 같은 answer 동시 판정: UNIQUE(answer_id) upsert — last-write-wins.
@@ -136,10 +139,11 @@ BRAVO_GRADE_WEIGHTS = [
 - `tests/bravo_grading_test.php`:
   - 환산 순수함수: 등급 3종 × 판정 조합(만점/0점/혼합), 반올림, N 분모(현존 문항 기준), B1 completion 무시
   - save: 정상 upsert(점수 스냅샷), 재판정 갱신, B2 completion 누락 거부, 비submitted attempt 거부, 확정 후 거부, 스냅샷 밖 answer 거부
-  - confirm: 미완 거부, 자동 합불(경계값 = passing_score 정확히), 오버라이드 사유 필수/기록, 중복 확정 거부, cancel 정상(판정 보존), released 후 cancel 거부
+  - confirm: 미완 거부, 자동 합불(경계값 = passing_score 정확히), passing_score 스냅샷 저장, 오버라이드 사유 필수/기록, 중복 확정 거부, cancel 정상(판정 보존), released 후 cancel 거부
+  - 문항 삭제 엣지: 채점 후 문항 삭제 → 유령 grade 합산 제외 + 잔존 grade 자동 재환산(n_denominator 갱신) 후 확정 총점 단일 N 일관
   - 목록 카운트: 미채점/채점중/확정 집계
   - cascade: bravoExamDelete → grades 2테이블 정리
-  - 오디오: 경로 검증 로직 단위(파일 유실 404) — 실재생은 브라우저 검증
+  - 오디오: 경로 검증 로직 단위(파일 유실 404) + Range 파싱 순수함수(bytes=0-99/중간/말단/비정상 → 200 폴백) — 실재생·scrub은 브라우저 검증
 - 기존 BRAVO 14파일 회귀 0.
 - 브라우저 검증(사용자): slice6 검증에서 만든 제출 데이터로 채점 풀사이클(목록→재생→판정→확정→취소→재확정).
 
