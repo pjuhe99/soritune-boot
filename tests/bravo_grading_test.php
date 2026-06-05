@@ -70,6 +70,7 @@ try {
        ->execute([$cohortId, "{$tag}응시자", "{$tag}닉", '01000000099', "{$tag}_uid"]);
     $memberId = (int)$db->lastInsertId();
     $db->prepare("INSERT INTO bravo_member_settings (user_id, review_count_override) VALUES (?, 10)")->execute(["{$tag}_uid"]);
+    bravoGradeSet($db, "{$tag}_uid", 1, 'admin_adjust', 99, null); // B2 이전등급 요건
 
     $examId = bravoExamCreate($db, ['title'=>"{$tag} 시험",'bravo_level'=>2,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'open'], 99);
     $qids = [];

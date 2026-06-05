@@ -42,6 +42,7 @@ function bravoGradeLockRow(PDO $db, string $memberKey): array {
 
 /**
  * 등급 설정 + 이력 로그. 같은 레벨이면 no-op(로그 없음). 0~3 클램프.
+ * 잠금 없는 read-then-write — 동시 호출 시 로그 from_level 이 stale 할 수 있으나 current_level 은 last-write 로 정합. 직렬화가 필요하면 호출부가 bravoGradeLockRow 선행 (Demote/Start 패턴).
  */
 function bravoGradeSet(PDO $db, string $memberKey, int $to, string $source, ?int $refId = null, ?string $note = null): void {
     $to = max(0, min(3, $to));

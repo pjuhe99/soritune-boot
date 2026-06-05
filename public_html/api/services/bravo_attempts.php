@@ -50,6 +50,7 @@ function bravoAnswerValidateUpload(array $file): array {
 
 /**
  * 회원의 시험 접근 공통 검증 (intro/start/save 용 — submit 은 미사용).
+ * 보유/이전등급/누적 quota 게이트 포함.
  * 성공: ['exam'=>row, 'ctx'=>bravoMemberContext, 'member_key'=>string]
  * 실패: ['error'=>msg, 'code'=>http]
  */
@@ -70,9 +71,34 @@ function bravoAttemptExamAccess(PDO $db, int $memberId, int $examId): array {
         return ['error' => '응시 자격이 없습니다.', 'code' => 403];
     }
     $memberKey = bravoAttemptMemberKey($ctx['row']);
-    // 합격자 동일 등급 재응시 차단 — released pass 만 기준 (발표 전 합격은 차단 안 함: 정보 누설 방지)
-    if (bravoHasReleasedPass($db, $memberKey, (int)$exam['bravo_level'])) {
-        return ['error' => '이미 BRAVO ' . (int)$exam['bravo_level'] . ' 등급에 합격했습니다.', 'code' => 403];
+    $examLevel = (int)$exam['bravo_level'];
+    $cur = bravoGradeCurrentLevel($db, $memberKey);
+    // ① 보유 차단 — 재응시는 강등 신청 후 (등급 진실원 기준, slice8 의 released-pass 차단 대체)
+    if ($cur >= $examLevel) {
+        return ['error' => "이미 BRAVO {$examLevel} 등급을 보유하고 있습니다. 재응시하려면 강등 신청을 해주세요.", 'code' => 403];
+    }
+    // ② 이전등급 요건 (bravo_levels.requires_previous_level — B2←B1, B3←B2)
+    $reqPrev = false;
+    foreach ($ctx['levels'] as $lvRow) {
+        if ((int)$lvRow['level'] === $examLevel) { $reqPrev = (int)$lvRow['requires_previous_level'] === 1; break; }
+    }
+    if ($reqPrev && $cur < $examLevel - 1) {
+        return ['error' => 'BRAVO ' . ($examLevel - 1) . ' 등급 취득 후 응시할 수 있습니다.', 'code' => 403];
+    }
+    // ③-pre 같은 시험 미확정 submitted → 채점 대기 차단 (quota 보다 먼저 — 더 명확한 안내)
+    $subChk = $db->prepare("
+        SELECT COUNT(*) FROM bravo_attempts a
+        LEFT JOIN bravo_attempt_grades g ON g.attempt_id = a.id
+        WHERE a.exam_id = ? AND a.member_key = ? AND a.status = 'submitted' AND g.id IS NULL
+    ");
+    $subChk->execute([$examId, $memberKey]);
+    if ((int)$subChk->fetchColumn() > 0) {
+        return ['error' => '이미 제출한 응시의 채점이 진행 중입니다. 결과 확정 후 다시 도전할 수 있습니다.', 'code' => 400];
+    }
+    // ③ 등급당 평생 누적 quota (기본 3 + 관리자 extra)
+    $quota = bravoAttemptQuotaForLevel($db, $memberKey, $examLevel);
+    if ($quota['left'] <= 0) {
+        return ['error' => "응시 횟수를 모두 사용했습니다. (누적 {$quota['used']}/{$quota['limit']}) 추가 응시는 운영진에게 문의해주세요.", 'code' => 403];
     }
     return ['exam' => $exam, 'ctx' => $ctx, 'member_key' => $memberKey];
 }
@@ -119,10 +145,11 @@ function bravoAttemptFindInProgress(PDO $db, int $examId, string $memberKey): ?a
 /**
  * 응시 시작 (이어하기 겸용).
  * - in_progress 존재 → 그대로 반환 (resumed=true, 차감 없음)
- * - submitted 존재 → 잠금 (채점 전 보수적 — 불합격 재응시는 결과 공개 슬라이스에서)
- * - 신규: require_check 검증 → 스냅샷 → FOR UPDATE 카운트 → INSERT (dup catch → 기존 반환)
+ * - 미확정 submitted 존재 → 채점 대기 차단 (확정되면 같은 시험 재응시 가능 — 실제 한도는 누적 quota)
+ * - 신규: require_check 검증 → 스냅샷 → 사람 단위 mutex(bravoGradeLockRow) → 누적 quota 재검사 → INSERT
+ *   (mutex 가 같은 등급 다른 시험의 동시 시작도 직렬화 — 빈 범위 gap-lock 한계 없음)
  * 성공: ['attempt'=>row, 'resumed'=>bool], 실패: ['error'=>msg]
- * $testHook: 테스트 전용 — INSERT 직전 호출(동시 시작 race 재현).
+ * $testHook: 테스트 전용 — mutex 획득 후·quota 카운트 직전 호출(race 재현).
  */
 function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $memberKey, bool $otChecked, ?callable $testHook = null): array {
     $examId = (int)$exam['id'];
@@ -130,10 +157,15 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
     $existing = bravoAttemptFindInProgress($db, $examId, $memberKey);
     if ($existing) return ['attempt' => $existing, 'resumed' => true];
 
-    $sub = $db->prepare("SELECT COUNT(*) FROM bravo_attempts WHERE exam_id = ? AND member_key = ? AND status = 'submitted'");
+    // 미확정 submitted → 채점 대기 차단 (pass/fail 비대칭 차단은 발표 전 정보 누설이라 불문 — 스펙 §4-2)
+    $sub = $db->prepare("
+        SELECT COUNT(*) FROM bravo_attempts a
+        LEFT JOIN bravo_attempt_grades g ON g.attempt_id = a.id
+        WHERE a.exam_id = ? AND a.member_key = ? AND a.status = 'submitted' AND g.id IS NULL
+    ");
     $sub->execute([$examId, $memberKey]);
     if ((int)$sub->fetchColumn() > 0) {
-        return ['error' => '이미 제출한 시험입니다. 결과 발표를 기다려주세요.'];
+        return ['error' => '이미 제출한 응시의 채점이 진행 중입니다. 결과 확정 후 다시 도전할 수 있습니다.'];
     }
 
     $otCheckedAt = null;
@@ -146,30 +178,30 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
     $qids = bravoExamQuestionAssignedIds($db, $examId);
     if (!$qids) return ['error' => '아직 출제 준비 중인 시험입니다.'];
 
-    $limit = (int)$exam['attempt_limit'];
     $owns = !$db->inTransaction();
     if ($owns) $db->beginTransaction();
     try {
-        // 횟수 차감 race 가드 (코인 한도 FOR UPDATE 패턴)
-        // NOTE: 현 슬라이스 상태값(in_progress/submitted)에선 submitted 잠금이 먼저 걸려
-        // 이 분기 자연 도달 불가 — 불합격 재응시(결과 공개 슬라이스)가 열리면 활성화되는 방어선.
-        $cnt = $db->prepare("SELECT COUNT(*) FROM bravo_attempts WHERE exam_id = ? AND member_key = ? FOR UPDATE");
-        $cnt->execute([$examId, $memberKey]);
-        $used = (int)$cnt->fetchColumn();
-        if ($limit > 0 && $used >= $limit) {
-            if ($owns) $db->rollBack();
-            return ['error' => "응시 횟수를 모두 사용했습니다. ({$used}/{$limit})"];
-        }
+        // 사람 단위 mutex — 같은 등급 다른 시험의 동시 시작도 이 행 잠금으로 직렬화
+        bravoGradeLockRow($db, $memberKey);
         if ($testHook) $testHook();
+        $quota = bravoAttemptQuotaForLevel($db, $memberKey, (int)$exam['bravo_level']);
+        if ($quota['left'] <= 0) {
+            if ($owns) $db->rollBack();
+            return ['error' => "응시 횟수를 모두 사용했습니다. (누적 {$quota['used']}/{$quota['limit']})"];
+        }
+        // attempt_no = 이 시험 내 순번 (UNIQUE(exam, member, attempt_no) — 누적 used 와 분리)
+        $no = $db->prepare("SELECT COALESCE(MAX(attempt_no), 0) + 1 FROM bravo_attempts WHERE exam_id = ? AND member_key = ?");
+        $no->execute([$examId, $memberKey]);
+        $attemptNo = (int)$no->fetchColumn();
         $ins = $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids, ot_checked_at) VALUES (?,?,?,?,?,?)");
-        $ins->execute([$examId, $memberKey, (int)$memberRow['id'], $used + 1, json_encode($qids), $otCheckedAt]);
+        $ins->execute([$examId, $memberKey, (int)$memberRow['id'], $attemptNo, json_encode($qids), $otCheckedAt]);
         $newId = (int)$db->lastInsertId();
         if ($owns) $db->commit();
         return ['attempt' => bravoAttemptGet($db, $newId), 'resumed' => false];
     } catch (PDOException $e) {
         if ($owns) $db->rollBack();
         if ($e->getCode() === '23000') {
-            // 동시 시작: 빈 범위에선 FOR UPDATE 직렬화가 보장되지 않음 → UNIQUE 충돌 catch 후 기존 반환
+            // 같은 시험 더블클릭 안전망 — 기존 in_progress 반환
             $existing = bravoAttemptFindInProgress($db, $examId, $memberKey);
             if ($existing) return ['attempt' => $existing, 'resumed' => true];
         }

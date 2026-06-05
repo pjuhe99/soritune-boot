@@ -87,14 +87,13 @@ try {
     $r2 = bravoAttemptStart($db, $exam, $mrow, $mk, false);
     t('start 재호출 → 동일 attempt (이어하기, 차감 없음)', isset($r2['attempt']) && (int)$r2['attempt']['id'] === (int)$attempt['id'] && !empty($r2['resumed']));
 
-    // 동시 시작 race: 테스트 훅으로 INSERT 직전 경쟁 행 삽입 → dup catch → 기존 행 반환
+    // 동시 시작: 이미 in_progress 가 있으면 mutex 안에서도 최상단 이어하기로 반환
     $db->prepare("DELETE FROM bravo_attempts WHERE id = ?")->execute([(int)$attempt['id']]);
-    $hook = function () use ($db, $examId, $mk, $memberId) {
-        $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids) VALUES (?,?,?,1,'[]')")
-           ->execute([$examId, $mk, $memberId]);
-    };
-    $r3 = bravoAttemptStart($db, $exam, $mrow, $mk, false, $hook);
-    t('동시 시작 dup catch → 기존 반환', isset($r3['attempt']) && !empty($r3['resumed']));
+    // 먼저 in_progress 행을 삽입해 두면 bravoAttemptFindInProgress 가 최상단에서 잡아 resumed=true
+    $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids) VALUES (?,?,?,1,?)")
+       ->execute([$examId, $mk, $memberId, json_encode([$q1, $q2, $q3])]);
+    $r3 = bravoAttemptStart($db, $exam, $mrow, $mk, true); // ot_checked=true (OT require_check 는 아직 미설정)
+    t('이미 in_progress → 이어하기 반환 (resumed=true)', isset($r3['attempt']) && !empty($r3['resumed']));
     $db->prepare("DELETE FROM bravo_attempts WHERE exam_id = ? AND member_key = ?")->execute([$examId, $mk]);
 
     // require_check=1 시험: 미체크 거부 / 체크 시 ot_checked_at 기록
@@ -198,17 +197,14 @@ try {
     $own = bravoAttemptForMember($db, (int)$pAttempt['id'], $memberId2);
     t('타인 attempt 거부', $own === null);
 
-    // ── 응시 횟수 한도 (FOR UPDATE 경로): submitted 잠금이 먼저 걸리지 않는 인위 상태로 검증 ──
-    // 현 상태값 체계(in_progress/submitted)에선 submitted 잠금이 limit 보다 먼저 걸려 자연 도달 불가.
-    // 불합격 재응시(결과 공개 슬라이스)가 열리면 이 경로가 활성화됨.
-    // 여기선 submitted 행을 미리 삽입한 상태에서 재시작 시도 → 잠금 우선 거부를 명시 단언.
+    // ── 응시 횟수 한도 + 미확정 submitted: 재시작 차단 검증 ──
+    // 미확정 submitted 가 있으면 access 게이트에서 '채점 진행 중' 차단 (횟수 소진보다 우선).
     $limitExam = bravoExamCreate($db, ['title'=>"{$tag} 한도",'bravo_level'=>1,'exam_mode'=>'always','attempt_limit'=>1,'target_type'=>'all','status'=>'open'], 99);
     bravoExamQuestionSet($db, $limitExam, [$q1]);
     $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids, status, submitted_at) VALUES (?,?,?,1,'[]','submitted',NOW())")
        ->execute([$limitExam, $mk, $memberId]);
     $lAcc = bravoAttemptExamAccess($db, $memberId, $limitExam);
-    $r = bravoAttemptStart($db, $lAcc['exam'], $mrow, $mk, false);
-    t('한도 소진+제출 → 잠금 우선 거부', isset($r['error']));
+    t('한도 소진+제출 → 채점 대기 거부', isset($lAcc['error']) && str_contains($lAcc['error'], '채점'));
 
     // ── cascade: 시험 삭제 → attempts/answers/파일 정리 ──
     $delDir = BRAVO_UPLOAD_ROOT . '/answers/' . (int)$pAttempt['id'];

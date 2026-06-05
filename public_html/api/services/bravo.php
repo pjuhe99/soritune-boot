@@ -265,6 +265,7 @@ function bravoExamCreate(PDO $db, array $d, int $adminId): int {
  * 시험 수정 (status 포함 전체 필드).
  * status 가 released 로 '전환'되는 시점에 확정 pass 전원 승급 (bravoGradeApplyExamPass).
  * 재전환(released→closed→released)은 ApplyExamPass 내부 no-op 으로 멱등.
+ * prevStatus 조회는 트랜잭션 밖 — 동시 released 저장 시 훅 2회 가능하나 ApplyExamPass no-op 멱등으로 등급 오염 없음(최악 로그 1행 중복 — 허용). 훅 예외 시 status 변경까지 롤백(발표 실패가 등급 누락보다 수복 명확 — 의도).
  */
 function bravoExamUpdate(PDO $db, int $id, array $d): void {
     $c = bravoExamPersistData($d);
@@ -407,22 +408,6 @@ function bravoStatusAttempts(PDO $db, array $exam, string $memberKey): array {
 }
 
 /**
- * 그 등급에서 "released 시험의 pass 확정" 보유 여부 — 합격자 동일 등급 차단·passed_level 공용.
- * released 전 합격(채점 확정만)은 의도적으로 제외 — 차단 메시지로 발표 전 합격이 유추되는 정보 누설 방지.
- */
-function bravoHasReleasedPass(PDO $db, string $memberKey, int $level): bool {
-    $stmt = $db->prepare("
-        SELECT COUNT(*)
-        FROM bravo_attempts a
-        JOIN bravo_attempt_grades g ON g.attempt_id = a.id AND g.result = 'pass'
-        JOIN bravo_exams e ON e.id = a.exam_id AND e.status = 'released'
-        WHERE a.member_key = ? AND e.bravo_level = ?
-    ");
-    $stmt->execute([$memberKey, $level]);
-    return (int)$stmt->fetchColumn() > 0;
-}
-
-/**
  * 시험 삭제 (하드). 연결된 문제 배정(bravo_exam_questions)·OT(bravo_exam_ot)·
  * 응시 기록(bravo_attempts/bravo_answers/bravo_answer_grades/bravo_attempt_grades + 녹음 파일) 도 함께 삭제.
  */
@@ -493,7 +478,7 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
             'required_review_count' => (int)$lv['required_review_count'],
             'eligible'              => $isElig,
             'status'                => $isElig ? 'eligible' : 'ineligible',
-            'passed_level'          => bravoHasReleasedPass($db, $memberKey, $L),
+            'passed_level'          => bravoGradeCurrentLevel($db, $memberKey) >= $L,
             'exam'                  => $exam,
             'attempts'              => $attempts,
         ];

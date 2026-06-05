@@ -93,10 +93,15 @@ try {
     bravoExamQuestionSet($db, $examId, $qids);
 
     $m1 = $mkMember(1); $m3 = $mkMember(3); $m4 = $mkMember(4);
+    // B2 이전등급(B1) 요건 부여
+    foreach (["{$tag}_uid1", "{$tag}_uid3", "{$tag}_uid4"] as $uid) {
+        bravoGradeSet($db, $uid, 1, 'admin_adjust', 99, null);
+    }
     $at1 = $passAttempt($m1, $examId, $qids);
     $at3 = $passAttempt($m3, $examId, $qids);
     $at4 = $passAttempt($m4, $examId, $qids);
-    $db->prepare("UPDATE bravo_exams SET status='released' WHERE id=?")->execute([$examId]);
+    $examRow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examId)->fetch(PDO::FETCH_ASSOC);
+    bravoExamUpdate($db, $examId, array_merge($examRow, ['status' => 'released'])); // 훅 발동 → m1/m3/m4 B2 취득
     $exam = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examId)->fetch(PDO::FETCH_ASSOC);
     t('셋업 정상', $exam['status'] === 'released');
 
@@ -135,7 +140,8 @@ try {
     $q3 = bravoQuestionCreate($db, ['question_type'=>1,'bravo_level'=>3,'korean_text'=>"{$tag} q3",'english_text'=>'a3','accepted_answers'=>'','target_chunks'=>'c3','difficulty'=>'easy','is_active'=>1], 99);
     bravoExamQuestionSet($db, $examP, [$q3]);
     $atP = $passAttempt($m1, $examP, [$q3]);
-    $db->prepare("UPDATE bravo_exams SET status='released' WHERE id=?")->execute([$examP]);
+    $examPRow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examP)->fetch(PDO::FETCH_ASSOC);
+    bravoExamUpdate($db, $examP, array_merge($examPRow, ['status' => 'released']));
     $examPRow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examP)->fetch(PDO::FETCH_ASSOC);
     $cP = bravoCertificateIssue($db, $atP, $examPRow, "{$tag}회원1");
     $relDate = date('Y-m-d', strtotime($relAt));

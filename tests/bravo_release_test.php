@@ -67,6 +67,9 @@ try {
     }
     bravoExamQuestionSet($db, $examA, $qids);
     $m1 = $mkMember(1); $m2 = $mkMember(2);
+    // B2 이전등급 요건(B1) 충족 — admin_adjust 부여
+    bravoGradeSet($db, "{$tag}_uid1", 1, 'admin_adjust', 99, null);
+    bravoGradeSet($db, "{$tag}_uid2", 1, 'admin_adjust', 99, null);
     $r1 = $gradeAttempt($m1, $examA, $qids, $J_MAX, 'pass');
     $r2 = $gradeAttempt($m2, $examA, $qids, $J_ZERO, 'fail');
     $key1 = $r1['member_key']; $key2 = $r2['member_key'];
@@ -78,15 +81,16 @@ try {
     t('미released: 기존 필드 유지', $st['used'] === 1 && $st['submitted'] === true && $st['limit'] === 3);
     $ms = bravoMemberStatus($db, $m1);
     $lv2 = null; foreach ($ms['levels'] as $lv) { if ($lv['level'] === 2) $lv2 = $lv; }
-    t('미released: passed_level false', $lv2 !== null && $lv2['passed_level'] === false);
+    t('미released: passed_level false', $lv2 !== null && $lv2['passed_level'] === false); // m1 level=0 → 0>=2 false
     // 발표 전엔 같은 등급 다른 시험 차단도 없어야 함 (정보 누설 방지)
     $examB = bravoExamCreate($db, ['title'=>"{$tag} B",'bravo_level'=>2,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'open'], 99);
     bravoExamQuestionSet($db, $examB, $qids);
     $acc = bravoAttemptExamAccess($db, $m1, $examB);
     t('released 전 pass: 차단 안 함', !isset($acc['error']), $acc['error'] ?? '');
 
-    // ── released 전환 ──
-    $db->prepare("UPDATE bravo_exams SET status='released' WHERE id=?")->execute([$examA]);
+    // ── released 전환 (bravoExamUpdate 경유 — 훅 발동) ──
+    $examARow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examA)->fetch(PDO::FETCH_ASSOC);
+    bravoExamUpdate($db, $examA, array_merge($examARow, ['status' => 'released']));
     $examARow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examA)->fetch(PDO::FETCH_ASSOC);
 
     // 합격자 result 공개
@@ -116,22 +120,23 @@ try {
 
     // ── 합격자 등급 차단 ──
     $acc = bravoAttemptExamAccess($db, $m1, $examB);
-    t('합격자 같은 등급 차단 (403)', isset($acc['error']) && ($acc['code'] ?? 0) === 403 && str_contains($acc['error'], 'BRAVO 2'), json_encode($acc));
-    // 불합격자는 같은 등급 다음 시험 자연 허용
+    t('합격자 같은 등급 차단 (403)', isset($acc['error']) && ($acc['code'] ?? 0) === 403 && str_contains($acc['error'], '보유'), json_encode($acc));
+    // 불합격자는 같은 등급 다음 시험 허용 — 단 B2 이전등급(B1) 요건 충족 위해 B1 부여 필요
+    bravoGradeSet($db, $key2, 1, 'admin_adjust', 99, null);
     $acc = bravoAttemptExamAccess($db, $m2, $examB);
     t('불합격자 통과', !isset($acc['error']), $acc['error'] ?? '');
-    // 다른 등급은 차단 안 함 (m1, B1 시험)
+    // m1 은 B2 보유 → B1 시험은 보유 차단(강등 안내) — 신규 게이트 정책
     $examC = bravoExamCreate($db, ['title'=>"{$tag} C",'bravo_level'=>1,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'open'], 99);
     $acc = bravoAttemptExamAccess($db, $m1, $examC);
-    t('다른 등급 차단 안 함', !isset($acc['error']), $acc['error'] ?? '');
+    t('B2 보유자는 B1 차단(강등 필요)', isset($acc['error']) && str_contains($acc['error'], '강등'), $acc['error'] ?? '');
 
-    // helper 직접 검증 (복수 released 일관성의 근거 — 어느 한 released pass 라도 true)
-    t('bravoHasReleasedPass true (m1 B2)', bravoHasReleasedPass($db, $key1, 2) === true);
-    t('bravoHasReleasedPass false (m1 B1)', bravoHasReleasedPass($db, $key1, 1) === false);
-    t('bravoHasReleasedPass false (m2 B2)', bravoHasReleasedPass($db, $key2, 2) === false);
+    // 등급 진실원 기준 직접 검증 (bravoHasReleasedPass 대체 — released 훅으로 승급된 등급)
+    t('released 후 등급 취득 (m1 B2)', bravoGradeCurrentLevel($db, $key1) === 2);
+    t('불합격자 등급 없음 (m2)', bravoGradeCurrentLevel($db, $key2) === 1); // admin_adjust 로 B1 부여됨
 
     // ── released 인데 확정 없음 (채점 누락) → result 키 부재 (대기 유지) ──
     $m5 = $mkMember(5);
+    bravoGradeSet($db, "{$tag}_uid5", 1, 'admin_adjust', 99, null); // B2 이전등급 요건
     $acc5 = bravoAttemptExamAccess($db, $m5, $examB);
     $r5 = bravoAttemptStart($db, $acc5['exam'], $acc5['ctx']['row'], $acc5['member_key'], false);
     $at5 = $r5['attempt'];
@@ -140,7 +145,8 @@ try {
         bravoAnswerStore($db, $at5, $q, $f, 'audio/webm', 'webm', 3000, false);
     }
     bravoAttemptSubmit($db, bravoAttemptGet($db, (int)$at5['id']));
-    $db->prepare("UPDATE bravo_exams SET status='released' WHERE id=?")->execute([$examB]);
+    $examBRow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examB)->fetch(PDO::FETCH_ASSOC);
+    bravoExamUpdate($db, $examB, array_merge($examBRow, ['status' => 'released']));
     $examBRow = $db->query("SELECT * FROM bravo_exams WHERE id=" . $examB)->fetch(PDO::FETCH_ASSOC);
     $st5 = bravoStatusAttempts($db, $examBRow, $acc5['member_key']);
     t('released+미확정: result 키 부재 (대기 유지)', !array_key_exists('result', $st5) && $st5['submitted'] === true);
