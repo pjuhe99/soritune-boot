@@ -86,6 +86,7 @@ function bravoAttemptExamAccess(PDO $db, int $memberId, int $examId): array {
         return ['error' => 'BRAVO ' . ($examLevel - 1) . ' 등급 취득 후 응시할 수 있습니다.', 'code' => 403];
     }
     // ③-pre 같은 시험 미확정 submitted → 채점 대기 차단 (quota 보다 먼저 — 더 명확한 안내)
+    // (start 의 미확정 체크와 의도적 중복 — 수정 시 두 곳 동기화.)
     $subChk = $db->prepare("
         SELECT COUNT(*) FROM bravo_attempts a
         LEFT JOIN bravo_attempt_grades g ON g.attempt_id = a.id
@@ -158,6 +159,7 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
     if ($existing) return ['attempt' => $existing, 'resumed' => true];
 
     // 미확정 submitted → 채점 대기 차단 (pass/fail 비대칭 차단은 발표 전 정보 누설이라 불문 — 스펙 §4-2)
+    // (access ③-pre 와 동일 쿼리 의도적 중복 — start 직접 호출 경로의 방어선. 수정 시 두 곳 동기화.)
     $sub = $db->prepare("
         SELECT COUNT(*) FROM bravo_attempts a
         LEFT JOIN bravo_attempt_grades g ON g.attempt_id = a.id

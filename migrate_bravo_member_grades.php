@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS bravo_grade_log (
 ");
 echo "bravo_grade_log 생성 완료\n";
 
+// bravo_attempts.member_key 인덱스 (quota 누적 쿼리용) — 멱등
+$has = $db->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'bravo_attempts' AND index_name = 'idx_ba_member_key'")->fetchColumn();
+if ((int)$has === 0) {
+    $db->exec("ALTER TABLE bravo_attempts ADD KEY idx_ba_member_key (member_key)");
+    echo "bravo_attempts.idx_ba_member_key 인덱스 추가\n";
+} else {
+    echo "bravo_attempts.idx_ba_member_key 이미 존재\n";
+}
+
 $r = bravoGradeBackfillFromLegacy($db);
 echo "grandfather backfill: applied {$r['applied']}, skipped {$r['skipped']}\n";
 

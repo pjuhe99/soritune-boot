@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS bravo_attempts (
     started_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     submitted_at  DATETIME NULL,
     UNIQUE KEY uk_ba_exam_user_no (exam_id, member_key, attempt_no),
-    KEY idx_ba_member (member_id)
+    KEY idx_ba_member (member_id),
+    KEY idx_ba_member_key (member_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ");
 echo "bravo_attempts 생성 완료\n";

@@ -132,7 +132,7 @@ try {
 
     // 등급 진실원 기준 직접 검증 (bravoHasReleasedPass 대체 — released 훅으로 승급된 등급)
     t('released 후 등급 취득 (m1 B2)', bravoGradeCurrentLevel($db, $key1) === 2);
-    t('불합격자 등급 없음 (m2)', bravoGradeCurrentLevel($db, $key2) === 1); // admin_adjust 로 B1 부여됨
+    t('불합격자 등급 미상승 — admin 부여 B1 유지 (m2)', bravoGradeCurrentLevel($db, $key2) === 1);
 
     // ── released 인데 확정 없음 (채점 누락) → result 키 부재 (대기 유지) ──
     $m5 = $mkMember(5);
