@@ -916,7 +916,7 @@ case 'member_list':
                COALESCE(mhs_u.stage1_participation_count, mhs_p.stage1_participation_count, 0) AS stage1_participation_count,
                COALESCE(mhs_u.stage2_participation_count, mhs_p.stage2_participation_count, 0) AS stage2_participation_count,
                COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-               COALESCE(mhs_u.bravo_grade, mhs_p.bravo_grade) AS bravo_grade
+               CASE WHEN bmg.current_level >= 1 THEN CONCAT('Bravo ', bmg.current_level) END AS bravo_grade
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN bootcamp_groups bg ON bm.group_id = bg.id
@@ -924,6 +924,7 @@ case 'member_list':
         LEFT JOIN member_coin_balances mcb ON bm.id = mcb.member_id
         LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
         LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
+        LEFT JOIN bravo_member_grades bmg ON bmg.member_key = COALESCE(NULLIF(bm.user_id, ''), CONCAT('p:', bm.phone))
         WHERE " . implode(' AND ', $where) . "
         ORDER BY bm.real_name
     ");

@@ -6,6 +6,7 @@
  * - phone/user_id 기준으로 동일인의 크로스 cohort 통계를 계산하여 저장
  * - 원본은 항상 bootcamp_members + cohorts 에 있으므로 언제든 재계산 가능
  * - 갱신 시점: 회원 CREATE / UPDATE(stage_no, is_active, phone, user_id 변경) / DELETE
+ * bravo_grade 는 freeze — 등급 진실원은 bravo_member_grades (등급 단일화 슬라이스), 이 파일은 더이상 쓰지 않음.
  */
 
 /**
@@ -52,51 +53,48 @@ function refreshMemberStats($db, $phone, $userId) {
     $s1    = count($stage1Cohorts);
     $s2    = count($stage2Cohorts);
     $comp  = count($completionCohorts);
-    $bravo = calcBravoGrade($comp);
 
     // phone 기준 upsert
     if (!empty($phone)) {
-        upsertStatsByPhone($db, $phone, $s1, $s2, $comp, $bravo);
+        upsertStatsByPhone($db, $phone, $s1, $s2, $comp);
     }
 
     // user_id 기준 upsert (phone과 별도 row일 수 있음)
     if (!empty($userId)) {
-        upsertStatsByUserId($db, $userId, $s1, $s2, $comp, $bravo);
+        upsertStatsByUserId($db, $userId, $s1, $s2, $comp);
     }
 }
 
 /**
  * phone 기준 upsert
  */
-function upsertStatsByPhone($db, $phone, $s1, $s2, $comp, $bravo) {
+function upsertStatsByPhone($db, $phone, $s1, $s2, $comp) {
     $db->prepare("
         INSERT INTO member_history_stats
-            (phone, stage1_participation_count, stage2_participation_count, completed_bootcamp_count, bravo_grade, last_calculated_at)
-        VALUES (?, ?, ?, ?, ?, NOW())
+            (phone, stage1_participation_count, stage2_participation_count, completed_bootcamp_count, last_calculated_at)
+        VALUES (?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             stage1_participation_count = VALUES(stage1_participation_count),
             stage2_participation_count = VALUES(stage2_participation_count),
             completed_bootcamp_count   = VALUES(completed_bootcamp_count),
-            bravo_grade                = VALUES(bravo_grade),
             last_calculated_at         = NOW()
-    ")->execute([$phone, $s1, $s2, $comp, $bravo]);
+    ")->execute([$phone, $s1, $s2, $comp]);
 }
 
 /**
  * user_id 기준 upsert
  */
-function upsertStatsByUserId($db, $userId, $s1, $s2, $comp, $bravo) {
+function upsertStatsByUserId($db, $userId, $s1, $s2, $comp) {
     $db->prepare("
         INSERT INTO member_history_stats
-            (user_id, stage1_participation_count, stage2_participation_count, completed_bootcamp_count, bravo_grade, last_calculated_at)
-        VALUES (?, ?, ?, ?, ?, NOW())
+            (user_id, stage1_participation_count, stage2_participation_count, completed_bootcamp_count, last_calculated_at)
+        VALUES (?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
             stage1_participation_count = VALUES(stage1_participation_count),
             stage2_participation_count = VALUES(stage2_participation_count),
             completed_bootcamp_count   = VALUES(completed_bootcamp_count),
-            bravo_grade                = VALUES(bravo_grade),
             last_calculated_at         = NOW()
-    ")->execute([$userId, $s1, $s2, $comp, $bravo]);
+    ")->execute([$userId, $s1, $s2, $comp]);
 }
 
 /**
@@ -177,12 +175,12 @@ function recalcAllMemberStats($db) {
 
         $stats = calcStatsFromRecords($relatedRecords, $today);
 
-        upsertStatsByPhone($db, $phone, $stats['s1'], $stats['s2'], $stats['comp'], $stats['bravo']);
+        upsertStatsByPhone($db, $phone, $stats['s1'], $stats['s2'], $stats['comp']);
         $count++;
 
         // 연결된 user_id에도 동일한 값 저장
         foreach ($relatedUserIds as $uid) {
-            upsertStatsByUserId($db, $uid, $stats['s1'], $stats['s2'], $stats['comp'], $stats['bravo']);
+            upsertStatsByUserId($db, $uid, $stats['s1'], $stats['s2'], $stats['comp']);
             $count++;
         }
     }
@@ -194,7 +192,7 @@ function recalcAllMemberStats($db) {
 
         $stats = calcStatsFromRecords($records, $today);
 
-        upsertStatsByUserId($db, $userId, $stats['s1'], $stats['s2'], $stats['comp'], $stats['bravo']);
+        upsertStatsByUserId($db, $userId, $stats['s1'], $stats['s2'], $stats['comp']);
         $count++;
     }
 
@@ -223,12 +221,11 @@ function calcStatsFromRecords($records, $today) {
         's1'    => count($stage1),
         's2'    => count($stage2),
         'comp'  => $comp,
-        'bravo' => calcBravoGrade($comp),
     ];
 }
 
 /**
- * 완주 횟수 기반 Bravo 등급 산정
+ * 완주 횟수 기반 Bravo 등급 산정 — freeze 후 미사용. 등급 진실원은 bravo_member_grades (마이그 backfill 의 역사적 기준 참조용으로만 잔존).
  */
 function calcBravoGrade($completionCount) {
     if ($completionCount >= 10) return 'Bravo 3';
