@@ -329,6 +329,20 @@ case 'bravo_certificate':
     echo $r['bytes'];
     exit;
 
+case 'bravo_demote':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $s = requireMember();
+    $db = getDB();
+    $ctx = bravoMemberContext($db, (int)$s['member_id']);
+    if (!$ctx) jsonError('회원 정보를 찾을 수 없습니다.', 404);
+    $r = bravoGradeDemote($db, bravoAttemptMemberKey($ctx['row']));
+    if (isset($r['error'])) jsonError($r['error']);
+    jsonSuccess(
+        ['from' => $r['from'], 'to' => $r['to']],
+        'BRAVO ' . $r['from'] . ' → ' . ($r['to'] >= 1 ? 'BRAVO ' . $r['to'] : '무등급') . ' 로 강등되었습니다.'
+    );
+    break;
+
 default:
     jsonError('Unknown action', 404);
 }
