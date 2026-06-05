@@ -4,6 +4,7 @@
  * 1차 슬라이스: 자격 자동계산 순수 함수 + 관리자 데이터 서비스.
  * 기존 member_history_stats.bravo_grade 와 무관한 추가형.
  */
+require_once __DIR__ . '/bravo_grades.php';
 
 /**
  * 유효 회독수 = override 가 있으면 그 값, 없으면(NULL) 자동 completed_bootcamp_count.
@@ -262,18 +263,35 @@ function bravoExamCreate(PDO $db, array $d, int $adminId): int {
 
 /**
  * 시험 수정 (status 포함 전체 필드).
+ * status 가 released 로 '전환'되는 시점에 확정 pass 전원 승급 (bravoGradeApplyExamPass).
+ * 재전환(released→closed→released)은 ApplyExamPass 내부 no-op 으로 멱등.
  */
 function bravoExamUpdate(PDO $db, int $id, array $d): void {
     $c = bravoExamPersistData($d);
-    $db->prepare("
-        UPDATE bravo_exams SET
-            title=?, bravo_level=?, exam_mode=?, start_at=?, end_at=?, result_release_at=?,
-            attempt_limit=?, target_type=?, target_cohort_id=?, status=?
-        WHERE id=?
-    ")->execute([
-        $c['title'], $c['bravo_level'], $c['exam_mode'], $c['start_at'], $c['end_at'], $c['result_release_at'],
-        $c['attempt_limit'], $c['target_type'], $c['target_cohort_id'], $c['status'], $id,
-    ]);
+    $prevStmt = $db->prepare("SELECT status FROM bravo_exams WHERE id = ?");
+    $prevStmt->execute([$id]);
+    $prevStatus = $prevStmt->fetchColumn();
+
+    $owns = !$db->inTransaction();
+    if ($owns) $db->beginTransaction();
+    try {
+        $db->prepare("
+            UPDATE bravo_exams SET
+                title=?, bravo_level=?, exam_mode=?, start_at=?, end_at=?, result_release_at=?,
+                attempt_limit=?, target_type=?, target_cohort_id=?, status=?
+            WHERE id=?
+        ")->execute([
+            $c['title'], $c['bravo_level'], $c['exam_mode'], $c['start_at'], $c['end_at'], $c['result_release_at'],
+            $c['attempt_limit'], $c['target_type'], $c['target_cohort_id'], $c['status'], $id,
+        ]);
+        if ($prevStatus !== false && $prevStatus !== 'released' && $c['status'] === 'released') {
+            bravoGradeApplyExamPass($db, ['id' => $id, 'bravo_level' => $c['bravo_level'], 'title' => $c['title']]);
+        }
+        if ($owns) $db->commit();
+    } catch (Throwable $e) {
+        if ($owns) $db->rollBack();
+        throw $e;
+    }
 }
 
 /**

@@ -31,6 +31,7 @@ function bravoGradeRow(PDO $db, string $memberKey): ?array {
 /**
  * 사람 단위 mutex: 행 보장(INSERT IGNORE) 후 FOR UPDATE 잠금. 트랜잭션 안에서만 호출(호출부 책임).
  * 행이 항상 존재하므로 빈 범위 gap-lock 한계 없이 같은 사람의 동시 작업이 직렬화된다.
+ * ⚠️ autocommit(트랜잭션 밖)에서 호출 금지 — INSERT IGNORE 가 즉시 커밋되어 미사용 행이 영구 잔류함.
  */
 function bravoGradeLockRow(PDO $db, string $memberKey): array {
     $db->prepare("INSERT IGNORE INTO bravo_member_grades (member_key) VALUES (?)")->execute([$memberKey]);
