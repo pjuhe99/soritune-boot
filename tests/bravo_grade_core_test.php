@@ -104,6 +104,11 @@ try {
     bravoGradeBackfillFromLegacy($db);
     t('backfill 이 기존 상위 등급 안 내림', bravoGradeCurrentLevel($db, "{$tag}_legacy") === 3);
 
+    // 강등 후 마이그 재실행이 grandfather 등급을 복원하면 안 됨 (외부 리뷰 Critical)
+    bravoGradeSet($db, 'p:' . $phone2, 1, 'self_demotion', null, null); // B3 grandfather → B1 로 강등 시뮬
+    bravoGradeBackfillFromLegacy($db);
+    t('강등 후 backfill 재실행이 복원 안 함', bravoGradeCurrentLevel($db, 'p:' . $phone2) === 1);
+
     $db->rollBack();
 } catch (Throwable $e) {
     $db->rollBack();

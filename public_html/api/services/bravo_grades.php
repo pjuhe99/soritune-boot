@@ -82,21 +82,30 @@ function bravoGradeDemote(PDO $db, string $memberKey): array {
 
 /**
  * released 전환 훅: 그 시험의 확정 pass 전원을 max(현재, 시험등급) 으로 승급. 변경 인원 반환.
- * 이미 같거나 높은 등급은 no-op(로그 없음) — released 재전환에도 멱등.
+ * 1시험 1승급 — 이 시험으로 이미 exam_pass 로그가 있는 키는 재전환 시에도(강등 후 포함) 재승급하지 않음 (스펙 §2/§8).
+ * 이미 같거나 높은 등급은 no-op(로그 없음). 재전환 후 새로 확정된 합격자는 로그가 없어 정상 승급됨.
  */
 function bravoGradeApplyExamPass(PDO $db, array $exam): int {
     $level = (int)$exam['bravo_level'];
+    $examId = (int)$exam['id'];
+    // 이 시험으로 이미 승급 처리된 사람 (released 재전환이 강등을 되돌리면 안 됨 — 1시험 1승급)
+    $already = [];
+    $aStmt = $db->prepare("SELECT DISTINCT member_key FROM bravo_grade_log WHERE source = 'exam_pass' AND ref_id = ?");
+    $aStmt->execute([$examId]);
+    foreach ($aStmt->fetchAll(PDO::FETCH_COLUMN) as $k) $already[$k] = true;
+
     $stmt = $db->prepare("
         SELECT DISTINCT a.member_key
         FROM bravo_attempts a
         JOIN bravo_attempt_grades g ON g.attempt_id = a.id AND g.result = 'pass'
         WHERE a.exam_id = ?
     ");
-    $stmt->execute([(int)$exam['id']]);
+    $stmt->execute([$examId]);
     $n = 0;
     foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $key) {
+        if (isset($already[(string)$key])) continue;
         if (bravoGradeCurrentLevel($db, (string)$key) < $level) {
-            bravoGradeSet($db, (string)$key, $level, 'exam_pass', (int)$exam['id'], isset($exam['title']) ? (string)$exam['title'] : null);
+            bravoGradeSet($db, (string)$key, $level, 'exam_pass', $examId, isset($exam['title']) ? (string)$exam['title'] : null);
             $n++;
         }
     }
@@ -126,7 +135,8 @@ function bravoAttemptQuotaForLevel(PDO $db, string $memberKey, int $level): arra
  * 레거시 member_history_stats.bravo_grade → bravo_member_grades backfill (grandfather). 멱등.
  * - user_id 행 우선. phone 행은 그 phone 의 bootcamp_members 가 user_id 를 갖지 않을 때만 'p:'+phone 키로
  *   (이중 카운트 방지 — 표시 경로의 COALESCE(user행, phone행) 우선순위와 동일).
- * - 'Bravo N' 문자열 파싱. 기존 current_level 이 같거나 높으면 skip (안 내림 — GREATEST 의미).
+ * - 'Bravo N' 문자열 파싱. grandfather 로그 보유 키는 영구 skip — 강등 후 재실행이 복원하지 않음 (스펙 §2/§3-3).
+ *   grandfather 로그가 없는 키만 current_level 비교 후 승급.
  */
 function bravoGradeBackfillFromLegacy(PDO $db): array {
     $parse = function (?string $g): int {
@@ -146,8 +156,15 @@ function bravoGradeBackfillFromLegacy(PDO $db): array {
         $key = ($uid !== false && $uid !== '' && $uid !== null) ? (string)$uid : 'p:' . $r['phone'];
         $byKey[$key] = max($byKey[$key] ?? 0, $lv);
     }
+    // 이미 grandfather 처리된 키 로드 — 루프 전 일괄 (효율 + 강등 후 재실행 복원 차단)
+    $alreadyGf = [];
+    foreach ($db->query("SELECT DISTINCT member_key FROM bravo_grade_log WHERE source = 'grandfather'") as $r) {
+        $alreadyGf[$r['member_key']] = true;
+    }
     $applied = 0; $skipped = 0;
     foreach ($byKey as $key => $lv) {
+        // 이미 grandfather 처리된 사람은 영구 skip — 이후 강등/조정을 마이그 재실행이 되돌리면 안 됨 (스펙 §2/§3-3)
+        if (isset($alreadyGf[$key])) { $skipped++; continue; }
         if (bravoGradeCurrentLevel($db, $key) >= $lv) { $skipped++; continue; }
         bravoGradeSet($db, $key, $lv, 'grandfather', null, 'legacy bravo_grade backfill');
         $applied++;

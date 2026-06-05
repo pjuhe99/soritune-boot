@@ -147,10 +147,12 @@ function bravoAttemptFindInProgress(PDO $db, int $examId, string $memberKey): ?a
  * 응시 시작 (이어하기 겸용).
  * - in_progress 존재 → 그대로 반환 (resumed=true, 차감 없음)
  * - 미확정 submitted 존재 → 채점 대기 차단 (확정되면 같은 시험 재응시 가능 — 실제 한도는 누적 quota)
- * - 신규: require_check 검증 → 스냅샷 → 사람 단위 mutex(bravoGradeLockRow) → 누적 quota 재검사 → INSERT
+ * - 신규: require_check 검증 → 스냅샷 → 사람 단위 mutex(bravoGradeLockRow) → 같은 시험 in_progress 재확인
+ *   (더블클릭 안전망 — 락 대기 중 선행 커밋된 in_progress 를 resumed 로 반환, 이중 차감 방지)
+ *   → 누적 quota 재검사 → INSERT
  *   (mutex 가 같은 등급 다른 시험의 동시 시작도 직렬화 — 빈 범위 gap-lock 한계 없음)
  * 성공: ['attempt'=>row, 'resumed'=>bool], 실패: ['error'=>msg]
- * $testHook: 테스트 전용 — mutex 획득 후·quota 카운트 직전 호출(race 재현).
+ * $testHook: 테스트 전용 — mutex 획득 후·in_progress 재확인 직전 호출(race/더블클릭 재현).
  */
 function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $memberKey, bool $otChecked, ?callable $testHook = null): array {
     $examId = (int)$exam['id'];
@@ -186,6 +188,12 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
         // 사람 단위 mutex — 같은 등급 다른 시험의 동시 시작도 이 행 잠금으로 직렬화
         bravoGradeLockRow($db, $memberKey);
         if ($testHook) $testHook();
+        // 더블클릭 재확인 — 락 대기 중 먼저 커밋된 같은 시험 in_progress 가 있으면 그걸 반환 (이중 차감 방지)
+        $existing = bravoAttemptFindInProgress($db, $examId, $memberKey);
+        if ($existing) {
+            if ($owns) $db->rollBack();
+            return ['attempt' => $existing, 'resumed' => true];
+        }
         $quota = bravoAttemptQuotaForLevel($db, $memberKey, (int)$exam['bravo_level']);
         if ($quota['left'] <= 0) {
             if ($owns) $db->rollBack();
@@ -203,7 +211,7 @@ function bravoAttemptStart(PDO $db, array $exam, array $memberRow, string $membe
     } catch (PDOException $e) {
         if ($owns) $db->rollBack();
         if ($e->getCode() === '23000') {
-            // 같은 시험 더블클릭 안전망 — 기존 in_progress 반환
+            // UNIQUE 충돌 안전망 — 락 후 재확인을 통과한 극단적 경쟁(같은 커넥션 밖) 시 기존 in_progress 반환
             $existing = bravoAttemptFindInProgress($db, $examId, $memberKey);
             if ($existing) return ['attempt' => $existing, 'resumed' => true];
         }

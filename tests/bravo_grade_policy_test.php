@@ -95,6 +95,12 @@ try {
     bravoExamUpdate($db, $examA, $upd);
     t('상위 등급 보유자 no-op', bravoGradeCurrentLevel($db, $key2) === 3);
 
+    // 합격 승급 후 강등한 회원을 released 재전환이 재승급하면 안 됨 (외부 리뷰 Important)
+    bravoGradeDemote($db, $key1); // B1 → 0 (examA=B1 합격으로 승급됐던 키)
+    bravoExamUpdate($db, $examA, array_merge($upd, ['status' => 'closed']));
+    bravoExamUpdate($db, $examA, $upd); // 재전환
+    t('재전환이 강등자 재승급 안 함', bravoGradeCurrentLevel($db, $key1) === 0);
+
     // ── 누적 quota ──
     $m3 = $mkMember(3);
     $key3 = "{$tag}_uid3";

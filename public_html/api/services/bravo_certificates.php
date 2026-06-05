@@ -163,7 +163,6 @@ function bravoCertificateRender(array $cert, bool $forcePng = false): array {
         $bg = @imagecreatefrompng(BRAVO_CERT_BG_PNG);
         if ($bg) {
             imagecopyresampled($im, $bg, 0, 0, 0, 0, $w, $h, imagesx($bg), imagesy($bg));
-            imagedestroy($bg);
             $bgUsed = true;
         }
     }
@@ -209,7 +208,7 @@ function bravoCertificateRender(array $cert, bool $forcePng = false): array {
     ob_start();
     imagepng($im);
     $png = ob_get_clean();
-    imagedestroy($im);
+    // GdImage 는 GC — imagedestroy 는 PHP 8.5 deprecated 라 미사용
 
     if (!$forcePng && class_exists('Imagick')) {
         try {

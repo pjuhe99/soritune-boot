@@ -133,6 +133,23 @@ try {
     // hook 이 잔여 1 을 선점 → start 의 quota 재검사(잠금 후 카운트)가 이를 보고 거부해야 함
     t('race: mutex 후 quota 재검사로 거부', isset($r['error']) && str_contains($r['error'], '횟수'), json_encode($r));
 
+    // ⑤ 같은 시험 더블클릭: 락 후 재확인 — 끼어든 in_progress 를 resumed 로 반환 (이중 차감 방지)
+    $db->prepare("UPDATE bravo_member_grades SET extra_attempts_1 = 5 WHERE member_key = ?")->execute([$keyP]);
+    $accD2 = bravoAttemptExamAccess($db, $mp, $examD);
+    t('더블클릭 셋업 access', !isset($accD2['error']), $accD2['error'] ?? '');
+    $hooked2 = false;
+    $hook2 = function () use ($db, &$hooked2, $examD, $keyP, $mp, $qD) {
+        if ($hooked2) return;
+        $hooked2 = true;
+        $no = (int)$db->query("SELECT COALESCE(MAX(attempt_no),0)+1 FROM bravo_attempts WHERE exam_id={$examD} AND member_key=" . $db->quote($keyP))->fetchColumn();
+        $db->prepare("INSERT INTO bravo_attempts (exam_id, member_key, member_id, attempt_no, question_ids) VALUES (?,?,?,?,?)")
+           ->execute([$examD, $keyP, $mp, $no, json_encode($qD)]);
+    };
+    $cntBefore = (int)$db->query("SELECT COUNT(*) FROM bravo_attempts WHERE exam_id={$examD} AND member_key=" . $db->quote($keyP))->fetchColumn();
+    $r5 = bravoAttemptStart($db, $accD2['exam'], $accD2['ctx']['row'], $accD2['member_key'], false, $hook2);
+    $cntAfter = (int)$db->query("SELECT COUNT(*) FROM bravo_attempts WHERE exam_id={$examD} AND member_key=" . $db->quote($keyP))->fetchColumn();
+    t('더블클릭: 끼어든 attempt 를 resumed 반환 (신규 INSERT 0)', !isset($r5['error']) && !empty($r5['resumed']) && $cntAfter === $cntBefore + 1, json_encode(['r'=>$r5['resumed'] ?? null, 'before'=>$cntBefore, 'after'=>$cntAfter]));
+
     $db->rollBack();
 } catch (Throwable $e) {
     $db->rollBack();
