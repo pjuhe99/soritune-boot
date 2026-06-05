@@ -101,6 +101,31 @@ try {
     bravoExamUpdate($db, $examA, $upd); // 재전환
     t('재전환이 강등자 재승급 안 함', bravoGradeCurrentLevel($db, $key1) === 0);
 
+    // 단 강등 "후" 같은 시험에 재합격(새 확정)하면 재전환 시 정당 승급 (재오픈 사이클)
+    // key1 은 현재 0 (강등됨). examA 를 재오픈해 새 attempt 합격 확정 → 재released → 승급되어야 함
+    bravoExamUpdate($db, $examA, array_merge($upd, ['status' => 'open']));
+    // 승급 로그가 과거에 있으므로 confirmed_at 이 그보다 뒤여야 함 — sleep(1) 로 초 단위 분리
+    sleep(1);
+    $accRe = bravoAttemptExamAccess($db, $m1, $examA);
+    if (isset($accRe['error'])) throw new RuntimeException('re-access: ' . $accRe['error']);
+    $rRe = bravoAttemptStart($db, $accRe['exam'], $accRe['ctx']['row'], $accRe['member_key'], false);
+    if (isset($rRe['error'])) throw new RuntimeException('re-start: ' . $rRe['error']);
+    $atRe = $rRe['attempt'];
+    foreach ($qA as $q) {
+        $f = tempnam(sys_get_temp_dir(), 'tgp_'); file_put_contents($f, 'audio');
+        bravoAnswerStore($db, $atRe, $q, $f, 'audio/webm', 'webm', 3000, false);
+    }
+    bravoAttemptSubmit($db, $atRe);
+    $atRe = bravoAttemptGet($db, (int)$atRe['id']);
+    foreach ($qA as $q) {
+        $aid = (int)$db->query("SELECT id FROM bravo_answers WHERE attempt_id=" . (int)$atRe['id'] . " AND question_id=" . (int)$q)->fetchColumn();
+        bravoGradeSave($db, $atRe, $accRe['exam'], $aid, $J_MAX, 99);
+    }
+    $cRe = bravoAttemptConfirm($db, $atRe, $accRe['exam'], ['result' => 'pass'], 99);
+    if (isset($cRe['error'])) throw new RuntimeException('re-confirm: ' . $cRe['error']);
+    bravoExamUpdate($db, $examA, $upd); // 재released
+    t('강등 후 재합격 → 재전환 시 정당 승급', bravoGradeCurrentLevel($db, $key1) === 1);
+
     // ── 누적 quota ──
     $m3 = $mkMember(3);
     $key3 = "{$tag}_uid3";

@@ -81,31 +81,39 @@ function bravoGradeDemote(PDO $db, string $memberKey): array {
 }
 
 /**
- * released 전환 훅: 그 시험의 확정 pass 전원을 max(현재, 시험등급) 으로 승급. 변경 인원 반환.
- * 1시험 1승급 — 이 시험으로 이미 exam_pass 로그가 있는 키는 재전환 시에도(강등 후 포함) 재승급하지 않음 (스펙 §2/§8).
- * 이미 같거나 높은 등급은 no-op(로그 없음). 재전환 후 새로 확정된 합격자는 로그가 없어 정상 승급됨.
+ * released 전환 훅: 그 시험의 확정 pass 를 max(현재, 시험등급) 으로 승급. 변경 인원 반환.
+ * - 이미 같거나 높은 등급은 no-op(로그 없음).
+ * - 재전환이 강등을 되돌리지 않음: 그 시험의 마지막 exam_pass 승급 "이후" 새 합격 확정이 있는 사람만 승급
+ *   (재오픈 사이클에서 강등 후 재합격한 사람은 정당하게 재승급 — 외부리뷰 fix 의 정밀화).
  */
 function bravoGradeApplyExamPass(PDO $db, array $exam): int {
     $level = (int)$exam['bravo_level'];
     $examId = (int)$exam['id'];
-    // 이 시험으로 이미 승급 처리된 사람 (released 재전환이 강등을 되돌리면 안 됨 — 1시험 1승급)
-    $already = [];
-    $aStmt = $db->prepare("SELECT DISTINCT member_key FROM bravo_grade_log WHERE source = 'exam_pass' AND ref_id = ?");
-    $aStmt->execute([$examId]);
-    foreach ($aStmt->fetchAll(PDO::FETCH_COLUMN) as $k) $already[$k] = true;
 
+    // 사람별 마지막 합격 확정 시각
     $stmt = $db->prepare("
-        SELECT DISTINCT a.member_key
+        SELECT a.member_key, MAX(g.confirmed_at) AS last_pass
         FROM bravo_attempts a
         JOIN bravo_attempt_grades g ON g.attempt_id = a.id AND g.result = 'pass'
         WHERE a.exam_id = ?
+        GROUP BY a.member_key
     ");
     $stmt->execute([$examId]);
+    $passers = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+    if (!$passers) return 0;
+
+    // 사람별 이 시험의 마지막 승급 시각
+    $lStmt = $db->prepare("SELECT member_key, MAX(created_at) FROM bravo_grade_log WHERE source = 'exam_pass' AND ref_id = ? GROUP BY member_key");
+    $lStmt->execute([$examId]);
+    $credited = $lStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
     $n = 0;
-    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $key) {
-        if (isset($already[(string)$key])) continue;
-        if (bravoGradeCurrentLevel($db, (string)$key) < $level) {
-            bravoGradeSet($db, (string)$key, $level, 'exam_pass', $examId, isset($exam['title']) ? (string)$exam['title'] : null);
+    foreach ($passers as $key => $lastPass) {
+        $key = (string)$key;
+        // 이미 승급된 적 있고, 그 이후 새 합격 확정이 없으면 skip (강등 복원 금지)
+        if (isset($credited[$key]) && $lastPass <= $credited[$key]) continue;
+        if (bravoGradeCurrentLevel($db, $key) < $level) {
+            bravoGradeSet($db, $key, $level, 'exam_pass', $examId, isset($exam['title']) ? (string)$exam['title'] : null);
             $n++;
         }
     }
