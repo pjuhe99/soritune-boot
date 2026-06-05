@@ -31,6 +31,9 @@
 .bravo-chip.lv2 { background: var(--color-primary-100); color: var(--color-primary-700); }
 .bravo-chip.lv3 { background: var(--color-accent-100); color: var(--color-accent-600); }
 
+.bravo-extra-cell { white-space: nowrap; }
+.bravo-cur-level { padding: 2px 4px; font-size: var(--text-sm); }
+
 /* ── 시험 관리 ── */
 .bravo-exam-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
 .bravo-exam-fields {

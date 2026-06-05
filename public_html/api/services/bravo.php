@@ -87,23 +87,36 @@ function bravoMemberList(PDO $db, string $cohort): array {
     $stmt = $db->prepare("
         SELECT bm.user_id, bm.real_name, bm.nickname, bm.phone,
                COALESCE(mhs_u.completed_bootcamp_count, mhs_p.completed_bootcamp_count, 0) AS completed_bootcamp_count,
-               bms.review_count_override, bms.granted_levels, bms.notes
+               bms.review_count_override, bms.granted_levels, bms.notes,
+               bmg.current_level, bmg.extra_attempts_1, bmg.extra_attempts_2, bmg.extra_attempts_3
         FROM bootcamp_members bm
         JOIN cohorts c ON bm.cohort_id = c.id
         LEFT JOIN member_history_stats mhs_p ON bm.phone = mhs_p.phone AND bm.phone IS NOT NULL AND bm.phone != ''
         LEFT JOIN member_history_stats mhs_u ON bm.user_id = mhs_u.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
         LEFT JOIN bravo_member_settings bms ON bm.user_id = bms.user_id AND bm.user_id IS NOT NULL AND bm.user_id != ''
+        LEFT JOIN bravo_member_grades bmg ON bmg.member_key = COALESCE(NULLIF(bm.user_id, ''), CONCAT('p:', bm.phone))
         WHERE c.cohort = ? AND bm.member_status NOT IN ('refunded','expelled')
         ORDER BY bm.real_name
     ");
     $stmt->execute([$cohort]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // 등급별 누적 used (사람×등급 단위 일괄)
+    $usedMap = [];
+    foreach ($db->query("
+        SELECT a.member_key, e.bravo_level, COUNT(*) AS c
+        FROM bravo_attempts a JOIN bravo_exams e ON e.id = a.exam_id
+        GROUP BY a.member_key, e.bravo_level
+    ") as $u) {
+        $usedMap[$u['member_key']][(int)$u['bravo_level']] = (int)$u['c'];
+    }
+
     $out = [];
     foreach ($rows as $r) {
         $override = $r['review_count_override'] !== null ? (int)$r['review_count_override'] : null;
         $granted  = bravoParseGrantedLevels($r['granted_levels']);
         $completed = (int)$r['completed_bootcamp_count'];
+        $mk = $r['user_id'] !== null && $r['user_id'] !== '' ? $r['user_id'] : 'p:' . $r['phone'];
         $out[] = [
             'user_id'                  => $r['user_id'],
             'real_name'                => $r['real_name'],
@@ -115,6 +128,18 @@ function bravoMemberList(PDO $db, string $cohort): array {
             'granted_levels'           => $granted,
             'notes'                    => $r['notes'],
             'eligible_levels'          => bravoEligibleLevels($override, $completed, $granted, $levels),
+            'member_key'               => $mk,
+            'current_level'            => $r['current_level'] !== null ? (int)$r['current_level'] : 0,
+            'extra_attempts'           => [
+                1 => (int)($r['extra_attempts_1'] ?? 0),
+                2 => (int)($r['extra_attempts_2'] ?? 0),
+                3 => (int)($r['extra_attempts_3'] ?? 0),
+            ],
+            'used_attempts'            => [
+                1 => $usedMap[$mk][1] ?? 0,
+                2 => $usedMap[$mk][2] ?? 0,
+                3 => $usedMap[$mk][3] ?? 0,
+            ],
         ];
     }
     return $out;

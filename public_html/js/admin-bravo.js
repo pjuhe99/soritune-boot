@@ -87,7 +87,7 @@ const AdminBravoApp = (() => {
         const rows = members.map(m => {
             const ov = m.review_count_override === null ? '' : m.review_count_override;
             return `
-            <tr data-user="${App.esc(m.user_id)}">
+            <tr data-user="${App.esc(m.user_id)}" data-key="${App.esc(m.member_key)}">
                 <td>${App.esc(m.real_name || '')}<br><small>${App.esc(m.nickname || '')}</small></td>
                 <td>${App.esc(m.phone || '')}</td>
                 <td class="num">${m.completed_bootcamp_count}</td>
@@ -95,6 +95,15 @@ const AdminBravoApp = (() => {
                 <td class="num">${m.effective_review_count}</td>
                 <td>${grantCheckboxes(m.granted_levels)}</td>
                 <td>${levelChip(m.eligible_levels)}</td>
+                <td>
+                    <select class="bravo-cur-level">
+                        ${[0,1,2,3].map(l => `<option value="${l}" ${ (m.current_level || 0) === l ? 'selected' : ''}>${l === 0 ? '무등급' : 'BRAVO ' + l}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="num"><small>${m.used_attempts ? `${m.used_attempts[1]}·${m.used_attempts[2]}·${m.used_attempts[3]}` : '-'}</small></td>
+                <td class="bravo-extra-cell">
+                    ${[1,2,3].map(l => `<input type="number" class="bravo-extra" data-lv="${l}" min="0" max="99" value="${m.extra_attempts ? m.extra_attempts[l] : 0}" style="width:3.5em">`).join(' ')}
+                </td>
                 <td><input type="text" class="bravo-notes" value="${App.esc(m.notes || '')}" placeholder="메모"></td>
                 <td><button class="btn btn-primary btn-sm bravo-save">저장</button></td>
             </tr>`;
@@ -105,9 +114,9 @@ const AdminBravoApp = (() => {
                 <p class="bravo-help">응시 자격 임계 — ${App.esc(thresholdInfo)}. 회독수 override 비우면 자동(완주횟수) 사용. 수동부여는 계산과 무관하게 응시 허용.</p>
                 <table class="data-table bravo-table">
                     <thead><tr>
-                        <th>회원</th><th>전화번호</th><th>완주(자동)</th><th>override</th><th>유효회독</th><th>수동부여</th><th>응시가능</th><th>메모</th><th></th>
+                        <th>회원</th><th>전화번호</th><th>완주(자동)</th><th>override</th><th>유효회독</th><th>수동부여</th><th>응시가능</th><th>현재 등급</th><th>누적 응시</th><th>추가횟수 B1/B2/B3</th><th>메모</th><th></th>
                     </tr></thead>
-                    <tbody>${rows || '<tr><td colspan="9">회원이 없습니다.</td></tr>'}</tbody>
+                    <tbody>${rows || '<tr><td colspan="12">회원이 없습니다.</td></tr>'}</tbody>
                 </table>
             </div>`;
 
@@ -120,22 +129,30 @@ const AdminBravoApp = (() => {
         const tr = e.target.closest('tr');
         if (!tr) return;
         const userId = tr.dataset.user;
-        const ovRaw = tr.querySelector('.bravo-override').value.trim();
-        const granted = Array.from(tr.querySelectorAll('input[data-grant]:checked')).map(c => parseInt(c.dataset.grant, 10));
-        const notes = tr.querySelector('.bravo-notes').value;
-        const payload = {
-            user_id: userId,
-            review_count_override: ovRaw === '' ? null : parseInt(ovRaw, 10),
-            granted_levels: granted,
-            notes: notes,
-        };
-        const r = await App.post('/api/admin.php?action=bravo_member_update', payload);
-        if (r && r.success !== false) {
+        const memberKey = tr.dataset.key;
+        let ok = true;
+        if (userId) { // user_id 있는 회원만 기존 설정 저장 (phone-only 는 override/granted 미지원 — 기존 한계)
+            const ovRaw = tr.querySelector('.bravo-override').value.trim();
+            const granted = Array.from(tr.querySelectorAll('input[data-grant]:checked')).map(c => parseInt(c.dataset.grant, 10));
+            const notes = tr.querySelector('.bravo-notes').value;
+            const r1 = await App.post('/api/admin.php?action=bravo_member_update', {
+                user_id: userId,
+                review_count_override: ovRaw === '' ? null : parseInt(ovRaw, 10),
+                granted_levels: granted,
+                notes: notes,
+            });
+            ok = ok && r1 && r1.success !== false;
+        }
+        const payload = { member_key: memberKey, current_level: parseInt(tr.querySelector('.bravo-cur-level').value, 10) };
+        tr.querySelectorAll('.bravo-extra').forEach(inp => { payload['extra_attempts_' + inp.dataset.lv] = parseInt(inp.value, 10) || 0; });
+        const r2 = await App.post('/api/admin.php?action=bravo_grade_update', payload);
+        ok = ok && r2 && r2.success !== false;
+        if (ok) {
             Toast.success('저장되었습니다.');
             await loadQual();
             renderQual();
         } else {
-            Toast.error((r && r.error) || '저장 실패');
+            Toast.error('저장 실패 — 일부 항목을 확인해주세요.');
         }
     }
 

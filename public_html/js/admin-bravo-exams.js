@@ -107,7 +107,7 @@ const AdminBravoExamApp = (() => {
                     <label>종료 <input type="datetime-local" id="bx-end" value="${toLocal(e && e.end_at)}"></label>
                     <label>발표 <input type="datetime-local" id="bx-release" value="${toLocal(e && e.result_release_at)}"></label>
                 </span>
-                <label>응시횟수 <input type="number" id="bx-limit" min="1" value="${e ? e.attempt_limit : 3}" style="width:4em"></label>
+
                 <label>대상 <select id="bx-target">
                     <option value="all" ${tgt === 'all' ? 'selected' : ''}>전체</option>
                     <option value="cohort" ${tgt === 'cohort' ? 'selected' : ''}>특정 기수</option>
@@ -136,6 +136,7 @@ const AdminBravoExamApp = (() => {
     function localToDt(v) { return v ? v.replace('T', ' ') + ':00' : null; }
 
     async function onSave() {
+        const e2 = editingId ? exams.find(x => parseInt(x.id, 10) === editingId) : null;
         const f = container.querySelector('#bravo-exam-form');
         const mode = f.querySelector('#bx-mode').value;
         const target = f.querySelector('#bx-target').value;
@@ -146,7 +147,7 @@ const AdminBravoExamApp = (() => {
             start_at: mode === 'period' ? localToDt(f.querySelector('#bx-start').value) : null,
             end_at: mode === 'period' ? localToDt(f.querySelector('#bx-end').value) : null,
             result_release_at: mode === 'period' ? localToDt(f.querySelector('#bx-release').value) : null,
-            attempt_limit: parseInt(f.querySelector('#bx-limit').value, 10) || 1,
+            attempt_limit: e2 ? parseInt(e2.attempt_limit, 10) || 3 : 3, // 사용 중단 — 누적 quota 가 한도 (컬럼 잔존, 기존값 유지)
             target_type: target,
             target_cohort_id: target === 'cohort' ? parseInt(f.querySelector('#bx-cohort').value, 10) : null,
             status: f.querySelector('#bx-status').value,

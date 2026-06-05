@@ -622,6 +622,36 @@ case 'bravo_member_update':
     jsonSuccess([], '저장되었습니다.');
     break;
 
+case 'bravo_grade_update':
+    if ($method !== 'POST') jsonError('POST만 허용됩니다.', 405);
+    $admin = requireAdmin(['operation']);
+    $input = getJsonInput();
+    $memberKey = is_string($input['member_key'] ?? null) ? trim($input['member_key']) : '';
+    if ($memberKey === '') jsonError('member_key가 필요합니다.');
+    $level = (isset($input['current_level']) && is_numeric($input['current_level'])) ? max(0, min(3, (int)$input['current_level'])) : null;
+    $extras = [];
+    foreach ([1, 2, 3] as $l) {
+        $k = 'extra_attempts_' . $l;
+        $extras[$l] = (isset($input[$k]) && is_numeric($input[$k])) ? max(0, min(99, (int)$input[$k])) : 0;
+    }
+    $db = getDB();
+    $owns = !$db->inTransaction();
+    if ($owns) $db->beginTransaction();
+    try {
+        bravoGradeLockRow($db, $memberKey);
+        if ($level !== null) {
+            bravoGradeSet($db, $memberKey, $level, 'admin_adjust', (int)$admin['admin_id'], '관리자 수동 조정');
+        }
+        $db->prepare("UPDATE bravo_member_grades SET extra_attempts_1 = ?, extra_attempts_2 = ?, extra_attempts_3 = ? WHERE member_key = ?")
+           ->execute([$extras[1], $extras[2], $extras[3], $memberKey]);
+        if ($owns) $db->commit();
+    } catch (Throwable $e) {
+        if ($owns) $db->rollBack();
+        throw $e;
+    }
+    jsonSuccess([], '저장되었습니다.');
+    break;
+
 case 'bravo_exam_list':
     requireAdmin(['operation']);
     $db = getDB();
