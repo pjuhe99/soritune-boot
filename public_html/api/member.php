@@ -9,6 +9,8 @@ require_once __DIR__ . '/../includes/bootcamp_functions.php';
 require_once __DIR__ . '/../includes/coin_functions.php';
 require_once __DIR__ . '/services/bravo.php';
 require_once __DIR__ . '/services/bravo_attempts.php';
+require_once __DIR__ . '/services/bravo_grading.php';
+require_once __DIR__ . '/services/bravo_certificates.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $action = getAction();
@@ -292,6 +294,37 @@ case 'bravo_attempt_submit':
     if (isset($r['error'])) jsonError($r['error']);
     jsonSuccess(['submitted' => true], '제출되었습니다.');
     break;
+
+case 'bravo_certificate':
+    $s = requireMember();
+    $attemptId = (isset($_GET['attempt_id']) && is_numeric($_GET['attempt_id'])) ? (int)$_GET['attempt_id'] : 0;
+    if ($attemptId < 1) jsonError('attempt_id가 필요합니다.');
+    $db = getDB();
+    $attempt = bravoAttemptForMember($db, $attemptId, (int)$s['member_id']);
+    if (!$attempt) jsonError('응시 기록을 찾을 수 없습니다.', 404); // 타인 attempt 동일 거부
+    $exStmt = $db->prepare("SELECT * FROM bravo_exams WHERE id = ?");
+    $exStmt->execute([(int)$attempt['exam_id']]);
+    $exam = $exStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$exam) jsonError('시험을 찾을 수 없습니다.', 404);
+    $deny = bravoCertificateEligible($exam, bravoAttemptGradeGet($db, $attemptId));
+    if ($deny) jsonError($deny['error'], $deny['code']);
+    $ctx = bravoMemberContext($db, (int)$s['member_id']);
+    $cert = bravoCertificateIssue($db, $attempt, $exam, $ctx['row']['real_name']);
+    try {
+        $r = bravoCertificateRender($cert);
+    } catch (Throwable $e) {
+        error_log('bravo_certificate render: ' . $e->getMessage());
+        jsonError('인증서 생성에 실패했습니다. 관리자에게 문의해주세요.', 500);
+    }
+    $level = (int)$cert['bravo_level'];
+    $ascii = "bravo{$level}_certificate.{$r['ext']}"; // ASCII 폴백
+    $utf8  = "BRAVO{$level}_인증서_{$cert['member_name']}.{$r['ext']}"; // RFC5987 한글 병기
+    header('Content-Type: ' . $r['mime']);
+    header("Content-Disposition: attachment; filename=\"{$ascii}\"; filename*=UTF-8''" . rawurlencode($utf8));
+    header('Cache-Control: private, no-store'); // 개인정보 포함 파일
+    header('Content-Length: ' . strlen($r['bytes']));
+    echo $r['bytes'];
+    exit;
 
 default:
     jsonError('Unknown action', 404);
