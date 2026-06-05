@@ -358,16 +358,18 @@ function bravoMemberContext(PDO $db, int $memberId): ?array {
  * 한 시험에 대한 이 사람(member_key)의 응시 현황 (status 카드용).
  * exam.status='released' 일 때만 확정(bravo_attempt_grades) 결과를 result 필드로 노출 —
  * 발표 전 비공개가 쿼리 조건으로 보장됨 (미released 시 result 키 자체가 없음).
+ * used/limit 은 등급당 평생 누적 quota (시험 단위 아님 — 정책 슬라이스에서 교체).
  */
 function bravoStatusAttempts(PDO $db, array $exam, string $memberKey): array {
     $examId = (int)$exam['id'];
-    $limit  = (int)$exam['attempt_limit'];
+    // used/limit 은 등급당 평생 누적 quota (시험 단위 아님 — 정책 슬라이스에서 교체)
+    $quota = bravoAttemptQuotaForLevel($db, $memberKey, (int)$exam['bravo_level']);
 
     $stmt = $db->prepare("SELECT id, status, question_ids FROM bravo_attempts WHERE exam_id = ? AND member_key = ? ORDER BY attempt_no");
     $stmt->execute([$examId, $memberKey]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $used = count($rows); $submitted = false; $inProgress = null;
+    $submitted = false; $inProgress = null;
     $cntStmt = $db->prepare("SELECT COUNT(*) FROM bravo_answers WHERE attempt_id = ?");
     foreach ($rows as $a) {
         if ($a['status'] === 'submitted') {
@@ -379,7 +381,7 @@ function bravoStatusAttempts(PDO $db, array $exam, string $memberKey): array {
             $inProgress = ['attempt_id' => (int)$a['id'], 'answered' => (int)$cntStmt->fetchColumn(), 'total' => $total];
         }
     }
-    $out = ['exam_id' => $examId, 'used' => $used, 'limit' => $limit, 'in_progress' => $inProgress, 'submitted' => $submitted];
+    $out = ['exam_id' => $examId, 'used' => $quota['used'], 'limit' => $quota['limit'], 'in_progress' => $inProgress, 'submitted' => $submitted];
 
     if (($exam['status'] ?? '') === 'released') {
         $gStmt = $db->prepare("
@@ -443,9 +445,10 @@ function bravoExamDelete(PDO $db, int $id): void {
 /**
  * 회원(bootcamp_members.id) 의 BRAVO 도전 상태.
  * 슬라이스1 자격 순수함수 재사용 + 등급별 매칭 시험(open 우선, preparing 비공개) 조회.
- * 반환: ['member'=>{real_name,nickname,cohort,effective_review_count}|null,
- *        'levels'=>[{level,name,required_review_count,eligible,status,passed_level,exam|null,attempts|null}]]
- * exam 에 id/attempt_limit 포함(slice6), attempts 는 그 카드 시험(exam_id) 기준 집계.
+ * 반환: ['member'=>{real_name,nickname,cohort,effective_review_count,current_level}|null,
+ *        'levels'=>[{level,name,required_review_count,eligible,status,held,prev_required,quota,exam|null,attempts|null}]]
+ * held: 현재 등급 보유 여부 (current_level >= L). prev_required: 이전 등급 미보유로 응시 불가.
+ * quota: 등급당 평생 누적 응시 횟수 {used,limit,left}. exam 에 id/attempt_limit 포함(slice6).
  */
 function bravoMemberStatus(PDO $db, int $memberId): array {
     $ctx = bravoMemberContext($db, $memberId);
@@ -456,7 +459,7 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
     $memberKey = bravoAttemptMemberKey($m);
 
     $exStmt = $db->prepare("
-        SELECT id, title, exam_mode, start_at, end_at, result_release_at, status, attempt_limit
+        SELECT id, title, bravo_level, exam_mode, start_at, end_at, result_release_at, status, attempt_limit
         FROM bravo_exams
         WHERE bravo_level = ?
           AND (target_type = 'all' OR target_cohort_id = ?)
@@ -465,6 +468,8 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
         LIMIT 1
     ");
 
+    $cur = bravoGradeCurrentLevel($db, $memberKey);
+
     $out = [];
     foreach ($ctx['levels'] as $lv) {
         $L = (int)$lv['level'];
@@ -472,13 +477,16 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
         $exStmt->execute([$L, (int)$m['cohort_id']]);
         $exam = $exStmt->fetch(PDO::FETCH_ASSOC) ?: null;
         $attempts = $exam ? bravoStatusAttempts($db, $exam, $memberKey) : null;
+        $quota = bravoAttemptQuotaForLevel($db, $memberKey, $L);
         $out[] = [
             'level'                 => $L,
             'name'                  => $lv['name'],
             'required_review_count' => (int)$lv['required_review_count'],
             'eligible'              => $isElig,
             'status'                => $isElig ? 'eligible' : 'ineligible',
-            'passed_level'          => bravoGradeCurrentLevel($db, $memberKey) >= $L,
+            'held'                  => $cur >= $L,
+            'prev_required'         => ((int)$lv['requires_previous_level'] === 1) && $cur < $L - 1,
+            'quota'                 => $quota,
             'exam'                  => $exam,
             'attempts'              => $attempts,
         ];
@@ -490,6 +498,7 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
             'nickname'               => $m['nickname'],
             'cohort'                 => $m['cohort'],
             'effective_review_count' => bravoEffectiveReviewCount($ctx['override'], $ctx['completed']),
+            'current_level'          => $cur,
         ],
         'levels' => $out,
     ];

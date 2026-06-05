@@ -81,7 +81,7 @@ try {
     t('미released: 기존 필드 유지', $st['used'] === 1 && $st['submitted'] === true && $st['limit'] === 3);
     $ms = bravoMemberStatus($db, $m1);
     $lv2 = null; foreach ($ms['levels'] as $lv) { if ($lv['level'] === 2) $lv2 = $lv; }
-    t('미released: passed_level false', $lv2 !== null && $lv2['passed_level'] === false); // m1 level=0 → 0>=2 false
+    t('미released: held false', $lv2 !== null && $lv2['held'] === false); // m1 current_level=1 (admin_adjust) → 1>=2 false
     // 발표 전엔 같은 등급 다른 시험 차단도 없어야 함 (정보 누설 방지)
     $examB = bravoExamCreate($db, ['title'=>"{$tag} B",'bravo_level'=>2,'exam_mode'=>'always','attempt_limit'=>3,'target_type'=>'all','status'=>'open'], 99);
     bravoExamQuestionSet($db, $examB, $qids);
@@ -110,13 +110,13 @@ try {
     $st = bravoStatusAttempts($db, $examARow, $key1);
     t('cert_issued true 반영', $st['result']['cert_issued'] === true);
 
-    // passed_level
+    // held (등급 보유 여부)
     $ms = bravoMemberStatus($db, $m1);
     $lv2 = null; foreach ($ms['levels'] as $lv) { if ($lv['level'] === 2) $lv2 = $lv; }
-    t('released: 합격자 passed_level true', $lv2 !== null && $lv2['passed_level'] === true);
+    t('released: 합격자 held true', $lv2 !== null && $lv2['held'] === true);
     $ms2 = bravoMemberStatus($db, $m2);
     $lv2b = null; foreach ($ms2['levels'] as $lv) { if ($lv['level'] === 2) $lv2b = $lv; }
-    t('released: 불합격자 passed_level false', $lv2b !== null && $lv2b['passed_level'] === false);
+    t('released: 불합격자 held false', $lv2b !== null && $lv2b['held'] === false);
 
     // ── 합격자 등급 차단 ──
     $acc = bravoAttemptExamAccess($db, $m1, $examB);
