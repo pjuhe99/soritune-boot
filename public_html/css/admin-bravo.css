@@ -46,6 +46,7 @@
     font-size: var(--text-base);
 }
 .bravo-exam-fields label { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.bravo-exam-fields > select { align-self: center; }
 .bx-dates { display: inline-flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--color-primary-200); }
 
 /* ── 폼 공통 (문제은행 + OT) — 2열 그리드, wide 풀폭 ── */
@@ -90,3 +91,57 @@
 .bravo-eq-row { display: block; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-gray-100); cursor: pointer; }
 .bravo-eq-row:last-child { border-bottom: none; }
 .bravo-eq-row:hover { background: var(--color-primary-50); }
+
+/* ── 채점 ── */
+.grading-toolbar { margin-bottom: var(--space-3); }
+.grading-toolbar select { max-width: 100%; padding: var(--space-2); font-size: var(--text-base); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.grading-chip { display: inline-block; padding: 1px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--font-semibold); white-space: nowrap; }
+.grading-chip.done { background: var(--color-success-50); color: var(--color-success-600); }
+.grading-chip.ing { background: var(--color-warning-50); color: var(--color-warning-500); }
+.grading-chip.none { background: var(--color-bg-subtle); color: var(--color-text-muted); }
+
+.grading-panel { margin-top: var(--space-4); padding: var(--space-4); background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.grading-panel h4 { margin: 0 0 var(--space-2); }
+.grading-progress {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-accent-50);
+    border-radius: var(--radius-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-accent-600);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 문항 카드 — 재렌더 없이 동일 행 공간 유지 (고정 height 금지, min-height 예약) */
+.grading-card { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.grading-q { font-size: var(--text-base); line-height: var(--leading-normal); }
+.grading-answer-key { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--color-info-50); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-sub); }
+.grading-audio { display: flex; align-items: center; gap: var(--space-2); min-height: 56px; margin: var(--space-2) 0; }
+.grading-audio audio { flex: 1; min-width: 0; max-width: 420px; }
+.grading-audio-missing { color: var(--color-danger-600); }
+
+/* 판정 — 선택 상태는 JS 가 .on + .btn-primary 토글, 여기선 기본 outline 만 */
+.grading-judges { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-2); padding: 0; border: none; }
+.grading-judges > div { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; min-height: 32px; font-size: var(--text-sm); color: var(--color-text-sub); }
+.grading-judges .grading-judge { border: 1px solid var(--color-gray-300); background: var(--color-bg); color: var(--color-text-sub); }
+.grading-judges .grading-judge.on { font-weight: var(--font-bold); }
+.grading-judges[disabled] { opacity: 0.65; }
+
+.grading-score { min-height: 24px; margin: var(--space-1) 0; font-size: var(--text-md); color: var(--color-accent-600); font-variant-numeric: tabular-nums; }
+.grading-score strong { font-size: var(--text-lg); }
+.grading-memo { width: 100%; box-sizing: border-box; }
+
+.grading-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-border); font-size: var(--text-base); }
+.grading-confirm p { margin: 0; flex-basis: 100%; }
+/* 확정 = success (마크업 btn-primary 를 override, JS 무수정) */
+.grading-confirm .btn-primary { background: var(--color-success-500); }
+.grading-confirm .btn-primary:hover { background: var(--color-success-600); color: #fff; }
+.grading-confirm .btn-primary:disabled { background: var(--color-gray-300); }
+
+/* ── 좁은 화면 (base 룰 뒤, 파일 마지막) ── */
+@media (max-width: 640px) {
+    .bravo-q-form,
+    .bravo-ot-form { grid-template-columns: 1fr; }
+    .grading-audio audio { max-width: 100%; }
+    .bravo-q-filters #bq-new { margin-left: 0; }
+}
