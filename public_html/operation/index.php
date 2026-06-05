@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/css/bulk-register.css<?= v('/css/bulk-register.css') ?>">
     <link rel="stylesheet" href="/css/notify.css<?= v('/css/notify.css') ?>">
     <link rel="stylesheet" href="/css/retention.css<?= v('/css/retention.css') ?>">
+    <link rel="stylesheet" href="/css/admin-bravo.css<?= v('/css/admin-bravo.css') ?>">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>

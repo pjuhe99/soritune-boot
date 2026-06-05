@@ -1,0 +1,92 @@
+/* ══════════════════════════════════════════════════════════════
+   boot — BRAVO 관리자 (operation): 서브탭/자격/시험/문제은행/OT/배정/채점
+   slice1~8 스타일링 패스. design-tokens 변수만 사용.
+   ⚠️ base 룰은 @media 위에 (cascade 순서).
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 서브탭 (admin.css .multipass-subtab 선례와 동일 문법, 토큰화) ── */
+.bravo-subtabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.bravo-subtab {
+    padding: 6px 14px;
+    border: 1px solid var(--color-gray-300);
+    background: var(--color-bg);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-base);
+    color: var(--color-text-sub);
+    transition: all var(--transition-fast);
+}
+.bravo-subtab:hover { border-color: var(--color-primary-300); color: var(--color-primary-600); }
+.bravo-subtab.active { background: var(--color-primary-600); color: #fff; border-color: var(--color-primary-600); font-weight: var(--font-semibold); }
+
+/* ── 자격 (qual) ── */
+.bravo-help { margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); background: var(--color-info-50); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-sub); }
+.bravo-table .num { text-align: right; }
+.bravo-table .bravo-override { text-align: right; }
+.bravo-table .bravo-notes { width: 100%; min-width: 120px; box-sizing: border-box; }
+.bravo-grant { display: inline-flex; align-items: center; gap: 2px; margin-right: var(--space-2); font-size: var(--text-sm); white-space: nowrap; cursor: pointer; }
+.bravo-chip { display: inline-block; padding: 1px 8px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--font-semibold); white-space: nowrap; }
+.bravo-chip.none { background: var(--color-bg-subtle); color: var(--color-text-muted); }
+.bravo-chip.lv1 { background: var(--color-primary-50); color: var(--color-primary-600); }
+.bravo-chip.lv2 { background: var(--color-primary-100); color: var(--color-primary-700); }
+.bravo-chip.lv3 { background: var(--color-accent-100); color: var(--color-accent-600); }
+
+/* ── 시험 관리 ── */
+.bravo-exam-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
+.bravo-exam-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    align-items: center;
+    margin: var(--space-3) 0;
+    padding: var(--space-4);
+    background: var(--color-bg-page);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+}
+.bravo-exam-fields label { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.bx-dates { display: inline-flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--color-primary-200); }
+
+/* ── 폼 공통 (문제은행 + OT) — 2열 그리드, wide 풀폭 ── */
+.bravo-q-form,
+.bravo-ot-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2) var(--space-4);
+    margin: var(--space-3) 0;
+    padding: var(--space-4);
+    background: var(--color-bg-page);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+}
+.bravo-q-form h4,
+.bravo-ot-form h4 { grid-column: 1 / -1; margin: 0; }
+.bravo-q-form label,
+.bravo-ot-form label { display: flex; flex-direction: column; gap: var(--space-1); }
+.bravo-q-form .bq-wide,
+.bravo-ot-form .ot-wide { grid-column: 1 / -1; }
+.bravo-q-form textarea,
+.bravo-ot-form textarea,
+.bravo-q-form input[type="text"],
+.bravo-ot-form input[type="text"] { width: 100%; box-sizing: border-box; }
+.bravo-q-form > div,
+.bravo-ot-form > div { grid-column: 1 / -1; display: flex; gap: var(--space-2); }
+/* 체크박스 라벨은 가로 정렬 유지 */
+.bravo-ot-form label:has(> input[type="checkbox"]),
+.bravo-q-form label:has(> input[type="checkbox"]) { flex-direction: row; align-items: center; }
+
+/* ── 문제은행 필터 ── */
+.bravo-q-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); align-items: center; }
+.bravo-q-filters #bq-new { margin-left: auto; }
+
+/* ── 문제 배정 패널 ── */
+.bravo-eq-panel { margin: var(--space-3) 0; padding: var(--space-4); background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--text-base); }
+.bravo-eq-panel h4 { margin: 0 0 var(--space-2); }
+.eq-note { display: block; margin: var(--space-1) 0 var(--space-2); color: var(--color-text-muted); }
+.eq-summary { margin-bottom: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--color-accent-50); border-radius: var(--radius-sm); font-weight: var(--font-semibold); color: var(--color-accent-600); }
+.eq-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg); margin-bottom: var(--space-3); }
+.bravo-eq-row { display: block; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-gray-100); cursor: pointer; }
+.bravo-eq-row:last-child { border-bottom: none; }
+.bravo-eq-row:hover { background: var(--color-primary-50); }
