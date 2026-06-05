@@ -42,7 +42,7 @@ const MemberBravo = (() => {
             return `<p class="bravo-state bravo-result-fail">아쉽게 불합격 — 총점 ${parseFloat(r.total_score)} / 합격선 ${parseFloat(r.passing_score)}. 다음 도전 기간에 다시 도전할 수 있어요.</p>`;
         }
         // 다른 시험이 카드에 떠도 이미 합격한 등급이면 도전 대신 합격 완료 표시
-        if (lv.passed_level) {
+        if (lv.held) { // 서버 응답 축 교체 (passed_level → held) — 다음 태스크에서 분기 전면 재정렬 예정
             return `<p class="bravo-state bravo-result-pass">✅ BRAVO ${parseInt(lv.level, 10)} 합격 완료</p>`;
         }
         if (at.submitted) {
