@@ -99,7 +99,11 @@ $cur = bravoGradeCurrentLevel($db, $memberKey);
 
 **누적 quota 의 동시 시작 race 가드 (리뷰 P1-1):** 기존 `bravoAttemptStart` 의 FOR UPDATE 카운트는 `bravo_attempts` 빈 범위에선 직렬화가 보장되지 않고, UNIQUE 가 `(exam_id, member_key, attempt_no)` 라 **서로 다른 같은-등급 시험 2개의 동시 시작은 UNIQUE 충돌 없이 둘 다 통과**할 수 있다. 교체: `bravoAttemptStart` 트랜잭션 안에서 ① `bravoGradeLockRow`(member_key — 행이 항상 존재하는 사람 단위 mutex) 로 잠금 → ② 등급 누적 COUNT(일반 SELECT — 잠금은 ①이 담당) → ③ quota 검사 → ④ INSERT. 같은 사람의 모든 등급 시험 시작이 이 한 행으로 직렬화됨 (사람 단위 coarse lock — 동시 시작은 드물어 충분). 기존 23000 catch 는 같은 시험 더블클릭 안전망으로 잔존.
 
-**같은 시험 재응시 허용 (리뷰 P1-2 — 정책 명시):** 기존 `bravoAttemptStart` 의 submitted 잠금("이미 제출한 시험입니다")을 **"결과 미발표 submitted"로 좁힌다** — 그 시험에 submitted attempt 가 있어도 시험이 `released` 면 새 attempt_no 로 재응시 가능. 즉 강등 후(또는 불합격 후) 재시험은 **같은 시험(상시 등 open 상태로 유지되는 경우)에서도, 새 시험에서도** 가능하며 실제 한도는 누적 quota 뿐이다. (released 전 submitted 는 기존대로 차단 — 결과 대기 중 재시작 방지. slice8 의 "불합격 재응시는 다음 시험에서" 결정은 이 정책으로 대체됨.) 주의: 재응시 attempt 의 결과 공개는 `bravoStatusAttempts` 의 `attempt_no DESC LIMIT 1` 선택이 자연스럽게 최신 응시를 보여줌 — 기존 인증서는 attempt 단위라 과거 합격 인증서도 유효(영구 보존 정책과 일관).
+**같은 시험 재응시 허용 (리뷰 P1-2 — 정책 명시):** 기존 `bravoAttemptStart` 의 submitted 잠금("이미 제출한 시험입니다")을 **"미확정 submitted"로 좁힌다** — 차단 기준은 시험 status 가 아니라 **채점 확정(`bravo_attempt_grades` 행) 여부**. (released 기준은 불가 — released 시험은 access 게이트의 `status='open'` 요구로 어차피 시작 불가라 재응시가 실현되지 않음.)
+- 미확정 submitted 존재 → '채점 진행 중' 차단 (중복 채점 방지).
+- 확정된 submitted 만 있으면 → 같은 시험에서 새 attempt_no 로 재응시 가능. **pass/fail 불문** — pass 만 차단하면 발표 전 합격이 유추되는 정보 누설(slice8 원칙)이라 비대칭 차단 금지. 발표 전 합격자가 모르고 재응시해 quota 를 쓰는 것은 감수(발표되면 보유 차단 작동).
+- 효과: 기간제 시험의 기간 내 다회 응시(문서 §8 "최대 3회")가 확정 즉시 가능해지고, 강등 후 재도전은 같은 시험(open 유지/재오픈) 또는 새 시험에서 — 실제 한도는 누적 quota 뿐. slice8 의 "불합격 재응시는 다음 시험에서" 결정은 이 정책으로 대체.
+- attempt_no 는 시험 내 `MAX(attempt_no)+1` 로 채번(누적 used 와 분리). 결과 공개는 `bravoStatusAttempts` 의 `attempt_no DESC LIMIT 1` 이 최신 확정 응시를 보여줌 — 기존 인증서는 attempt 단위라 과거 합격 인증서도 유효(영구 보존 정책과 일관).
 
 ### 4-3. status 응답 변경 (bravo.php)
 
