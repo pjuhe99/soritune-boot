@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="/css/member-shortcuts.css<?= v('/css/member-shortcuts.css') ?>">
     <link rel="stylesheet" href="/css/member-bootees.css<?= v('/css/member-bootees.css') ?>">
     <link rel="stylesheet" href="/css/member-notices.css<?= v('/css/member-notices.css') ?>">
+    <link rel="stylesheet" href="/css/bravo.css<?= v('/css/bravo.css') ?>">
     <link rel="manifest" href="/manifest.json">
 </head>
 <body>
