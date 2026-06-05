@@ -68,7 +68,7 @@ slice1~8 이 만든 BRAVO 전 화면(회원 탭·응시 플로우·관리자 서
 
 - `.grading-toolbar`: 시험 선택 행. `.grading-table` = `.data-table` 보정.
 - `.grading-panel`: 상세 패널 — 문항 카드 `.grading-q` 세로 나열.
-- **레이아웃 시프트 0 원칙**: 판정 인라인 갱신(slice7 — 오디오 재생 보존) 위에 얹으므로 `.grading-q` 높이를 판정 상태와 무관하게 유지 (오디오 행 고정 높이, 판정 버튼 영역 고정).
+- **레이아웃 시프트 0 원칙 — "재렌더 없이 동일 행 공간 유지"**: 판정 인라인 갱신(slice7 — 오디오 재생 보존) 위에 얹으므로, 판정 상태 변화가 `.grading-q` 안 요소들의 공간을 바꾸지 않게 한다. 구현은 **고정 `height` 금지** — native `<audio controls>` 높이는 브라우저별(특히 모바일 Safari)로 달라 clipping 위험. 대신 `.grading-audio { min-height: 56px; display: flex; align-items: center; }` + `audio { width: 100% }` 식의 **min-height 공간 예약**, 판정 버튼 영역도 min-height 예약. 점수 표기는 자릿수 변동에도 폭이 안 흔들리게 `min-width` 또는 tabular-nums.
 - `.grading-judges/.grading-judge`: 판정 토글 버튼 그룹 — 미선택=outline, 선택=primary 채움 (`.on` 또는 `[aria-pressed]` 등 기존 JS 가 쓰는 셀렉터를 구현 시 확인해 그대로 매칭).
 - `.grading-score`: 실시간 총점 강조(앰버). `.grading-confirm`: 확정 영역 — 확정=success 버튼, 취소=ghost. `.grading-chip`: 카운트 칩 4종 색.
 - `.grading-answer-key`: 정답·허용답 박스(관리자 전용 정보 — info-50 배경). `.grading-audio-missing` = danger 텍스트.
@@ -76,7 +76,18 @@ slice1~8 이 만든 BRAVO 전 화면(회원 탭·응시 플로우·관리자 서
 ### 4-5. 인증서 GD 렌더 폴리시 (`bravo_certificates.php` 내부만)
 
 - 이중 골드 테두리 굵기·간격 보강 + 모서리 장식(직선 조합 수준).
-- 등급별 포인트 색: B1/B2/B3 타이틀 색 차등(토큰 팔레트의 HEX 직접 사용 — CSS 변수 불가 환경).
+- **배경 PNG 와 장식의 관계 (명시)**: 프레임 장식(테두리·모서리)은 **기본(무배경) 디자인 전용** — 배경 PNG 가 존재하면 PNG 가 완성 디자인이므로 프레임 장식은 그리지 않는다(현 분기 유지). 단 **텍스트 계열 폴리시(등급별 포인트 색·자간·이름 아래 구분선·서명선)는 배경 유무와 무관하게 항상 적용** — 디자이너 PNG 투입 시에도 이번 패스의 텍스트 개선이 유지된다. 렌더 함수 주석에 이 규칙을 남길 것.
+- **색상 고정값 (구현자 재량 금지 — 토큰 팔레트와 정합, 시각 확인 후 조정 가능):**
+
+| 용도 | HEX | 근거 |
+|------|-----|------|
+| 본문 네이비 | `#1A2B4C` | 현행 유지 |
+| 골드 보더·장식 | `#B08D57` | 현행 유지 |
+| 인증번호 그레이 | `#64748B` | `--color-gray-500` |
+| B1 타이틀 포인트 | `#2563EB` | `--color-primary-600` |
+| B2 타이틀 포인트 | `#D97706` | `--color-accent-600` |
+| B3 타이틀 포인트 | `#B08D57` | 골드 (최고 등급 = 보더와 통일) |
+
 - 제목/이름 자간(레터 스페이싱은 GD 미지원 → 문자 사이 공백 또는 위치 계산), 이름 아래 구분선, "소리튠영어" 위 서명선 느낌의 가는 선.
 - **계약 유지**: `bravoCertificateRender(array, bool $forcePng=false): array{bytes,mime,ext}` 시그니처·PNG/PDF 시그니처 테스트(`bravo_certificates_test.php`) 그대로 통과해야 함. 캔버스 1754×1240 유지.
 
@@ -93,6 +104,7 @@ slice1~8 이 만든 BRAVO 전 화면(회원 탭·응시 플로우·관리자 서
 - CSS 는 자동 테스트 불가 — **회귀 가드**: 기존 BRAVO 테스트 19파일 전부 pass (특히 JS 마크업 수정 시 `bravo_certificates_test.php` 렌더 단언, 인증서 폴리시 후 PNG/PDF 시그니처).
 - `node --check` (수정한 JS), `php -l` (수정한 PHP).
 - 인증서 시각 확인: 렌더 PNG 를 파일로 떨궈 컨트롤러가 Read 로 확인(이미지 뷰) 후 사용자 검증으로.
+- **dev 인증서 다운로드 합격 기준 (명시)**: dev/prod 는 같은 서버이고 Imagick 설치·PDF write 동작이 확인됨(CLI `%PDF` blob 생성 검증 완료) → **dev 검증에서 다운로드 파일은 PDF 가 기대값**. PNG 로 떨어지면 "폴백 경로 정상 작동"이 아니라 **Imagick 변환 예외 발생 신호로 보고 원인 조사** (PHP-FPM 모듈/policy 차이 등). 단 테스트 계약(`bravo_certificates_test.php` 의 Imagick 미가용 시 PNG 인정 분기)은 이식성 가드로 그대로 둔다.
 - 사용자 브라우저 검증(게이트): dev-boot.soritune.com — 회원 탭/응시 풀플로우(모바일 폭 시뮬 포함)/관리자 4서브탭/채점/인증서 PDF. slice6~8 기능 검증과 병행 가능.
 
 ## 7. 배포
