@@ -337,8 +337,13 @@ function bravoMemberContext(PDO $db, int $memberId): ?array {
 
 /**
  * 한 시험에 대한 이 사람(member_key)의 응시 현황 (status 카드용).
+ * exam.status='released' 일 때만 확정(bravo_attempt_grades) 결과를 result 필드로 노출 —
+ * 발표 전 비공개가 쿼리 조건으로 보장됨 (미released 시 result 키 자체가 없음).
  */
-function bravoStatusAttempts(PDO $db, int $examId, string $memberKey, int $limit): array {
+function bravoStatusAttempts(PDO $db, array $exam, string $memberKey): array {
+    $examId = (int)$exam['id'];
+    $limit  = (int)$exam['attempt_limit'];
+
     $stmt = $db->prepare("SELECT id, status, question_ids FROM bravo_attempts WHERE exam_id = ? AND member_key = ? ORDER BY attempt_no");
     $stmt->execute([$examId, $memberKey]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -355,7 +360,48 @@ function bravoStatusAttempts(PDO $db, int $examId, string $memberKey, int $limit
             $inProgress = ['attempt_id' => (int)$a['id'], 'answered' => (int)$cntStmt->fetchColumn(), 'total' => $total];
         }
     }
-    return ['exam_id' => $examId, 'used' => $used, 'limit' => $limit, 'in_progress' => $inProgress, 'submitted' => $submitted];
+    $out = ['exam_id' => $examId, 'used' => $used, 'limit' => $limit, 'in_progress' => $inProgress, 'submitted' => $submitted];
+
+    if (($exam['status'] ?? '') === 'released') {
+        $gStmt = $db->prepare("
+            SELECT a.id AS attempt_id, g.result, g.total_score, g.passing_score
+            FROM bravo_attempts a
+            JOIN bravo_attempt_grades g ON g.attempt_id = a.id
+            WHERE a.exam_id = ? AND a.member_key = ? AND a.status = 'submitted'
+            ORDER BY a.attempt_no DESC
+            LIMIT 1
+        ");
+        $gStmt->execute([$examId, $memberKey]);
+        $g = $gStmt->fetch(PDO::FETCH_ASSOC);
+        if ($g) {
+            $cStmt = $db->prepare("SELECT COUNT(*) FROM bravo_certificates WHERE attempt_id = ?");
+            $cStmt->execute([(int)$g['attempt_id']]);
+            $out['result'] = [
+                'attempt_id'    => (int)$g['attempt_id'],
+                'result'        => $g['result'],
+                'total_score'   => (float)$g['total_score'],
+                'passing_score' => (float)$g['passing_score'],
+                'cert_issued'   => (int)$cStmt->fetchColumn() > 0,
+            ];
+        }
+    }
+    return $out;
+}
+
+/**
+ * 그 등급에서 "released 시험의 pass 확정" 보유 여부 — 합격자 동일 등급 차단·passed_level 공용.
+ * released 전 합격(채점 확정만)은 의도적으로 제외 — 차단 메시지로 발표 전 합격이 유추되는 정보 누설 방지.
+ */
+function bravoHasReleasedPass(PDO $db, string $memberKey, int $level): bool {
+    $stmt = $db->prepare("
+        SELECT COUNT(*)
+        FROM bravo_attempts a
+        JOIN bravo_attempt_grades g ON g.attempt_id = a.id AND g.result = 'pass'
+        JOIN bravo_exams e ON e.id = a.exam_id AND e.status = 'released'
+        WHERE a.member_key = ? AND e.bravo_level = ?
+    ");
+    $stmt->execute([$memberKey, $level]);
+    return (int)$stmt->fetchColumn() > 0;
 }
 
 /**
@@ -395,7 +441,7 @@ function bravoExamDelete(PDO $db, int $id): void {
  * 회원(bootcamp_members.id) 의 BRAVO 도전 상태.
  * 슬라이스1 자격 순수함수 재사용 + 등급별 매칭 시험(open 우선, preparing 비공개) 조회.
  * 반환: ['member'=>{real_name,nickname,cohort,effective_review_count}|null,
- *        'levels'=>[{level,name,required_review_count,eligible,status,exam|null,attempts|null}]]
+ *        'levels'=>[{level,name,required_review_count,eligible,status,passed_level,exam|null,attempts|null}]]
  * exam 에 id/attempt_limit 포함(slice6), attempts 는 그 카드 시험(exam_id) 기준 집계.
  */
 function bravoMemberStatus(PDO $db, int $memberId): array {
@@ -422,13 +468,14 @@ function bravoMemberStatus(PDO $db, int $memberId): array {
         $isElig = in_array($L, $ctx['eligible'], true);
         $exStmt->execute([$L, (int)$m['cohort_id']]);
         $exam = $exStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-        $attempts = $exam ? bravoStatusAttempts($db, (int)$exam['id'], $memberKey, (int)$exam['attempt_limit']) : null;
+        $attempts = $exam ? bravoStatusAttempts($db, $exam, $memberKey) : null;
         $out[] = [
             'level'                 => $L,
             'name'                  => $lv['name'],
             'required_review_count' => (int)$lv['required_review_count'],
             'eligible'              => $isElig,
             'status'                => $isElig ? 'eligible' : 'ineligible',
+            'passed_level'          => bravoHasReleasedPass($db, $memberKey, $L),
             'exam'                  => $exam,
             'attempts'              => $attempts,
         ];

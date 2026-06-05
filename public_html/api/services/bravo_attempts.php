@@ -69,7 +69,12 @@ function bravoAttemptExamAccess(PDO $db, int $memberId, int $examId): array {
     if (!in_array((int)$exam['bravo_level'], $ctx['eligible'], true)) {
         return ['error' => '응시 자격이 없습니다.', 'code' => 403];
     }
-    return ['exam' => $exam, 'ctx' => $ctx, 'member_key' => bravoAttemptMemberKey($ctx['row'])];
+    $memberKey = bravoAttemptMemberKey($ctx['row']);
+    // 합격자 동일 등급 재응시 차단 — released pass 만 기준 (발표 전 합격은 차단 안 함: 정보 누설 방지)
+    if (bravoHasReleasedPass($db, $memberKey, (int)$exam['bravo_level'])) {
+        return ['error' => '이미 BRAVO ' . (int)$exam['bravo_level'] . ' 등급에 합격했습니다.', 'code' => 403];
+    }
+    return ['exam' => $exam, 'ctx' => $ctx, 'member_key' => $memberKey];
 }
 
 /**

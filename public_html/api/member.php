@@ -228,7 +228,7 @@ case 'bravo_exam_intro':
             'require_check' => (int)$ot['require_check'],
         ] : null,
         'question_count' => count(bravoExamQuestionAssignedIds($db, $examId)),
-        'attempts' => bravoStatusAttempts($db, $examId, $acc['member_key'], (int)$exam['attempt_limit']),
+        'attempts' => bravoStatusAttempts($db, $exam, $acc['member_key']),
     ]);
     break;
 
