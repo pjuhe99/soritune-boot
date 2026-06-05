@@ -109,9 +109,36 @@ function bravoCertCenteredText($im, string $font, float $size, int $color, int $
 }
 
 /**
+ * 자간(tracking) 적용 가운데 정렬 텍스트.
+ * GD 는 letter-spacing 미지원 — 문자 단위로 폭을 재며 전진 그리기 (커닝 무시는 디스플레이용 허용).
+ */
+function bravoCertTrackedCenteredText($im, string $font, float $size, int $color, int $centerX, int $baselineY, string $text, float $tracking): void {
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (!$chars) return;
+    $widths = [];
+    $total = 0.0;
+    foreach ($chars as $ch) {
+        $b = imagettfbbox($size, 0, $font, $ch);
+        $cw = $b[2] - $b[0];
+        $widths[] = $cw;
+        $total += $cw;
+    }
+    $total += $tracking * (count($chars) - 1);
+    $x = $centerX - $total / 2;
+    foreach ($chars as $i => $ch) {
+        imagettftext($im, $size, 0, (int)round($x), $baselineY, $color, $font, $ch);
+        $x += $widths[$i] + $tracking;
+    }
+}
+
+/**
  * 인증서 렌더. GD 1754×1240 (A4 가로 ~150dpi) → Imagick PDF, 불가 시 PNG.
  * 반환: ['bytes'=>string, 'mime'=>string, 'ext'=>string]
  * $forcePng: 테스트/폴백 검증용 — Imagick 변환 생략.
+ *
+ * 장식 규칙 (스펙 2026-06-05 §4-5):
+ * - 프레임 장식(테두리·모서리 액센트)은 기본(무배경) 디자인 전용 — 배경 PNG 가 있으면 PNG 가 완성 디자인.
+ * - 텍스트 폴리시(등급별 포인트 색·자간·이름 구분선·서명선)는 배경 유무와 무관하게 항상 적용.
  */
 function bravoCertificateRender(array $cert, bool $forcePng = false): array {
     $bold = bravoCertFontPath('Bold');
@@ -123,9 +150,13 @@ function bravoCertificateRender(array $cert, bool $forcePng = false): array {
     $w = 1754; $h = 1240;
     $im = imagecreatetruecolor($w, $h);
     $white = imagecolorallocate($im, 255, 255, 255);
-    $ink   = imagecolorallocate($im, 26, 43, 76);    // 본문 네이비
-    $gold  = imagecolorallocate($im, 176, 141, 87);  // 테두리
-    $gray  = imagecolorallocate($im, 120, 120, 120); // 인증번호
+    $ink   = imagecolorallocate($im, 26, 43, 76);     // #1A2B4C 본문 네이비
+    $gold  = imagecolorallocate($im, 176, 141, 87);   // #B08D57 골드 (보더·장식)
+    $gray  = imagecolorallocate($im, 100, 116, 139);  // #64748B 인증번호 (--color-gray-500)
+    // 등급별 타이틀 포인트 색 (스펙 고정값: B1 primary-600 / B2 accent-600 / B3 골드)
+    $levelRgb = [1 => [37, 99, 235], 2 => [217, 119, 6], 3 => [176, 141, 87]];
+    $lv = $levelRgb[(int)$cert['bravo_level']] ?? [26, 43, 76];
+    $accent = imagecolorallocate($im, $lv[0], $lv[1], $lv[2]);
 
     $bgUsed = false;
     if (is_file(BRAVO_CERT_BG_PNG)) {
@@ -138,22 +169,41 @@ function bravoCertificateRender(array $cert, bool $forcePng = false): array {
     }
     if (!$bgUsed) {
         imagefilledrectangle($im, 0, 0, $w - 1, $h - 1, $white);
+        // 이중 테두리: 외곽 3px 띠 + 내곽 1px (간격 보강: 36 / 52)
         for ($i = 0; $i < 3; $i++) {
-            imagerectangle($im, 40 + $i, 40 + $i, $w - 41 - $i, $h - 41 - $i, $gold);
+            imagerectangle($im, 36 + $i, 36 + $i, $w - 37 - $i, $h - 37 - $i, $gold);
         }
-        imagerectangle($im, 56, 56, $w - 57, $h - 57, $gold);
+        imagerectangle($im, 52, 52, $w - 53, $h - 53, $gold);
+        // 모서리 L 액센트 (내곽 모서리 4곳, 직선 조합)
+        $cl = 36;
+        imagesetthickness($im, 3);
+        foreach ([[52, 52, 1, 1], [$w - 53, 52, -1, 1], [52, $h - 53, 1, -1], [$w - 53, $h - 53, -1, -1]] as $c) {
+            [$cx, $cy, $dx, $dy] = $c;
+            imageline($im, $cx + $dx * 8, $cy + $dy * 8, $cx + $dx * ($cl + 8), $cy + $dy * 8, $gold);
+            imageline($im, $cx + $dx * 8, $cy + $dy * 8, $cx + $dx * 8, $cy + $dy * ($cl + 8), $gold);
+        }
+        imagesetthickness($im, 1);
     }
 
     $level = (int)$cert['bravo_level'];
     $ts = strtotime($cert['passed_on']);
     $passedKo = date('Y', $ts) . '년 ' . date('n', $ts) . '월 ' . date('j', $ts) . '일';
 
+    // 텍스트 폴리시 — 배경 유무와 무관하게 항상 적용
     bravoCertCenteredText($im, $regular, 22, $gray, (int)($w / 2), 140, '제 ' . $cert['cert_no'] . ' 호');
-    bravoCertCenteredText($im, $bold, 64, $ink, (int)($w / 2), 300, "BRAVO {$level} 등급 인증서");
+    bravoCertTrackedCenteredText($im, $bold, 64, $accent, (int)($w / 2), 300, "BRAVO {$level} 등급 인증서", 6.0);
     bravoCertCenteredText($im, $bold, 52, $ink, (int)($w / 2), 520, $cert['member_name']);
+    // 이름 아래 구분선 (이름 폭 + 양쪽 40px)
+    $nb = imagettfbbox(52, 0, $bold, $cert['member_name']);
+    $nw = $nb[2] - $nb[0];
+    imagesetthickness($im, 2);
+    imageline($im, (int)($w / 2 - $nw / 2 - 40), 552, (int)($w / 2 + $nw / 2 + 40), 552, $gold);
+    imagesetthickness($im, 1);
     bravoCertCenteredText($im, $regular, 32, $ink, (int)($w / 2), 660, "위 사람은 소리튠영어 소리블록 BRAVO {$level} 등급 시험에");
     bravoCertCenteredText($im, $regular, 32, $ink, (int)($w / 2), 720, '합격하였음을 증명합니다.');
     bravoCertCenteredText($im, $regular, 30, $ink, (int)($w / 2), 940, $passedKo);
+    // 발급처 위 서명선 느낌의 가는 선
+    imageline($im, (int)($w / 2 - 150), 1000, (int)($w / 2 + 150), 1000, $gold);
     bravoCertCenteredText($im, $bold, 44, $ink, (int)($w / 2), 1060, '소리튠영어');
 
     ob_start();
