@@ -309,6 +309,7 @@ case 'bravo_certificate':
     $deny = bravoCertificateEligible($exam, bravoAttemptGradeGet($db, $attemptId));
     if ($deny) jsonError($deny['error'], $deny['code']);
     $ctx = bravoMemberContext($db, (int)$s['member_id']);
+    if (!$ctx) jsonError('회원 정보를 찾을 수 없습니다.', 500);
     $cert = bravoCertificateIssue($db, $attempt, $exam, $ctx['row']['real_name']);
     try {
         $r = bravoCertificateRender($cert);

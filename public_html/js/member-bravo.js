@@ -35,14 +35,15 @@ const MemberBravo = (() => {
         if (at.result) {
             const r = at.result;
             if (r.result === 'pass') {
+                const certLabel = r.cert_issued ? '인증서 다시 받기' : '인증서 다운로드';
                 return `<p class="bravo-state bravo-result-pass">🎉 합격! 총점 ${parseFloat(r.total_score)} / 합격선 ${parseFloat(r.passing_score)}</p>
-                    <button class="btn btn-primary bravo-cert" data-attempt-id="${r.attempt_id}">인증서 다운로드</button>`;
+                    <button class="btn btn-primary bravo-cert" data-attempt-id="${r.attempt_id}">${certLabel}</button>`;
             }
             return `<p class="bravo-state bravo-result-fail">아쉽게 불합격 — 총점 ${parseFloat(r.total_score)} / 합격선 ${parseFloat(r.passing_score)}. 다음 도전 기간에 다시 도전할 수 있어요.</p>`;
         }
         // 다른 시험이 카드에 떠도 이미 합격한 등급이면 도전 대신 합격 완료 표시
         if (lv.passed_level) {
-            return `<p class="bravo-state bravo-result-pass">✅ BRAVO ${lv.level} 합격 완료</p>`;
+            return `<p class="bravo-state bravo-result-pass">✅ BRAVO ${parseInt(lv.level, 10)} 합격 완료</p>`;
         }
         if (at.submitted) {
             return '<p class="bravo-state">제출완료 — 결과 발표 대기</p>'; // released+미확정(채점 누락)도 여기로 — 대기 유지
