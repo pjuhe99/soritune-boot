@@ -116,7 +116,7 @@
 /* ── 등급 헤더 + 강등 모달 ── */
 .member-bravo-grade { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); font-size: var(--text-base); color: var(--color-text); }
 .bravo-demote-btn { color: var(--color-text-sub); }
-.bravo-demote-dialog { border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); max-width: 420px; box-shadow: var(--shadow-lg); }
+.bravo-demote-dialog { position: fixed; inset: 0; margin: auto; width: fit-content; height: fit-content; max-width: min(420px, calc(100vw - var(--space-6))); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-lg); }
 .bravo-demote-dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
 .bravo-demote-dialog h4 { margin: 0 0 var(--space-3); }
 .bravo-demote-warn { padding: var(--space-2) var(--space-3); background: var(--color-warning-50); border-left: 3px solid var(--color-warning-500); border-radius: var(--radius-sm); font-size: var(--text-sm); line-height: var(--leading-normal); }

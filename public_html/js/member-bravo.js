@@ -113,7 +113,7 @@ const MemberBravo = (() => {
                 <dialog class="bravo-demote-dialog" id="bravo-demote-dialog">
                     <h4>등급 강등 신청</h4>
                     <p>BRAVO ${cur} → ${cur - 1 >= 1 ? 'BRAVO ' + (cur - 1) : '무등급'} 으로 내려갑니다.</p>
-                    <p class="bravo-demote-warn">⚠️ 되돌리려면 시험에 다시 합격해야 합니다.<br>누적 응시 횟수는 환불되지 않습니다.</p>
+                    <p class="bravo-demote-warn">⚠️ 되돌리려면 시험에 다시 합격해야 합니다.<br>누적 응시 횟수는 초기화되지 않습니다.</p>
                     <div class="bravo-demote-actions">
                         <button class="btn btn-danger" id="bravo-demote-confirm" type="button">강등 확인</button>
                         <button class="btn" id="bravo-demote-cancel" type="button">취소</button>

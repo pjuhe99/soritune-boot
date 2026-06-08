@@ -55,16 +55,25 @@ const AdminBravoExamApp = (() => {
 
         container.innerHTML = `
             <div class="bravo-exam-admin">
+                <div class="bravo-help">
+                    <strong>시험 관리</strong> — BRAVO 등급 시험을 만들고 운영합니다. 각 시험에 <b>OT</b>(안내)와 <b>문제</b>를 배정한 뒤 상태를 진행하세요.
+                    <ul class="bravo-help-list">
+                        <li><b>상태 흐름</b>: 준비중 → <b>오픈</b>(응시 가능) → <b>종료</b>(응시 마감) → <b>결과발표</b>(합불·점수 공개, 합격자 등급 자동 부여). 준비중 시험은 회원에게 보이지 않습니다.</li>
+                        <li><b>OT / 문제</b>: 각 행의 버튼으로 시험 안내와 출제 문제를 배정합니다. 문제가 없으면 응시가 시작되지 않습니다.</li>
+                    </ul>
+                </div>
                 <div class="bravo-exam-toolbar">
                     <button class="btn btn-primary btn-sm" id="bravo-exam-new">+ 시험 추가</button>
                 </div>
-                <div id="bravo-exam-form"></div>
+                <dialog id="bravo-exam-form" class="bravo-exam-dialog"></dialog>
+                <div class="bravo-table-wrap">
                 <table class="data-table">
                     <thead><tr>
                         <th>시험명</th><th>등급</th><th>기간</th><th>대상</th><th>응시횟수</th><th>상태</th><th></th>
                     </tr></thead>
                     <tbody>${rows || '<tr><td colspan="7">등록된 시험이 없습니다.</td></tr>'}</tbody>
                 </table>
+                </div>
             </div>`;
 
         container.querySelector('#bravo-exam-new').addEventListener('click', () => openForm(null));
@@ -95,6 +104,7 @@ const AdminBravoExamApp = (() => {
 
         const formEl = container.querySelector('#bravo-exam-form');
         formEl.innerHTML = `
+            <h4 class="bravo-modal-title">${id ? '시험 수정' : '시험 추가'}</h4>
             <div class="bravo-exam-fields">
                 <label>시험명 <input type="text" id="bx-title" value=""></label>
                 <label>등급 <select id="bx-level">${levelOpts}</select></label>
@@ -130,7 +140,8 @@ const AdminBravoExamApp = (() => {
         tgtSel.addEventListener('change', () => { cohortSel.disabled = tgtSel.value !== 'cohort'; });
 
         formEl.querySelector('#bx-save').addEventListener('click', onSave);
-        formEl.querySelector('#bx-cancel').addEventListener('click', () => { formEl.innerHTML = ''; editingId = null; });
+        formEl.querySelector('#bx-cancel').addEventListener('click', () => { formEl.close(); editingId = null; });
+        if (!formEl.open) formEl.showModal();
     }
 
     function localToDt(v) { return v ? v.replace('T', ' ') + ':00' : null; }
@@ -197,7 +208,8 @@ const AdminBravoExamApp = (() => {
                 <button class="btn btn-sm" id="ot-cancel">닫기</button></div>
             </div>`;
         host.querySelector('#ot-save').addEventListener('click', () => saveOt(examId, host));
-        host.querySelector('#ot-cancel').addEventListener('click', () => { host.innerHTML = ''; });
+        host.querySelector('#ot-cancel').addEventListener('click', () => host.close());
+        if (!host.open) host.showModal();
     }
 
     async function saveOt(examId, host) {
@@ -212,7 +224,7 @@ const AdminBravoExamApp = (() => {
             require_check: host.querySelector('#ot-require').checked ? 1 : 0,
         };
         const r = await App.post('/api/admin.php?action=bravo_ot_save', payload);
-        if (r && r.success !== false) { Toast.success('OT가 저장되었습니다.'); host.innerHTML = ''; }
+        if (r && r.success !== false) { Toast.success('OT가 저장되었습니다.'); host.close(); }
         else Toast.error((r && r.error) || 'OT 저장 실패');
     }
 
@@ -244,8 +256,9 @@ const AdminBravoExamApp = (() => {
         host.querySelector('#eq-showall').addEventListener('change', e => openExamQuestions(examId, e.target.checked));
         host.querySelectorAll('.eq-chk').forEach(c => c.addEventListener('change', () => renderEqSummary(host, level)));
         host.querySelector('#eq-save').addEventListener('click', () => saveExamQuestions(examId, host));
-        host.querySelector('#eq-cancel').addEventListener('click', () => { host.innerHTML = ''; });
+        host.querySelector('#eq-cancel').addEventListener('click', () => host.close());
         renderEqSummary(host, level);
+        if (!host.open) host.showModal(); // 전체보기 토글 재호출 시 이미 열려 있으면 재호출 안 함
     }
 
     function renderEqSummary(host, level) {

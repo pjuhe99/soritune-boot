@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════════════ */
 
 /* ── 서브탭 (admin.css .multipass-subtab 선례와 동일 문법, 토큰화) ── */
-.bravo-subtabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.bravo-subtabs { display: flex; gap: var(--space-1); margin-top: var(--space-5); margin-bottom: var(--space-4); flex-wrap: wrap; }
 .bravo-subtab {
     padding: 6px 14px;
     border: 1px solid var(--color-gray-300);
@@ -19,8 +19,32 @@
 .bravo-subtab:hover { border-color: var(--color-primary-300); color: var(--color-primary-600); }
 .bravo-subtab.active { background: var(--color-primary-600); color: #fff; border-color: var(--color-primary-600); font-weight: var(--font-semibold); }
 
+/* ── 폼 컨트롤 공통 — 서브탭 내 input/select/textarea 가 기본 박스/시스템 글꼴로 뜨던 것을 토큰·Pretendard 로 통일 (체크박스/라디오 제외) ── */
+.bravo-sub input:not([type="checkbox"]):not([type="radio"]),
+.bravo-sub select,
+.bravo-sub textarea {
+    padding: 6px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: var(--text-base);
+    box-sizing: border-box;
+}
+.bravo-sub textarea { width: 100%; }
+.bravo-sub input:not([type="checkbox"]):not([type="radio"]):focus,
+.bravo-sub select:focus,
+.bravo-sub textarea:focus { outline: none; border-color: var(--color-primary-400); }
+
 /* ── 자격 (qual) ── */
-.bravo-help { margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); background: var(--color-info-50); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-sub); }
+.bravo-help { margin: 0 0 var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-info-50); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-sub); line-height: var(--leading-normal); }
+.bravo-help strong { color: var(--color-text); }
+.bravo-help-list { margin: var(--space-2) 0 0; padding-left: var(--space-4); display: flex; flex-direction: column; gap: 3px; }
+.bravo-help-list b { color: var(--color-text); font-weight: var(--font-semibold); }
+/* 넓은 테이블 가로 스크롤 래퍼 (admin 800px 영역 안에서 넘침 방지 — 운영 관행) */
+.bravo-table-wrap { overflow-x: auto; }
+.bravo-table th { white-space: nowrap; }
 .bravo-table .num { text-align: right; }
 .bravo-table .bravo-override { text-align: right; }
 .bravo-table .bravo-notes { width: 100%; min-width: 120px; box-sizing: border-box; }
@@ -33,6 +57,21 @@
 
 .bravo-extra-cell { white-space: nowrap; }
 .bravo-cur-level { padding: 2px 4px; font-size: var(--text-sm); }
+
+/* ── 회원 자격 수정 모달 (목록+수정 분리) ── */
+.bravo-qual-dialog { position: fixed; inset: 0; margin: auto; width: fit-content; height: fit-content; max-width: min(440px, calc(100vw - var(--space-6))); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-lg); }
+.bravo-qual-dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+.bravo-qual-form h4 { margin: 0 0 var(--space-2); font-size: var(--text-lg); }
+.bravo-qual-form h4 small { font-size: var(--text-sm); font-weight: var(--font-normal); color: var(--color-text-sub); }
+.bravo-qual-meta { margin: 0 0 var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); color: var(--color-text-sub); }
+.bravo-qf-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-3); font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--color-text); }
+.bravo-qf-row small { font-weight: var(--font-normal); color: var(--color-text-muted); }
+.bravo-qf-row > input[type="number"], .bravo-qf-row > input[type="text"], .bravo-qf-row select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--text-base); }
+.bravo-qf-static { font-weight: var(--font-normal); color: var(--color-text-sub); font-variant-numeric: tabular-nums; }
+.bravo-extras, .bravo-grants { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.bravo-extras input { width: 4em; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--text-base); text-align: right; }
+.bravo-qf-note { margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); background: var(--color-warning-50); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: var(--font-normal); color: var(--color-text-sub); }
+.bravo-qf-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); }
 
 /* ── 시험 관리 ── */
 .bravo-exam-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
@@ -51,6 +90,15 @@
 .bravo-exam-fields label { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 .bravo-exam-fields > select { align-self: center; }
 .bx-dates { display: inline-flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--color-primary-200); }
+
+/* 시험 관리 모달 (수정/추가·OT·문제 배정 공용 — 회원 자격 모달과 동일 패턴) */
+.bravo-exam-dialog { position: fixed; inset: 0; margin: auto; width: min(620px, calc(100vw - var(--space-6))); height: fit-content; max-height: calc(100vh - var(--space-8)); overflow-y: auto; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-lg); }
+.bravo-exam-dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+.bravo-modal-title { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
+/* 모달 안에서는 내부 패널의 박스 크롬 제거 (이중 박스 방지) */
+.bravo-exam-dialog .bravo-exam-fields,
+.bravo-exam-dialog .bravo-ot-form,
+.bravo-exam-dialog .bravo-eq-panel { margin: 0; border: none; background: none; padding: 0; }
 
 /* ── 폼 공통 (문제은행 + OT) — 2열 그리드, wide 풀폭 ── */
 .bravo-q-form,

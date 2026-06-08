@@ -15,6 +15,13 @@ const AdminBravoQuestionApp = (() => {
         editingId = null;
         root.innerHTML = `
             <div class="bravo-q">
+                <div class="bravo-help">
+                    <strong>문제은행</strong> — 시험에 출제할 문제를 등록·관리합니다. 여기 등록한 문제를 <b>시험 관리 → 문제</b> 버튼에서 각 시험에 배정합니다.
+                    <ul class="bravo-help-list">
+                        <li>위 필터(유형·등급·난이도·활성·검색)로 문제를 추려 볼 수 있습니다.</li>
+                        <li><b>활성</b> 문제만 시험에 배정됩니다. 더 이상 쓰지 않는 문제는 비활성으로 두세요.</li>
+                    </ul>
+                </div>
                 <div class="bravo-q-filters">
                     <select id="bq-f-type"><option value="">유형 전체</option><option value="1">유형 1</option><option value="2">유형 2</option><option value="3">유형 3</option></select>
                     <select id="bq-f-level"><option value="">등급 전체</option><option value="1">BRAVO 1</option><option value="2">BRAVO 2</option><option value="3">BRAVO 3</option></select>
@@ -25,10 +32,12 @@ const AdminBravoQuestionApp = (() => {
                     <button class="btn btn-primary btn-sm" id="bq-new">+ 문제 추가</button>
                 </div>
                 <div id="bq-form"></div>
+                <div class="bravo-table-wrap">
                 <table class="data-table bravo-q-table">
                     <thead><tr><th>유형</th><th>등급</th><th>한국어</th><th>영어</th><th>난이도</th><th>활성</th><th></th></tr></thead>
                     <tbody id="bq-tbody"></tbody>
                 </table>
+                </div>
             </div>`;
         root.querySelector('#bq-search').addEventListener('click', load);
         root.querySelector('#bq-new').addEventListener('click', () => openForm(null));

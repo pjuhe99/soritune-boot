@@ -52,15 +52,24 @@ const AdminBravoGradingApp = (() => {
 
         root.innerHTML = `
             <div class="bravo-grading">
+                <div class="bravo-help">
+                    <strong>채점</strong> — 제출된 응시를 회원별로 채점하고 합불을 확정합니다.
+                    <ul class="bravo-help-list">
+                        <li>위에서 시험을 고르면 제출된 응시 목록이 나옵니다. 각 행의 <b>채점</b>으로 문항별 판정을 입력하세요.</li>
+                        <li>채점을 마치면 <b>확정</b>합니다. 회원에게는 시험을 <b>결과발표</b> 상태로 바꿔야 점수·합불이 공개됩니다.</li>
+                    </ul>
+                </div>
                 <div class="grading-toolbar">
                     <select id="grading-exam">
                         <option value="0">시험 선택 (제출된 응시가 있는 시험만)</option>${opts}
                     </select>
                 </div>
+                <div class="bravo-table-wrap">
                 <table class="data-table grading-table">
                     <thead><tr><th>회원</th><th>회차</th><th>제출일시</th><th>상태</th><th></th></tr></thead>
                     <tbody>${rows || '<tr><td colspan="5">시험을 선택하세요.</td></tr>'}</tbody>
                 </table>
+                </div>
                 <div id="grading-detail"></div>
             </div>`;
 
