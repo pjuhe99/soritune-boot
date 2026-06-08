@@ -7,14 +7,21 @@ const MemberBravo = (() => {
     MemberTabs.register('bravo', { mount });
 
     function statusBadge(lv) {
+        if (lv.held) return '<span class="bravo-badge held">보유 중</span>';
         return lv.eligible
             ? '<span class="bravo-badge eligible">응시 가능</span>'
             : '<span class="bravo-badge ineligible">응시 불가</span>';
     }
 
     function detailText(lv) {
+        if (lv.held) {
+            return `BRAVO ${parseInt(lv.level, 10)} 등급을 보유하고 있어요.`;
+        }
         if (!lv.eligible) {
             return `부트캠프 ${lv.required_review_count}회독 이상이면 도전할 수 있어요.`;
+        }
+        if (lv.prev_required) {
+            return `BRAVO ${parseInt(lv.level, 10) - 1} 등급 취득 후 도전할 수 있어요.`;
         }
         const ex = lv.exam;
         if (ex && ex.status === 'open') {
