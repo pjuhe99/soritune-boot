@@ -44,7 +44,7 @@ function bravoGradeLockRow(PDO $db, string $memberKey): array {
  * 등급 설정 + 이력 로그. 같은 레벨이면 no-op(로그 없음). 0~3 클램프.
  * 잠금 없는 read-then-write — 동시 호출 시 로그 from_level 이 stale 할 수 있으나 current_level 은 last-write 로 정합. 직렬화가 필요하면 호출부가 bravoGradeLockRow 선행 (Demote/Start 패턴).
  */
-function bravoGradeSet(PDO $db, string $memberKey, int $to, string $source, ?int $refId = null, ?string $note = null): void {
+function bravoGradeSet(PDO $db, string $memberKey, int $to, string $source, ?int $refId = null, ?string $note = null, ?int $sourceAttemptId = null): void {
     $to = max(0, min(3, $to));
     $from = bravoGradeCurrentLevel($db, $memberKey);
     if ($from === $to) return;
@@ -52,8 +52,8 @@ function bravoGradeSet(PDO $db, string $memberKey, int $to, string $source, ?int
         INSERT INTO bravo_member_grades (member_key, current_level) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE current_level = VALUES(current_level)
     ")->execute([$memberKey, $to]);
-    $db->prepare("INSERT INTO bravo_grade_log (member_key, from_level, to_level, source, ref_id, note) VALUES (?,?,?,?,?,?)")
-       ->execute([$memberKey, $from, $to, $source, $refId, $note !== null ? mb_substr($note, 0, 255) : null]);
+    $db->prepare("INSERT INTO bravo_grade_log (member_key, from_level, to_level, source, ref_id, source_attempt_id, note) VALUES (?,?,?,?,?,?,?)")
+       ->execute([$memberKey, $from, $to, $source, $refId, $sourceAttemptId, $note !== null ? mb_substr($note, 0, 255) : null]);
 }
 
 /**
@@ -83,16 +83,17 @@ function bravoGradeDemote(PDO $db, string $memberKey): array {
 /**
  * released 전환 훅: 그 시험의 확정 pass 를 max(현재, 시험등급) 으로 승급. 변경 인원 반환.
  * - 이미 같거나 높은 등급은 no-op(로그 없음).
- * - 재전환이 강등을 되돌리지 않음: 그 시험의 마지막 exam_pass 승급 "이후" 새 합격 확정이 있는 사람만 승급
- *   (재오픈 사이클에서 강등 후 재합격한 사람은 정당하게 재승급 — 외부리뷰 fix 의 정밀화).
+ * - 재전환이 강등을 되돌리지 않음: 그 시험에서 "아직 크레딧되지 않은 새 합격 attempt" 가 있는 사람만 승급.
+ *   크레딧 기준을 attempt.id(단조증가)로 비교 — 같은 attempt 의 재크레딧을 차단하면서, 강등 후 새 attempt
+ *   재합격은 정당 승급. created_at/confirmed_at(초 단위) 비교의 동초 충돌 결함을 제거 (외부리뷰 fix 의 정밀화).
  */
 function bravoGradeApplyExamPass(PDO $db, array $exam): int {
     $level = (int)$exam['bravo_level'];
     $examId = (int)$exam['id'];
 
-    // 사람별 마지막 합격 확정 시각
+    // 사람별 이 시험의 마지막 합격 attempt id (id 단조증가 — 동초 충돌 없음)
     $stmt = $db->prepare("
-        SELECT a.member_key, MAX(g.confirmed_at) AS last_pass
+        SELECT a.member_key, MAX(a.id) AS last_pass_attempt
         FROM bravo_attempts a
         JOIN bravo_attempt_grades g ON g.attempt_id = a.id AND g.result = 'pass'
         WHERE a.exam_id = ?
@@ -102,18 +103,19 @@ function bravoGradeApplyExamPass(PDO $db, array $exam): int {
     $passers = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
     if (!$passers) return 0;
 
-    // 사람별 이 시험의 마지막 승급 시각
-    $lStmt = $db->prepare("SELECT member_key, MAX(created_at) FROM bravo_grade_log WHERE source = 'exam_pass' AND ref_id = ? GROUP BY member_key");
+    // 사람별 이 시험에서 이미 크레딧된 마지막 attempt id
+    $lStmt = $db->prepare("SELECT member_key, MAX(source_attempt_id) FROM bravo_grade_log WHERE source = 'exam_pass' AND ref_id = ? AND source_attempt_id IS NOT NULL GROUP BY member_key");
     $lStmt->execute([$examId]);
     $credited = $lStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $n = 0;
-    foreach ($passers as $key => $lastPass) {
+    foreach ($passers as $key => $lastPassAttempt) {
         $key = (string)$key;
-        // 이미 승급된 적 있고, 그 이후 새 합격 확정이 없으면 skip (강등 복원 금지)
-        if (isset($credited[$key]) && $lastPass <= $credited[$key]) continue;
+        $lastPassAttempt = (int)$lastPassAttempt;
+        // 이미 이 attempt(또는 더 최신)가 크레딧됐으면 skip (강등 복원 금지 — 새 합격 attempt 없음)
+        if (isset($credited[$key]) && $lastPassAttempt <= (int)$credited[$key]) continue;
         if (bravoGradeCurrentLevel($db, $key) < $level) {
-            bravoGradeSet($db, $key, $level, 'exam_pass', $examId, isset($exam['title']) ? (string)$exam['title'] : null);
+            bravoGradeSet($db, $key, $level, 'exam_pass', $examId, isset($exam['title']) ? (string)$exam['title'] : null, $lastPassAttempt);
             $n++;
         }
     }

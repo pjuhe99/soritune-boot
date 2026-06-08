@@ -290,17 +290,20 @@ function bravoExamCreate(PDO $db, array $d, int $adminId): int {
  * 시험 수정 (status 포함 전체 필드).
  * status 가 released 로 '전환'되는 시점에 확정 pass 전원 승급 (bravoGradeApplyExamPass).
  * 재전환(released→closed→released)은 ApplyExamPass 내부 no-op 으로 멱등.
- * prevStatus 조회는 트랜잭션 밖 — 동시 released 저장 시 훅 2회 가능하나 ApplyExamPass no-op 멱등으로 등급 오염 없음(최악 로그 1행 중복 — 허용). 훅 예외 시 status 변경까지 롤백(발표 실패가 등급 누락보다 수복 명확 — 의도).
+ * prevStatus 를 트랜잭션 안에서 exam 행 FOR UPDATE 로 읽어 동시 released 저장을 직렬화 —
+ * 두 번째 저장은 첫 커밋 후 prevStatus='released' 를 보고 훅을 건너뛴다(중복 승급/로그 차단).
+ * 훅 예외 시 status 변경까지 롤백(발표 실패가 등급 누락보다 수복 명확 — 의도).
  */
 function bravoExamUpdate(PDO $db, int $id, array $d): void {
     $c = bravoExamPersistData($d);
-    $prevStmt = $db->prepare("SELECT status FROM bravo_exams WHERE id = ?");
-    $prevStmt->execute([$id]);
-    $prevStatus = $prevStmt->fetchColumn();
 
     $owns = !$db->inTransaction();
     if ($owns) $db->beginTransaction();
     try {
+        $prevStmt = $db->prepare("SELECT status FROM bravo_exams WHERE id = ? FOR UPDATE");
+        $prevStmt->execute([$id]);
+        $prevStatus = $prevStmt->fetchColumn();
+
         $db->prepare("
             UPDATE bravo_exams SET
                 title=?, bravo_level=?, exam_mode=?, start_at=?, end_at=?, result_release_at=?,

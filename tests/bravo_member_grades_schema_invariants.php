@@ -37,11 +37,12 @@ t('member_key UNIQUE', count($idx) === 1 && (int)$idx[0]['Non_unique'] === 0);
 // bravo_grade_log
 $cols = [];
 foreach ($db->query("SHOW COLUMNS FROM bravo_grade_log") as $c) $cols[$c['Field']] = $c;
-foreach (['id','member_key','from_level','to_level','source','ref_id','note','created_at'] as $col) {
+foreach (['id','member_key','from_level','to_level','source','ref_id','source_attempt_id','note','created_at'] as $col) {
     t("log.{$col} 존재", isset($cols[$col]));
 }
 t('source ENUM 4값', stripos($cols['source']['Type'], "enum('grandfather','exam_pass','self_demotion','admin_adjust')") === 0);
 t('ref_id NULL 허용', $cols['ref_id']['Null'] === 'YES');
+t('source_attempt_id NULL 허용 (exam_pass 크레딧 attempt — 재승급 멱등 기준)', ($cols['source_attempt_id']['Null'] ?? '') === 'YES');
 $ix = $db->query("SHOW INDEX FROM bravo_grade_log WHERE Key_name='idx_bgl_member'")->fetchAll();
 t('idx_bgl_member 2컬럼 비유니크', count($ix) === 2 && (int)$ix[0]['Non_unique'] === 1);
 

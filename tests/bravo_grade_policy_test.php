@@ -104,8 +104,7 @@ try {
     // 단 강등 "후" 같은 시험에 재합격(새 확정)하면 재전환 시 정당 승급 (재오픈 사이클)
     // key1 은 현재 0 (강등됨). examA 를 재오픈해 새 attempt 합격 확정 → 재released → 승급되어야 함
     bravoExamUpdate($db, $examA, array_merge($upd, ['status' => 'open']));
-    // 승급 로그가 과거에 있으므로 confirmed_at 이 그보다 뒤여야 함 — sleep(1) 로 초 단위 분리
-    sleep(1);
+    // 재승급 기준이 attempt.id(단조증가)라 동초여도 정확 — timestamp sleep(1) 불필요
     $accRe = bravoAttemptExamAccess($db, $m1, $examA);
     if (isset($accRe['error'])) throw new RuntimeException('re-access: ' . $accRe['error']);
     $rRe = bravoAttemptStart($db, $accRe['exam'], $accRe['ctx']['row'], $accRe['member_key'], false);
@@ -125,6 +124,16 @@ try {
     if (isset($cRe['error'])) throw new RuntimeException('re-confirm: ' . $cRe['error']);
     bravoExamUpdate($db, $examA, $upd); // 재released
     t('강등 후 재합격 → 재전환 시 정당 승급', bravoGradeCurrentLevel($db, $key1) === 1);
+    // 재승급 로그가 그 새 attempt 를 크레딧 기준으로 기록 (timestamp 비의존 멱등 근거)
+    $reLog = $db->prepare("SELECT source_attempt_id FROM bravo_grade_log WHERE member_key=? AND source='exam_pass' AND ref_id=? ORDER BY id DESC LIMIT 1");
+    $reLog->execute([$key1, $examA]);
+    t('재승급 로그 source_attempt_id = 새 attempt', (int)$reLog->fetchColumn() === (int)$atRe['id']);
+    // 새 합격 없이 재전환 반복은 같은 attempt 재크레딧 차단 (멱등)
+    $logsBeforeRe = (int)$db->query("SELECT COUNT(*) FROM bravo_grade_log WHERE source='exam_pass'")->fetchColumn();
+    bravoExamUpdate($db, $examA, array_merge($upd, ['status' => 'closed']));
+    bravoExamUpdate($db, $examA, $upd);
+    $logsAfterRe = (int)$db->query("SELECT COUNT(*) FROM bravo_grade_log WHERE source='exam_pass'")->fetchColumn();
+    t('새 합격 없는 재전환 반복 멱등 (로그 미증가)', $logsBeforeRe === $logsAfterRe);
 
     // ── 누적 quota ──
     $m3 = $mkMember(3);

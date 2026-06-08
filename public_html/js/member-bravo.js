@@ -54,8 +54,10 @@ const MemberBravo = (() => {
         if (at.result) {
             const r = at.result;
             if (r.result === 'pass') {
+                // 여기 도달 = released 합격이지만 현재 미보유(강등/관리자 조정). 보유 중이면 위 held 분기에서 이미 처리됨.
+                // stale "합격" 축하 대신 합격 이력으로 표시하고, 인증서(획득 기록)는 계속 제공.
                 const certLabel = r.cert_issued ? '인증서 다시 받기' : '인증서 다운로드';
-                return `<p class="bravo-state bravo-result-pass">🎉 합격! 총점 ${parseFloat(r.total_score)} / 합격선 ${parseFloat(r.passing_score)}</p>
+                return `<p class="bravo-state">BRAVO ${parseInt(lv.level, 10)} 합격 이력이 있어요 · 현재 미보유. 재취득하려면 새 시험에 다시 합격해주세요.</p>
                     <button class="btn btn-primary bravo-cert" data-attempt-id="${r.attempt_id}">${certLabel}</button>`;
             }
             const retry = (ex.status === 'open' && lv.quota && lv.quota.left > 0 && !lv.held && !lv.prev_required)

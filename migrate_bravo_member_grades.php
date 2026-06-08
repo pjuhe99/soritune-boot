@@ -34,12 +34,22 @@ CREATE TABLE IF NOT EXISTS bravo_grade_log (
     to_level    TINYINT UNSIGNED NOT NULL,
     source      ENUM('grandfather','exam_pass','self_demotion','admin_adjust') NOT NULL,
     ref_id      INT UNSIGNED NULL COMMENT 'exam_pass=exam_id, admin_adjust=admin_id, 그 외 NULL',
+    source_attempt_id INT UNSIGNED NULL COMMENT 'exam_pass 를 유발한 attempt.id — 재승급 멱등 기준(같은 attempt 재크레딧 차단, timestamp 비의존)',
     note        VARCHAR(255) NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_bgl_member (member_key, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ");
 echo "bravo_grade_log 생성 완료\n";
+
+// 기존 테이블에 source_attempt_id 컬럼 보강 (멱등) — 재승급 멱등 기준을 timestamp→attempt_id 로 전환
+$hasCol = $db->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'bravo_grade_log' AND column_name = 'source_attempt_id'")->fetchColumn();
+if ((int)$hasCol === 0) {
+    $db->exec("ALTER TABLE bravo_grade_log ADD COLUMN source_attempt_id INT UNSIGNED NULL COMMENT 'exam_pass 를 유발한 attempt.id — 재승급 멱등 기준(같은 attempt 재크레딧 차단, timestamp 비의존)' AFTER ref_id");
+    echo "bravo_grade_log.source_attempt_id 컬럼 추가\n";
+} else {
+    echo "bravo_grade_log.source_attempt_id 이미 존재\n";
+}
 
 // bravo_attempts.member_key 인덱스 (quota 누적 쿼리용) — 멱등
 $has = $db->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'bravo_attempts' AND index_name = 'idx_ba_member_key'")->fetchColumn();
