@@ -43,7 +43,8 @@ const MemberGrowthRecord = (() => {
         `;
 
         if (r.submitted) {
-            body.innerHTML = guideBlock + renderDone(r.submitted);
+            body.innerHTML = guideBlock + renderDone(r.submitted, r.open);
+            attachDoneHandlers(r.submitted, r.open);
             return;
         }
         if (!r.eligible) {
@@ -61,8 +62,16 @@ const MemberGrowthRecord = (() => {
         attachHandlers();
     }
 
-    function renderDone(s) {
+    function renderDone(s, open) {
         const d = (s.submitted_at || '').slice(0, 16);
+        const replaceBtn = (which, label) => open ? `
+            <input type="file" id="growth-replace-${which}" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg" hidden>
+            <button type="button" class="btn btn-secondary btn-sm growth-replace-btn" data-which="${which}"
+                    id="growth-replace-btn-${which}">파일 변경</button>` : '';
+        const cancelBtn = open ? `
+            <div class="growth-done-actions">
+                <button type="button" class="btn btn-sm btn-danger" id="growth-self-cancel-btn">제출 취소</button>
+            </div>` : '';
         return `
             <div class="growth-done">
                 <div class="growth-done-inner">
@@ -75,13 +84,70 @@ const MemberGrowthRecord = (() => {
                     <div class="growth-done-detail">
                         <div>후기 링크: <a href="${App.esc(s.url)}" target="_blank" rel="noopener noreferrer">${App.esc(s.url)}</a></div>
                         <div>Before 음성: ${App.esc(s.before_orig_name)}
-                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=before"></audio></div>
+                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=before"></audio>
+                            ${replaceBtn('before', 'Before')}</div>
                         <div>After 음성: ${App.esc(s.after_orig_name)}
-                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=after"></audio></div>
+                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=after"></audio>
+                            ${replaceBtn('after', 'After')}</div>
                     </div>
+                    ${cancelBtn}
                 </div>
             </div>
         `;
+    }
+
+    function attachDoneHandlers(s, open) {
+        if (!open) return;
+
+        ['before', 'after'].forEach(which => {
+            const btn = document.getElementById(`growth-replace-btn-${which}`);
+            const input = document.getElementById(`growth-replace-${which}`);
+            if (!btn || !input) return;
+            const label = which === 'before' ? 'Before' : 'After';
+
+            btn.addEventListener('click', () => input.click());
+
+            input.addEventListener('change', async function () {
+                const file = this.files[0];
+                if (!file) return;
+                if (!confirm(`${label} 음성을 이 파일로 교체할까요?`)) {
+                    this.value = '';
+                    return;
+                }
+                const MAX = 20 * 1024 * 1024;
+                if (file.size > MAX) {
+                    Toast.error('음성 파일은 20MB 이하여야 합니다.');
+                    this.value = '';
+                    return;
+                }
+                btn.disabled = true;
+                btn.textContent = '변경 중…';
+                const fd = new FormData();
+                fd.append('which', which);
+                fd.append('audio', file);
+                const r = await App.post(API + 'growth_record_replace_audio', fd);
+                if (r.success) {
+                    Toast.success(r.message || `${label} 음성이 변경되었습니다.`);
+                    await load();
+                } else {
+                    // App.post가 자동으로 Toast.error 처리 — 버튼 복구만
+                    btn.disabled = false;
+                    btn.textContent = '파일 변경';
+                    this.value = '';
+                }
+            });
+        });
+
+        const cancelBtn = document.getElementById('growth-self-cancel-btn');
+        if (!cancelBtn) return;
+        cancelBtn.addEventListener('click', async () => {
+            if (!confirm('제출을 취소할까요? 취소 후 다시 제출할 수 있습니다.')) return;
+            const r = await App.post(API + 'growth_record_self_cancel', {});
+            if (r.success) {
+                Toast.success(r.message || '제출이 취소되었습니다.');
+                await load();
+            }
+        });
     }
 
     function renderForm() {

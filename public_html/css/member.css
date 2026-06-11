@@ -790,3 +790,7 @@
 .growth-done-msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; color: #333; }
 .growth-done-detail { font-size: 13px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; color: #333; }
 .growth-done-detail audio { display: block; width: 100%; margin-top: 4px; }
+.growth-replace-btn { margin-top: 4px; }
+.growth-done-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid #D1FAE5; display: flex; justify-content: flex-end; }
+.growth-done-actions .btn-danger { background: #FFF1F2; color: #BE123C; border: 1px solid #FECDD3; }
+.growth-done-actions .btn-danger:hover { background: #BE123C; color: #fff; }

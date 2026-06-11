@@ -112,6 +112,69 @@ try {
         $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r2['submission']['after_file'];
     }
 
+    // ── growthSelfCancel ──
+    // 재제출(r2) 후 본인 취소
+    $r2Active = growthFindActive($db, $memberId);
+    t('selfCancel: fixture active row exists', $r2Active !== null);
+    if ($r2Active) {
+        $r = growthSelfCancel($db, $memberId);
+        t('selfCancel: ok', isset($r['cancelled']) && $r['cancelled'] === true);
+        // cancelled_by NULL, cancel_reason 확인
+        $stmt = $db->prepare("SELECT cancelled_by, cancel_reason FROM growth_record_submissions WHERE id = ?");
+        $stmt->execute([(int)$r2Active['id']]);
+        $cancelledRow = $stmt->fetch();
+        t('selfCancel: cancelled_by NULL', $cancelledRow !== false && $cancelledRow['cancelled_by'] === null);
+        t('selfCancel: cancel_reason is 회원 본인 취소', $cancelledRow !== false && $cancelledRow['cancel_reason'] === '회원 본인 취소');
+        // 파일 보존 확인
+        t('selfCancel: file preserved', is_file(GROWTH_UPLOAD_ROOT . '/' . $r2Active['before_file']));
+        // 대상 없을 때 error (방금 취소됐으므로 활성 없음)
+        $r = growthSelfCancel($db, $memberId);
+        t('selfCancel: no active submission → error', isset($r['error']));
+        // 재제출 가능 확인
+        $r3 = growthSubmit($db, $member, 'https://blog.naver.com/resubmit3', true, makeAudio('mp3'), makeAudio('mp3'), false);
+        t('selfCancel: resubmit after self cancel ok', isset($r3['submission']), $r3['error'] ?? '');
+        if (isset($r3['submission'])) {
+            $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r3['submission']['before_file'];
+            $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r3['submission']['after_file'];
+        }
+    }
+
+    // ── growthReplaceAudio ──
+    $activeForReplace = growthFindActive($db, $memberId);
+    t('replace: fixture active row exists', $activeForReplace !== null);
+    if ($activeForReplace) {
+        // happy path: before 교체
+        $oldBeforeFile = $activeForReplace['before_file'];
+        $oldBeforePath = GROWTH_UPLOAD_ROOT . '/' . $oldBeforeFile;
+        $newFile = makeAudio('mp3');
+        $r = growthReplaceAudio($db, $member, 'before', $newFile, false);
+        t('replace: ok', isset($r['submission']), $r['error'] ?? '');
+        if (isset($r['submission'])) {
+            $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r['submission']['before_file'];
+            t('replace: new filename has _r suffix', (bool)preg_match('/_r[0-9a-f]{6}\./', $r['submission']['before_file']));
+            t('replace: new file exists', is_file(GROWTH_UPLOAD_ROOT . '/' . $r['submission']['before_file']));
+            t('replace: old file deleted', !is_file($oldBeforePath));
+            t('replace: orig_name updated', $r['submission']['before_orig_name'] === '원본 mp3.mp3');
+            // ext 변경(mp3 → m4a) happy path: after 교체
+            $oldAfterFile = $r['submission']['after_file'];
+            $oldAfterPath = GROWTH_UPLOAD_ROOT . '/' . $oldAfterFile;
+            $newM4a = makeAudio('m4a');
+            $newM4a['mime'] = 'audio/mp4';
+            $r2r = growthReplaceAudio($db, $member, 'after', $newM4a, false);
+            t('replace ext change: ok', isset($r2r['submission']), $r2r['error'] ?? '');
+            if (isset($r2r['submission'])) {
+                $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r2r['submission']['after_file'];
+                t('replace ext change: new ext is m4a', str_ends_with($r2r['submission']['after_file'], '.m4a'));
+                t('replace ext change: old after file deleted', !is_file($oldAfterPath));
+            }
+        }
+
+        // 활성 제출 없을 때 error
+        $memberNoSub = ['id' => 99999999, 'cohort_id' => $cohortId, 'nickname' => '__nope', 'real_name' => ''];
+        $r = growthReplaceAudio($db, $memberNoSub, 'before', makeAudio('mp3'), false);
+        t('replace: no active submission → error', isset($r['error']));
+    }
+
     // 비활성 회원
     $db->prepare("UPDATE bootcamp_members SET is_active = 0 WHERE id = ?")->execute([$memberId]);
     t('memberRow inactive null', growthMemberRow($db, $memberId) === null);

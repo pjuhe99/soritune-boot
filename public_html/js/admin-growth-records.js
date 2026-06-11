@@ -172,7 +172,7 @@ const AdminGrowthRecords = (() => {
                 <td colspan="8">${audioCell(item.id, 'before')}${audioCell(item.id, 'after')}</td>
             </tr>`;
         const cancelRow = cancelled
-            ? `<tr class="agr-cancel-meta ${rowClass}"><td colspan="8">└ 사유: "${App.esc(item.cancel_reason || '')}" · by ${App.esc(item.cancelled_by_name || '?')} · ${App.esc((item.cancelled_at || '').slice(5, 16))}</td></tr>`
+            ? `<tr class="agr-cancel-meta ${rowClass}"><td colspan="8">└ 사유: "${App.esc(item.cancel_reason || '')}" · by ${App.esc(item.cancelled_by ? (item.cancelled_by_name || '?') : '본인')} · ${App.esc((item.cancelled_at || '').slice(5, 16))}</td></tr>`
             : '';
         return `
             <tr class="${rowClass}">
