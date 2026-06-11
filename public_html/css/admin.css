@@ -716,20 +716,63 @@
 }
 
 /* ── 성장기록 탭 (admin-growth-records.js) ─────────────────── */
-.admin-growth-settings { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
-.agr-settings-title { font-weight: 700; margin-bottom: 6px; }
-.agr-settings-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; }
-.agr-toggle { display: flex; align-items: center; gap: 6px; }
-.agr-settings-hint { color: #888; font-size: 12px; }
+/* 설정 박스 — reviews-settings 톤 통일 */
+.admin-growth-settings {
+    background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 12px;
+}
+.agr-settings-title { font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+.agr-settings-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; font-size: 13px; }
+.agr-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #444; }
+.agr-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #2563EB; }
+.agr-toggle input[type="checkbox"]:disabled { cursor: wait; opacity: 0.5; }
+.agr-settings-hint { font-size: 12px; color: #888; }
+
+/* 필터/카운트 */
 .admin-growth-filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.admin-growth-filters label { font-size: 13px; color: #444; }
+.admin-growth-filters select,
+.admin-growth-filters input { padding: 4px 8px; font-size: 13px; }
 .admin-growth-counts { font-size: 13px; color: #555; margin-bottom: 8px; }
+
+/* 리스트 overflow 안전망 */
+.admin-growth-list { overflow-x: auto; }
+
+/* 테이블 — reviews-table 톤 통일 */
 .admin-growth-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.admin-growth-table th, .admin-growth-table td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
-.agr-audio { width: 180px; height: 30px; vertical-align: middle; }
-.agr-status-active { color: #15803d; }
-.agr-status-cancelled { color: #b91c1c; }
+.admin-growth-table th,
+.admin-growth-table td { padding: 8px 6px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+.admin-growth-table th { background: #F9FAFB; font-weight: 600; color: #555; }
+.admin-growth-table a { color: #2563EB; }
+
+/* 메인 행 텍스트 컬럼 — 세로 줄바꿈 방지 */
+.admin-growth-table tr:not(.agr-media-row):not(.agr-cancel-meta) td { white-space: nowrap; }
+
+/* 미디어 행 */
+.agr-media-row td {
+    white-space: normal;
+    padding: 4px 8px 12px 24px;
+    background: #FAFAFA;
+    border-bottom: 1px solid #eee;
+}
+.agr-media-item {
+    display: inline-flex; align-items: center; gap: 6px; margin-right: 24px;
+}
+.agr-media-label { font-size: 12px; color: #888; font-weight: 600; }
+.agr-audio { width: 260px; height: 32px; }
+.agr-dl-link { color: #2563EB; text-decoration: none; }
+.agr-dl-link:hover { text-decoration: underline; }
+
+/* 상태 색 — reviews 통일 */
+.agr-status-active { color: #059669; font-weight: 600; }
+.agr-status-cancelled { color: #9CA3AF; font-weight: 600; }
+
+/* 취소 행 */
 .agr-row-cancelled td { opacity: 0.55; }
-.agr-cancel-meta td { font-size: 12px; color: #888; }
-.agr-cancel-warn { color: #b91c1c; font-size: 13px; margin: 6px 0; }
-.agr-cancel-actions, .agr-guide-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.agr-cancel-meta td { padding-left: 16px; font-size: 12px; color: #888; font-style: italic; }
+
+/* 모달 */
+.agr-cancel-warn { color: #B91C1C; font-size: 13px; margin: 6px 0; font-weight: 600; }
+.agr-cancel-label { display: block; font-size: 13px; margin-top: 8px; margin-bottom: 4px; }
+.agr-cancel-actions, .agr-guide-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .agr-guide-modal textarea { width: 100%; font-family: monospace; font-size: 13px; }
