@@ -381,6 +381,8 @@ case 'growth_records_list':              handleGrowthRecordsList(); break;
 case 'growth_record_cancel':             handleGrowthRecordCancel($method); break;
 case 'growth_record_settings':           handleGrowthRecordSettingsGet(); break;
 case 'growth_record_settings_save':      handleGrowthRecordSettingsUpdate($method); break;
+case 'growth_record_self_cancel':        handleGrowthRecordSelfCancel($method); break;
+case 'growth_record_replace_audio':      handleGrowthRecordReplaceAudio($method); break;
 
 // ── Notify (알림톡) ──────────────────────────────────────────
 
