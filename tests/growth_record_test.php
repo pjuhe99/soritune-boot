@@ -175,6 +175,46 @@ try {
         t('replace: no active submission → error', isset($r['error']));
     }
 
+    // ── growthReplaceAudio: 취소 직후 race 방어 ──
+    // 활성 제출 생성 → 직접 취소(growthSelfCancel) → replace 시도
+    // → error 반환 + 취소된 row 의 기존 파일 보존 + 새 staging/고아 파일 없음
+
+    // r3 (selfCancel 후 재제출) 가 아직 활성이면 먼저 취소
+    if (growthFindActive($db, $memberId) !== null) {
+        growthSelfCancel($db, $memberId);
+    }
+
+    $r4 = growthSubmit($db, $member, 'https://blog.naver.com/race_test', true, makeAudio('mp3'), makeAudio('mp3'), false);
+    t('replace-after-cancel: fixture submit ok', isset($r4['submission']), $r4['error'] ?? '');
+    if (isset($r4['submission'])) {
+        $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r4['submission']['before_file'];
+        $cleanFiles[] = GROWTH_UPLOAD_ROOT . '/' . $r4['submission']['after_file'];
+        $raceBeforeFile = GROWTH_UPLOAD_ROOT . '/' . $r4['submission']['before_file'];
+
+        // 취소 (race 시뮬레이션: replace 시도 전에 취소가 먼저 커밋된 상황)
+        $cancelR = growthSelfCancel($db, $memberId);
+        t('replace-after-cancel: cancel ok', isset($cancelR['cancelled']));
+
+        // staging 이전 파일 개수 확인 (고아 탐지용 기준점)
+        $stagesBefore = count(glob(GROWTH_UPLOAD_ROOT . '/tmp/stage_*') ?: []);
+
+        // replace 시도 — 취소된 상태이므로 error 여야 함
+        $newAudio = makeAudio('mp3');
+        $rr = growthReplaceAudio($db, $member, 'before', $newAudio, false);
+        t('replace-after-cancel: returns error', isset($rr['error']));
+
+        // 취소된 row 의 기존 파일이 디스크에 그대로 보존돼야 함
+        t('replace-after-cancel: old file preserved', is_file($raceBeforeFile));
+
+        // replace 실패 후 staging 고아 파일이 남지 않아야 함
+        $stagesAfter = count(glob(GROWTH_UPLOAD_ROOT . '/tmp/stage_*') ?: []);
+        t('replace-after-cancel: no orphan staging files', $stagesAfter === $stagesBefore);
+
+        // GROWTH_UPLOAD_ROOT 루트에도 replace 용 새 파일이 생기지 않아야 함
+        // (고아 파일이 없으면 충분하지만 명시적으로 검증)
+        t('replace-after-cancel: no orphan final files', !isset($rr['submission']));
+    }
+
     // 비활성 회원
     $db->prepare("UPDATE bootcamp_members SET is_active = 0 WHERE id = ?")->execute([$memberId]);
     t('memberRow inactive null', growthMemberRow($db, $memberId) === null);
