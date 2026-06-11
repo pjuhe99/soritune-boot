@@ -135,7 +135,7 @@ const AdminGrowthRecords = (() => {
                 <thead>
                     <tr>
                         <th>제출일</th><th>기수</th><th>조</th><th>닉네임</th><th>후기</th>
-                        <th>Before</th><th>After</th><th>동의</th><th>상태</th><th></th>
+                        <th>동의</th><th>상태</th><th></th>
                     </tr>
                 </thead>
                 <tbody>${r.items.map(renderRow).join('')}</tbody>
@@ -148,14 +148,19 @@ const AdminGrowthRecords = (() => {
     }
 
     function audioCell(id, which) {
+        const label = which === 'before' ? 'Before' : 'After';
         const src = `${API}growth_record_audio_admin&id=${id}&which=${which}`;
-        return `<audio controls preload="none" class="agr-audio" src="${src}"></audio>
-                <a href="${src}&download=1" title="다운로드">⬇</a>`;
+        return `<span class="agr-media-item">
+                    <span class="agr-media-label">${label}</span>
+                    <audio controls preload="none" class="agr-audio" src="${src}"></audio>
+                    <a href="${src}&download=1" title="다운로드" class="agr-dl-link">⬇</a>
+                </span>`;
     }
 
     function renderRow(item) {
         const submitted = (item.submitted_at || '').slice(5, 16);
         const cancelled = !!item.cancelled_at;
+        const rowClass = cancelled ? 'agr-row-cancelled' : '';
         const statusCell = cancelled
             ? `<span class="agr-status agr-status-cancelled">취소됨</span>`
             : `<span class="agr-status agr-status-active">활성</span>`;
@@ -163,22 +168,24 @@ const AdminGrowthRecords = (() => {
             `<button class="btn btn-small btn-danger agr-cancel-btn"
                      data-id="${item.id}" data-nickname="${App.esc(item.nickname || '')}"
                      data-submitted="${App.esc(submitted)}">취소</button>`;
+        const mediaRow = `<tr class="agr-media-row ${rowClass}">
+                <td colspan="8">${audioCell(item.id, 'before')}${audioCell(item.id, 'after')}</td>
+            </tr>`;
         const cancelRow = cancelled
-            ? `<tr class="agr-cancel-meta"><td colspan="10">└ 사유: "${App.esc(item.cancel_reason || '')}" · by ${App.esc(item.cancelled_by_name || '?')} · ${App.esc((item.cancelled_at || '').slice(5, 16))}</td></tr>`
+            ? `<tr class="agr-cancel-meta ${rowClass}"><td colspan="8">└ 사유: "${App.esc(item.cancel_reason || '')}" · by ${App.esc(item.cancelled_by_name || '?')} · ${App.esc((item.cancelled_at || '').slice(5, 16))}</td></tr>`
             : '';
         return `
-            <tr class="${cancelled ? 'agr-row-cancelled' : ''}">
+            <tr class="${rowClass}">
                 <td>${App.esc(submitted)}</td>
                 <td>${App.esc(item.cohort_label || '-')}</td>
                 <td>${App.esc(item.group_name || '-')}</td>
                 <td>${App.esc(item.nickname || '')}</td>
                 <td><a href="${App.esc(item.url)}" target="_blank" rel="noopener noreferrer">↗ 링크</a></td>
-                <td>${audioCell(item.id, 'before')}</td>
-                <td>${audioCell(item.id, 'after')}</td>
                 <td title="${App.esc(item.consent_agreed_at || '')}">${item.consent_agreed_at ? '✓' : '✗'}</td>
                 <td>${statusCell}</td>
                 <td>${actionCell}</td>
             </tr>
+            ${mediaRow}
             ${cancelRow}
         `;
     }
