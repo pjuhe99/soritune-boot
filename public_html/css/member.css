@@ -696,3 +696,27 @@
 .coin-cycle-logs .coin-section-label:first-child {
     margin-top: 0;
 }
+
+/* ── 성장기록 제출 (member-growth-record.js) ───────────────── */
+.growth-submit-page { padding: 16px; }
+.growth-submit-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.growth-submit-back { background: none; border: none; color: var(--c-primary, #4f46e5); font-size: 15px; cursor: pointer; padding: 4px 0; }
+.growth-submit-title { font-size: 18px; font-weight: 700; }
+.growth-submit-loading, .growth-submit-empty { padding: 32px 0; text-align: center; color: #888; }
+.growth-guide-top { margin-bottom: 16px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; background: #fafafa; }
+.growth-guide-top summary { font-weight: 700; cursor: pointer; }
+.growth-guide-body { margin-top: 8px; font-size: 14px; line-height: 1.6; }
+.growth-form { display: flex; flex-direction: column; gap: 10px; }
+.growth-form-label { font-weight: 600; font-size: 14px; margin-top: 6px; }
+.growth-form-input { padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+.growth-consent-box { background: #fffbe8; border: 1px solid #f5d77a; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; margin-top: 8px; }
+.growth-consent-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+.growth-consent-check input { margin-top: 2px; flex: none; }
+.growth-form-submit { margin-top: 8px; }
+.growth-form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.growth-form-hint { font-size: 12px; color: #888; }
+.growth-done { border: 1px solid #d1fadf; background: #f0fdf4; border-radius: 10px; padding: 16px; }
+.growth-done-badge { font-weight: 700; color: #15803d; margin-bottom: 8px; }
+.growth-done-msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
+.growth-done-detail { font-size: 13px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; }
+.growth-done-detail audio { display: block; width: 100%; margin-top: 4px; }
