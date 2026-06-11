@@ -698,25 +698,95 @@
 }
 
 /* ── 성장기록 제출 (member-growth-record.js) ───────────────── */
-.growth-submit-page { padding: 16px; }
+.growth-submit-page { padding: 16px; max-width: 720px; margin: 0 auto; }
 .growth-submit-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.growth-submit-back { background: none; border: none; color: var(--c-primary, #4f46e5); font-size: 15px; cursor: pointer; padding: 4px 0; }
-.growth-submit-title { font-size: 18px; font-weight: 700; }
-.growth-submit-loading, .growth-submit-empty { padding: 32px 0; text-align: center; color: #888; }
-.growth-guide-top { margin-bottom: 16px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; background: #fafafa; }
-.growth-guide-top summary { font-weight: 700; cursor: pointer; }
-.growth-guide-body { margin-top: 8px; font-size: 14px; line-height: 1.6; }
-.growth-form { display: flex; flex-direction: column; gap: 10px; }
-.growth-form-label { font-weight: 600; font-size: 14px; margin-top: 6px; }
-.growth-form-input { padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
-.growth-consent-box { background: #fffbe8; border: 1px solid #f5d77a; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; margin-top: 8px; }
+.growth-submit-back { background: none; border: none; color: #555; font-size: 15px; cursor: pointer; padding: 4px 8px; }
+.growth-submit-title { font-size: 18px; font-weight: 700; color: #222; }
+.growth-submit-loading,
+.growth-submit-empty {
+    padding: 40px 16px; text-align: center; color: #888; background: #fff;
+    border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.growth-guide-top {
+    background: #fff; border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.growth-guide-top summary {
+    cursor: pointer; color: #222; font-size: 15px; font-weight: 700; padding: 4px 0;
+}
+.growth-guide-body {
+    margin-top: 10px; padding: 12px; background: #F9FAFB; border-radius: 8px;
+    font-size: 14px; line-height: 1.6; color: #333;
+}
+.growth-guide-body h1, .growth-guide-body h2, .growth-guide-body h3 { margin: 14px 0 6px; font-size: 16px; color: #222; }
+.growth-guide-body h1:first-child, .growth-guide-body h2:first-child, .growth-guide-body h3:first-child { margin-top: 0; }
+.growth-guide-body p { margin: 6px 0; }
+.growth-guide-body ul, .growth-guide-body ol { padding-left: 20px; margin: 6px 0; }
+.growth-guide-body code {
+    background: #E5E7EB; padding: 1px 5px; border-radius: 4px; font-size: 13px;
+}
+.growth-guide-body strong { font-weight: 700; }
+
+.growth-guide-body .guide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+    margin: var(--space-3) 0;
+}
+.growth-guide-body .guide-table th {
+    background: var(--color-gray-50);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+    padding: var(--space-2) var(--space-2);
+    border-bottom: 2px solid var(--color-gray-200);
+    text-align: left;
+    white-space: nowrap;
+}
+.growth-guide-body .guide-table td {
+    padding: var(--space-2) var(--space-2);
+    border-bottom: 1px solid var(--color-gray-100);
+    color: var(--color-text);
+    vertical-align: top;
+}
+.growth-guide-body .guide-table tr:last-child td { border-bottom: none; }
+
+.growth-form {
+    background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.growth-form-label { display: block; font-size: 14px; color: #444; margin-bottom: 6px; margin-top: 10px; }
+.growth-form-label:first-child { margin-top: 0; }
+.growth-form-input {
+    width: 100%; padding: 10px 12px; border: 1px solid #D1D5DB;
+    border-radius: 8px; font-size: 14px; box-sizing: border-box; margin-bottom: 4px;
+}
+.growth-form-input:focus { outline: none; border-color: #2563EB; }
+
+/* 커스텀 파일 선택 */
+.growth-file-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.growth-file-btn { flex: none; }
+.growth-file-name { font-size: 13px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.growth-file-name.has-file { color: #333; }
+
+.growth-consent-box {
+    background: #fffbe8; border: 1px solid #f5d77a; border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; line-height: 1.6; margin-top: 8px; margin-bottom: 8px;
+}
 .growth-consent-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
 .growth-consent-check input { margin-top: 2px; flex: none; }
-.growth-form-submit { margin-top: 8px; }
-.growth-form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-.growth-form-hint { font-size: 12px; color: #888; }
-.growth-done { border: 1px solid #d1fadf; background: #f0fdf4; border-radius: 10px; padding: 16px; }
-.growth-done-badge { font-weight: 700; color: #15803d; margin-bottom: 8px; }
-.growth-done-msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
-.growth-done-detail { font-size: 13px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; }
+
+.growth-form-submit { width: 100%; margin-top: 8px; }
+.growth-form-hint { font-size: 12px; color: #888; margin-top: 6px; }
+
+.growth-done {
+    background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px;
+}
+.growth-done-inner {
+    padding: 12px; background: #ECFDF5; border-radius: 8px;
+}
+.growth-done-badge { color: #065F46; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.growth-done-msg { font-size: 14px; line-height: 1.7; margin-bottom: 12px; color: #333; }
+.growth-done-detail { font-size: 13px; display: flex; flex-direction: column; gap: 8px; word-break: break-all; color: #333; }
 .growth-done-detail audio { display: block; width: 100%; margin-top: 4px; }
