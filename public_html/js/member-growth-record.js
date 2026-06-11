@@ -65,18 +65,20 @@ const MemberGrowthRecord = (() => {
         const d = (s.submitted_at || '').slice(0, 16);
         return `
             <div class="growth-done">
-                <div class="growth-done-badge">✓ 제출 완료 · ${App.esc(d)}</div>
-                <div class="growth-done-msg">
-                    성장기록 제출이 완료되었습니다.<br>
-                    소중한 후기와 음성 파일을 남겨주셔서 감사합니다.<br>
-                    VOD 5주 연장은 제출 데이터 취합 후 <strong>2026년 6월 17일 수요일</strong>에 일괄 반영될 예정입니다.
-                </div>
-                <div class="growth-done-detail">
-                    <div>후기 링크: <a href="${App.esc(s.url)}" target="_blank" rel="noopener noreferrer">${App.esc(s.url)}</a></div>
-                    <div>Before 음성: ${App.esc(s.before_orig_name)}
-                        <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=before"></audio></div>
-                    <div>After 음성: ${App.esc(s.after_orig_name)}
-                        <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=after"></audio></div>
+                <div class="growth-done-inner">
+                    <div class="growth-done-badge">✓ 제출 완료 · ${App.esc(d)}</div>
+                    <div class="growth-done-msg">
+                        성장기록 제출이 완료되었습니다.<br>
+                        소중한 후기와 음성 파일을 남겨주셔서 감사합니다.<br>
+                        VOD 5주 연장은 제출 데이터 취합 후 <strong>2026년 6월 17일 수요일</strong>에 일괄 반영될 예정입니다.
+                    </div>
+                    <div class="growth-done-detail">
+                        <div>후기 링크: <a href="${App.esc(s.url)}" target="_blank" rel="noopener noreferrer">${App.esc(s.url)}</a></div>
+                        <div>Before 음성: ${App.esc(s.before_orig_name)}
+                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=before"></audio></div>
+                        <div>After 음성: ${App.esc(s.after_orig_name)}
+                            <audio controls preload="none" src="${API}growth_record_audio&id=${s.id}&which=after"></audio></div>
+                    </div>
                 </div>
             </div>
         `;
@@ -90,10 +92,18 @@ const MemberGrowthRecord = (() => {
                        placeholder="https://..." maxlength="500" autocomplete="off">
 
                 <label class="growth-form-label">Before 음성 파일</label>
-                <input type="file" id="growth-before" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg">
+                <div class="growth-file-row">
+                    <input type="file" id="growth-before" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg" hidden>
+                    <button type="button" class="btn btn-secondary btn-sm growth-file-btn" data-target="growth-before">파일 선택</button>
+                    <span class="growth-file-name" id="growth-before-name">선택된 파일 없음</span>
+                </div>
 
                 <label class="growth-form-label">After 음성 파일</label>
-                <input type="file" id="growth-after" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg">
+                <div class="growth-file-row">
+                    <input type="file" id="growth-after" accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg" hidden>
+                    <button type="button" class="btn btn-secondary btn-sm growth-file-btn" data-target="growth-after">파일 선택</button>
+                    <span class="growth-file-name" id="growth-after-name">선택된 파일 없음</span>
+                </div>
 
                 <div class="growth-consent-box">
                     🏅 <strong>안내 사항</strong>: 제출해 주신 소중한 후기와 음성 파일은 <strong>'베스트 성장러'</strong>로
@@ -113,6 +123,27 @@ const MemberGrowthRecord = (() => {
     }
 
     function attachHandlers() {
+        // 커스텀 파일 버튼: 클릭 → 숨겨진 input 포워딩
+        document.querySelectorAll('.growth-file-btn').forEach(fileBtn => {
+            fileBtn.addEventListener('click', () => {
+                document.getElementById(fileBtn.dataset.target).click();
+            });
+        });
+
+        // 파일 선택 시 파일명 표시
+        ['growth-before', 'growth-after'].forEach(inputId => {
+            document.getElementById(inputId).addEventListener('change', function () {
+                const nameSpan = document.getElementById(inputId + '-name');
+                const fileName = this.files[0] ? this.files[0].name : '선택된 파일 없음';
+                nameSpan.textContent = fileName;
+                if (this.files[0]) {
+                    nameSpan.classList.add('has-file');
+                } else {
+                    nameSpan.classList.remove('has-file');
+                }
+            });
+        });
+
         const consent = document.getElementById('growth-consent');
         const btn = document.getElementById('growth-submit-btn');
         consent.addEventListener('change', () => { btn.disabled = !consent.checked; });
