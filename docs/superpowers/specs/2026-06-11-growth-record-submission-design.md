@@ -36,11 +36,16 @@ CREATE TABLE growth_record_submissions (
     after_file        VARCHAR(255) NOT NULL,
     before_orig_name  VARCHAR(255) NOT NULL,          -- 업로드 당시 원본 파일명
     after_orig_name   VARCHAR(255) NOT NULL,
+    before_mime       VARCHAR(50) NOT NULL,           -- finfo 실측 MIME (스트리밍 Content-Type)
+    after_mime        VARCHAR(50) NOT NULL,
     consent_agreed_at DATETIME NOT NULL,              -- 마케팅 활용 동의 시각 (체크 필수)
     submitted_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     cancelled_at      DATETIME NULL,
     cancelled_by      INT UNSIGNED NULL,
     cancel_reason     VARCHAR(255) NULL,
+    -- 활성(미취소) 제출 1회를 DB 레벨에서 보장: 취소되면 NULL이 되어 unique에서 빠짐
+    active_member_id  INT UNSIGNED AS (IF(cancelled_at IS NULL, member_id, NULL)) PERSISTENT,
+    UNIQUE KEY uq_active_member (active_member_id),
     INDEX idx_submitted_at (submitted_at DESC),
     INDEX idx_member (member_id),
     INDEX idx_cohort (cohort_id),
@@ -49,7 +54,9 @@ CREATE TABLE growth_record_submissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-- 활성 제출 1회 제한은 애플리케이션 레벨에서 `cancelled_at IS NULL` 행 존재 여부로 검사 (기존 review_submissions 패턴과 동일).
+- 활성 제출 1회 제한: 애플리케이션 검사(친절한 에러 메시지용) + **PERSISTENT generated column unique 키로 DB 레벨 보장** (MariaDB 10.5 확인됨). 동시 요청이 들어와도 한쪽은 duplicate key로 실패 → "이미 제출됨" 응답으로 매핑.
+- `cohort_id`: `bootcamp_members.cohort_id`가 NOT NULL이고 활성 2,079명 중 NULL 0건 확인 (DEV DB 2026-06-11) — NOT NULL FK 유지. 기수 라벨은 `cohorts.cohort` join.
+- 조(group)는 스냅샷하지 않음 — admin 목록에서 기존 reviews_list와 동일하게 `LEFT JOIN bootcamp_groups bg ON bg.id = bm.group_id`로 **현재 조 기준** 표시 (기존 후기 관리와 같은 동작).
 - URL 검증은 기존 review와 동일 (`https?://`, 10~500자).
 
 ### `system_contents` 시드 (운영자가 admin에서 수정 가능)
@@ -71,6 +78,7 @@ CREATE TABLE growth_record_submissions (
 
 - before/after 각 1개 **필수**.
 - 허용 형식: **mp3, m4a(mp4), wav, webm, ogg** — 폰 녹음 파일 업로드를 가정해 bravo보다 넓게.
+- 검증은 확장자가 아니라 **finfo 실측 MIME 기준** (bravo의 `bravoAnswerValidateUpload` 패턴): MIME→저장 확장자 매핑 테이블 (`audio/mpeg`→mp3, `audio/mp4`·`video/mp4`→m4a, `audio/x-m4a`→m4a, `audio/wav`·`audio/x-wav`→wav, `audio/webm`·`video/webm`→webm, `audio/ogg`→ogg). 매핑에 없으면 거부. 실측 MIME을 DB에 저장하고 스트리밍 시 그 값을 Content-Type으로 사용.
 - 개당 최대 **20MB**.
 - 저장 위치: docroot 밖 `<site_root>/growth_uploads/` (bravo_uploads와 동일 구조, SELinux 컨텍스트 `httpd_sys_rw_content_t` 설정 — [[feedback_selinux_upload]]).
 - 서버 자동 명명: `{cohort}_{닉네임}_{before|after}_{submission_id}.{ext}` — 파일시스템 안전 문자로 정규화 (임시 저장 → DB INSERT로 id 확보 → 최종 명명 이동). 원본 파일명은 DB `*_orig_name`에 보존.
@@ -95,7 +103,7 @@ CREATE TABLE growth_record_submissions (
 
 - 진입점: member-shortcuts 카드 — 기존 '후기 작성하기' 카드를 '성장기록 제출' 카드로 **교체**.
 - 구성:
-  1. 안내 영역 (`growth_record_guide` 마크다운 렌더)
+  1. 안내 영역 — `growth_record_guide`를 기존 `MemberHome.renderMarkdown`으로 렌더. 이 렌더러는 HTML 이스케이프를 하지 않는 운영진 신뢰 모델(기존 review_guide·score_guide와 동일: 편집 권한이 운영진 admin으로 한정). 신규 sanitizer 도입은 하지 않되, 이 신뢰 전제를 코드 주석으로 명시.
   2. 후기 링크 입력
   3. Before 음성 파일 선택 + After 음성 파일 선택 (`<input type=file accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg">`)
   4. 동의 안내 박스 + 필수 체크박스 (기획안 4번 문구 그대로). **미체크 시 제출 버튼 비활성** + 서버에서도 재검증
@@ -121,10 +129,12 @@ CREATE TABLE growth_record_submissions (
 
 ## 에러 처리 / 엣지 케이스
 
-- multipart 업로드 부분 실패(한 파일만 도착, 용량 초과로 PHP가 드롭) → 명확한 에러 반환, DB/파일 어느 쪽도 부분 저장 안 함 (파일 먼저 임시 저장 → DB INSERT 성공 후 최종 위치 이동, 실패 시 임시 파일 삭제).
+- multipart 업로드 부분 실패(한 파일만 도착, 용량 초과로 PHP가 드롭) → 명확한 에러 반환, DB/파일 어느 쪽도 부분 저장 안 함.
+- **제출 원자성 (순서 고정)**: ① 두 파일 모두 검증 + 임시 저장 → ② DB 트랜잭션 BEGIN → ③ INSERT로 submission_id 확보 → ④ 임시 파일을 최종 파일명으로 이동(rename) → ⑤ 이동 성공 시 UPDATE로 파일명 기록 후 COMMIT. ④~⑤ 실패 시 ROLLBACK + 이동된/임시 파일 삭제. COMMIT 직후 crash로 남는 고아 임시 파일은 무해(주기 정리 불요, 수동 청소 가능).
 - `upload_max_filesize`/`post_max_size` php.ini 값이 20MB×2 + 폼 오버헤드(≥45MB)를 수용하는지 확인, 부족하면 vhost/풀 단위 조정.
-- 중복 제출 race: 제출 트랜잭션 내 `SELECT ... FOR UPDATE`로 활성 행 존재 검사 ([[feedback_mysql_repeatable_read_count_for_update]]).
+- 중복 제출 race: `uq_active_member` unique 키가 최종 방어 — duplicate key 예외를 "이미 제출하셨습니다" 응답으로 매핑.
 - 취소된 제출의 파일은 디스크에 보존 (운영 분쟁 대비).
+- **동의 철회**: `consent_agreed_at`으로 동의 시각 보존. 제출 후 콘텐츠 활용 동의 철회 요청은 시스템 기능 없이 운영팀 수동 처리(필요 시 운영자가 제출 취소 + 사유 기록).
 
 ## 테스트
 
