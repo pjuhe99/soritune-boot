@@ -315,47 +315,82 @@ function growthSelfCancel(PDO $db, int $memberId): array {
 /**
  * 본인 활성 제출의 음성 1개 교체. $file: ['tmp'=>,'mime'=>,'ext'=>,'orig'=>].
  * 새 파일명 ..._{id}_r{rev}.{ext} 로 저장 → UPDATE → 옛 파일 삭제 (교체본은 보관 안 함).
+ * 직렬화: BEGIN → SELECT ... FOR UPDATE → UPDATE → COMMIT.
+ * 취소 race: 잠근 row 없으면 rollback + 새 파일 unlink (old 파일 절대 건드리지 않음).
  * 성공: ['submission'=>row], 실패: ['error'=>msg].
  */
 function growthReplaceAudio(PDO $db, array $member, string $which, array $file, bool $viaUpload = true): array {
     $memberId = (int)$member['id'];
-    $row = growthFindActive($db, $memberId);
-    if (!$row) return ['error' => '변경할 제출이 없습니다.'];
 
     $tmpDir = GROWTH_UPLOAD_ROOT . '/tmp';
     if (!is_dir($tmpDir) && !mkdir($tmpDir, 0750, true) && !is_dir($tmpDir)) {
         return ['error' => '저장 공간 오류입니다. 관리자에게 문의해주세요.'];
     }
+
+    // ① staging 이동 (트랜잭션 앞 — 실패해도 DB 미변경)
     $t = $tmpDir . "/stage_{$memberId}_{$which}_" . bin2hex(random_bytes(4)) . '.' . $file['ext'];
     $moved = $viaUpload ? move_uploaded_file($file['tmp'], $t) : rename($file['tmp'], $t);
     if (!$moved) return ['error' => '음성 파일 저장에 실패했습니다. 다시 시도해주세요.'];
 
-    $cStmt = $db->prepare("SELECT cohort FROM cohorts WHERE id = ?");
-    $cStmt->execute([(int)$row['cohort_id']]);
-    $cohortLabel = (string)($cStmt->fetchColumn() ?: 'cohort');
-    $nick = growthSafeName($member['nickname'] ?: ($member['real_name'] ?: ('m' . $memberId)));
-    $name = growthSafeName($cohortLabel) . "_{$nick}_{$which}_{$row['id']}_r" . bin2hex(random_bytes(3)) . '.' . $file['ext'];
-
-    if (!rename($t, GROWTH_UPLOAD_ROOT . '/' . $name)) {
-        @unlink($t);
-        return ['error' => '음성 파일 저장에 실패했습니다. 다시 시도해주세요.'];
-    }
-
     $col = $which === 'before' ? 'before' : 'after';
-    $old = $row["{$col}_file"];
+    $name = null; // final 파일명 (트랜잭션 안에서 결정)
+
+    $db->beginTransaction();
     try {
-        $db->prepare("
+        // ② FOR UPDATE — 취소 race 직렬화
+        $stmt = $db->prepare("
+            SELECT * FROM growth_record_submissions
+            WHERE member_id = ? AND cancelled_at IS NULL FOR UPDATE
+        ");
+        $stmt->execute([$memberId]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            $db->rollBack();
+            @unlink($t);
+            return ['error' => '변경할 제출이 없습니다.'];
+        }
+
+        $old = $row["{$col}_file"];
+
+        // ③ staging → final 이동 (row id 확보 후 최종 명명)
+        $cStmt = $db->prepare("SELECT cohort FROM cohorts WHERE id = ?");
+        $cStmt->execute([(int)$row['cohort_id']]);
+        $cohortLabel = (string)($cStmt->fetchColumn() ?: 'cohort');
+        $nick = growthSafeName($member['nickname'] ?: ($member['real_name'] ?: ('m' . $memberId)));
+        $name = growthSafeName($cohortLabel) . "_{$nick}_{$which}_{$row['id']}_r" . bin2hex(random_bytes(3)) . '.' . $file['ext'];
+
+        if (!rename($t, GROWTH_UPLOAD_ROOT . '/' . $name)) {
+            $db->rollBack();
+            @unlink($t);
+            return ['error' => '음성 파일 저장에 실패했습니다. 다시 시도해주세요.'];
+        }
+
+        // ④ UPDATE + rowCount 확인
+        $upStmt = $db->prepare("
             UPDATE growth_record_submissions
                SET {$col}_file = ?, {$col}_orig_name = ?, {$col}_mime = ?
              WHERE id = ? AND cancelled_at IS NULL
-        ")->execute([$name, mb_substr($file['orig'], 0, 255), $file['mime'], (int)$row['id']]);
+        ");
+        $upStmt->execute([$name, mb_substr($file['orig'], 0, 255), $file['mime'], (int)$row['id']]);
+        if ($upStmt->rowCount() !== 1) {
+            $db->rollBack();
+            @unlink(GROWTH_UPLOAD_ROOT . '/' . $name);
+            return ['error' => '변경할 제출이 없습니다.'];
+        }
+
+        $db->commit();
     } catch (Throwable $e) {
-        @unlink(GROWTH_UPLOAD_ROOT . '/' . $name);
+        if ($db->inTransaction()) $db->rollBack();
+        @unlink($t);
+        if ($name !== null) @unlink(GROWTH_UPLOAD_ROOT . '/' . $name);
         throw $e;
     }
+
+    // ⑤ COMMIT 후 old 파일 삭제 (old 와 new 가 같으면 skip — 동일명 교체 방어)
     if ($old !== $name) @unlink(GROWTH_UPLOAD_ROOT . '/' . $old);
 
-    return ['submission' => growthFindActive($db, $memberId)];
+    $submission = growthFindActive($db, $memberId);
+    return ['submission' => $submission];
 }
 
 // ── HTTP 핸들러: 회원 ─────────────────────────────────────────
@@ -471,6 +506,7 @@ function handleGrowthRecordReplaceAudio($method) {
     $r = growthReplaceAudio($db, $member, $which, ['tmp' => $_FILES['audio']['tmp_name']] + $v, true);
     if (isset($r['error'])) jsonError($r['error']);
     $s = $r['submission'];
+    if ($s === null) jsonError('변경 처리에 실패했습니다. 새로고침 후 다시 시도해주세요.');
     jsonSuccess(['submission' => [
         'id'               => (int)$s['id'],
         'url'              => $s['url'],
