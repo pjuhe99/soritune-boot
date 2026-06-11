@@ -47,6 +47,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="/js/bulk-register.js<?= v('/js/bulk-register.js') ?>"></script>
     <script src="/js/admin-reviews.js<?= v('/js/admin-reviews.js') ?>"></script>
+    <script src="/js/admin-growth-records.js<?= v('/js/admin-growth-records.js') ?>"></script>
     <script src="/js/notify.js<?= v('/js/notify.js') ?>"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/js/retention.js<?= v('/js/retention.js') ?>"></script>
