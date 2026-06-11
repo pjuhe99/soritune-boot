@@ -40,6 +40,7 @@
     <script src="/js/member-notices.js<?= v('/js/member-notices.js') ?>"></script>
     <script src="/js/member-coin-history.js<?= v('/js/member-coin-history.js') ?>"></script>
     <script src="/js/member-review.js<?= v('/js/member-review.js') ?>"></script>
+    <script src="/js/member-growth-record.js<?= v('/js/member-growth-record.js') ?>"></script>
     <script src="/js/member-shortcuts.js<?= v('/js/member-shortcuts.js') ?>"></script>
     <script src="/js/study-create.js<?= v('/js/study-create.js') ?>"></script>
     <script src="/js/member-calendar-detail.js<?= v('/js/member-calendar-detail.js') ?>"></script>

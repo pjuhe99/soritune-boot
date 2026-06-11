@@ -44,23 +44,24 @@ const MemberShortcuts = (() => {
             </div>
         `;
 
-        // 2) 후기 카드 조건부 prepend (서버 상태에 따라)
+        // 2) 성장기록 카드 조건부 prepend (기존 후기 카드 대체)
         try {
-            const r = await App.get(API + 'my_review_status');
-            if (!r.success) return;
-            const anyEnabled = (r.cafe?.enabled || r.blog?.enabled);
-            if (!r.eligible || !anyEnabled) return;
+            const r = await App.get(API + 'my_growth_record_status');
+            if (!r.success || !r.eligible) return;
+            // 접수 중이거나 이미 제출했으면 노출 (제출 후에도 내역 확인 진입 유지)
+            if (!r.open && !r.submitted) return;
 
-            const reviewBtn = `<button class="shortcut-btn shortcut-btn--amber" id="shortcut-review-submit" type="button">
-                <span class="shortcut-label">후기 작성하기 (+5 코인/편)</span>
+            const label = r.submitted ? '성장기록 제출 내역 보기' : '성장기록 제출하고 VOD 5주 연장 받기';
+            const growthBtn = `<button class="shortcut-btn shortcut-btn--amber" id="shortcut-growth-record" type="button">
+                <span class="shortcut-label">${App.esc(label)}</span>
                 <span class="shortcut-arrow">&#8250;</span>
             </button>`;
             const inner = document.getElementById('shortcuts-list-inner');
-            if (inner) inner.insertAdjacentHTML('afterbegin', reviewBtn);
+            if (inner) inner.insertAdjacentHTML('afterbegin', growthBtn);
 
-            const btn = document.getElementById('shortcut-review-submit');
-            if (btn) btn.addEventListener('click', () => MemberApp.openReviewSubmit());
-        } catch (_e) { /* 네트워크/권한 에러는 조용히 무시 — 후기 카드만 안 보임 */ }
+            const btn = document.getElementById('shortcut-growth-record');
+            if (btn) btn.addEventListener('click', () => MemberApp.openGrowthRecord());
+        } catch (_e) { /* 네트워크/권한 에러는 조용히 무시 — 카드만 안 보임 */ }
     }
 
     return { render };

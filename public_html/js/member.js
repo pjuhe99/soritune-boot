@@ -216,6 +216,7 @@ const MemberApp = (() => {
                 </div>
                 <div id="member-coin-history-area" style="display:none"></div>
                 <div id="member-review-submit-area" style="display:none"></div>
+                <div id="member-growth-record-area" style="display:none"></div>
             </div>
         `;
 
@@ -287,6 +288,27 @@ const MemberApp = (() => {
         refreshMember();
     }
 
+    function openGrowthRecord() {
+        const dashboardContent = root.querySelector('.member-content');
+        const area = document.getElementById('member-growth-record-area');
+        if (!area) return;
+        dashboardContent.style.display = 'none';
+        area.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        MemberGrowthRecord.render(area, closeGrowthRecord);
+    }
+
+    function closeGrowthRecord() {
+        const dashboardContent = root.querySelector('.member-content');
+        const area = document.getElementById('member-growth-record-area');
+        if (!area) return;
+        area.style.display = 'none';
+        area.innerHTML = '';
+        dashboardContent.style.display = '';
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        // 코인 변동 없음 — refreshMember 호출 불필요
+    }
+
     async function refreshMember() {
         try {
             const r = await App.post('/api/member.php?action=check_session');
@@ -298,5 +320,5 @@ const MemberApp = (() => {
         } catch (_e) { /* 실패해도 UI 유지 */ }
     }
 
-    return { init, openCoinHistory, closeCoinHistory, openReviewSubmit, closeReviewSubmit, refreshMember };
+    return { init, openCoinHistory, closeCoinHistory, openReviewSubmit, closeReviewSubmit, openGrowthRecord, closeGrowthRecord, refreshMember };
 })();
