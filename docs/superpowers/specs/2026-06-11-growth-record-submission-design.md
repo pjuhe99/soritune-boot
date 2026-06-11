@@ -141,6 +141,14 @@ CREATE TABLE growth_record_submissions (
 - 서비스 레벨: 제출 검증(URL/consent/형식/용량), 1회 제한, 취소→재제출, 권한(타인 음성 접근 차단), 마감/토글 차단.
 - HTTP smoke: 회원 제출 happy path + 마감 후 + 기제출 + admin 목록/재생.
 
+## 증분 (2026-06-12 승인): 제출 후 본인 취소 / 파일 변경
+
+제출 완료 화면에서 회원 본인이 직접:
+- **제출 취소**: 소프트 취소(`cancelled_by = NULL`, 사유 '회원 본인 취소') → 즉시 재제출 가능. admin 목록에는 취소 주체 '본인'으로 표시. 파일은 기존 정책대로 보존.
+- **파일 변경**: Before/After 각각 개별 교체 (URL/동의는 유지). 검증은 제출과 동일(MIME/20MB). 새 파일은 충돌 없는 새 파일명(`..._{id}_r{rev}.{ext}`)으로 저장 → row UPDATE → **교체된 옛 파일은 삭제** (취소 보존 정책과 구분: 본인이 마감 전 교체한 파일은 보관 가치 없음).
+- **공통 게이트**: 접수 중(토글 ON + 마감 전)에만 — 버튼 미노출 + 서버 차단 이중. URL 변경은 취소 후 재제출로 갈음.
+- 신규 액션: `growth_record_self_cancel`(POST), `growth_record_replace_audio`(POST multipart: id 불필요 — 본인 활성 제출 대상, which + audio).
+
 ## 작업 순서 (배포 규칙)
 
 1. boot-dev (dev 브랜치)에서만 코드 작업, DEV DB에 마이그레이션 먼저.
