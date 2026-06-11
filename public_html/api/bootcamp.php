@@ -29,6 +29,7 @@ require_once __DIR__ . '/services/group_assignment.php';
 require_once __DIR__ . '/services/entrance.php';
 require_once __DIR__ . '/services/attendance.php';
 require_once __DIR__ . '/services/review.php';
+require_once __DIR__ . '/services/growth_record.php';
 require_once __DIR__ . '/services/notify.php';
 require_once __DIR__ . '/services/notice.php';
 
@@ -369,6 +370,17 @@ case 'reviews_list':         handleReviewsList(); break;
 case 'review_cancel':        handleReviewCancel($method); break;
 case 'review_settings':      handleReviewSettingsGet(); break;
 case 'review_settings_save': handleReviewSettingsUpdate($method); break;
+
+// ── Growth Records (성장기록 — 후기+음성, 기존 후기 대체) ────
+
+case 'my_growth_record_status':          handleMyGrowthRecordStatus(); break;
+case 'submit_growth_record':             handleSubmitGrowthRecord($method); break;
+case 'growth_record_audio':              handleGrowthRecordAudio(); break;
+case 'growth_record_audio_admin':        handleGrowthRecordAudioAdmin(); break;
+case 'growth_records_list':              handleGrowthRecordsList(); break;
+case 'growth_record_cancel':             handleGrowthRecordCancel($method); break;
+case 'growth_record_settings':           handleGrowthRecordSettingsGet(); break;
+case 'growth_record_settings_save':      handleGrowthRecordSettingsUpdate($method); break;
 
 // ── Notify (알림톡) ──────────────────────────────────────────
 
