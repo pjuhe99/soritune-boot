@@ -143,18 +143,17 @@ const MemberGrowthRecord = (() => {
                 fd.append('consent', '1');
                 fd.append('before_audio', before);
                 fd.append('after_audio', after);
-                const res = await fetch(API + 'submit_growth_record', { method: 'POST', body: fd });
-                const r = await res.json();
+                const r = await App.post(API + 'submit_growth_record', fd);
                 if (r.success) {
                     Toast.success(r.message || '제출이 완료되었습니다.');
                     await load();
                 } else {
-                    Toast.error(r.error || r.message || '제출에 실패했습니다.');
+                    // App.post가 r.error 있으면 자동으로 Toast.error 띄움 — 버튼 복구만
                     btn.disabled = false;
                     btn.textContent = '제출하기';
                 }
             } catch (_e) {
-                Toast.error('네트워크 오류 — 다시 시도해주세요.');
+                // App.post가 예외를 흡수하므로 실질적으로 진입하지 않음 — 버튼 복구 안전망
                 btn.disabled = false;
                 btn.textContent = '제출하기';
             }
