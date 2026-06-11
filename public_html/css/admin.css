@@ -714,3 +714,22 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* ── 성장기록 탭 (admin-growth-records.js) ─────────────────── */
+.admin-growth-settings { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+.agr-settings-title { font-weight: 700; margin-bottom: 6px; }
+.agr-settings-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.agr-toggle { display: flex; align-items: center; gap: 6px; }
+.agr-settings-hint { color: #888; font-size: 12px; }
+.admin-growth-filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+.admin-growth-counts { font-size: 13px; color: #555; margin-bottom: 8px; }
+.admin-growth-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-growth-table th, .admin-growth-table td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+.agr-audio { width: 180px; height: 30px; vertical-align: middle; }
+.agr-status-active { color: #15803d; }
+.agr-status-cancelled { color: #b91c1c; }
+.agr-row-cancelled td { opacity: 0.55; }
+.agr-cancel-meta td { font-size: 12px; color: #888; }
+.agr-cancel-warn { color: #b91c1c; font-size: 13px; margin: 6px 0; }
+.agr-cancel-actions, .agr-guide-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.agr-guide-modal textarea { width: 100%; font-family: monospace; font-size: 13px; }
