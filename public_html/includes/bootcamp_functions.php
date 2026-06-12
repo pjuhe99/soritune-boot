@@ -161,7 +161,9 @@ function recalculateMemberScore($db, $memberId, $adminId = null) {
 
         $scoringStart = date('Y-m-d', strtotime($adaptationEnd . ' +1 day'));
         $yesterday = date('Y-m-d', strtotime('-1 day'));
-        $scoringEnd = ($cohortEndDate && $cohortEndDate < $yesterday) ? $cohortEndDate : $yesterday;
+        // 기수 종료일 당일은 적응기간처럼 감점 제외 → 마지막 감점일 = end_date - 1
+        $lastScoringDay = $cohortEndDate ? date('Y-m-d', strtotime($cohortEndDate . ' -1 day')) : null;
+        $scoringEnd = ($lastScoringDay && $lastScoringDay < $yesterday) ? $lastScoringDay : $yesterday;
         $rules = getPenaltyRules();
         $penaltySum = 0;
 
