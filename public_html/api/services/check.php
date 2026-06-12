@@ -68,7 +68,8 @@ function handleChecklist() {
     $cohortInfo->execute([$cohortId]);
     $ci = $cohortInfo->fetch();
     $scoringStart = $ci ? date('Y-m-d', strtotime($ci['start_date'] . ' + ' . SCORE_ADAPTATION_DAYS . ' days')) : null;
-    $scoringEnd = $ci['end_date'] ?? null;
+    // 종료일 당일은 감점 제외 (recalculateMemberScore 와 동일 규칙)
+    $scoringEnd = !empty($ci['end_date']) ? date('Y-m-d', strtotime($ci['end_date'] . ' -1 day')) : null;
 
     jsonSuccess([
         'date' => $date,

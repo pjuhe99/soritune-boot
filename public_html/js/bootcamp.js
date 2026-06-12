@@ -508,7 +508,7 @@ const BootcampApp = (() => {
         if (isOutOfScoring) {
             const reason = selectedDate < scoring_start
                 ? `적응기간(~${scoring_start} 전)에 해당합니다.`
-                : `기수 종료일(${scoring_end}) 이후입니다.`;
+                : `감점 구간(~${scoring_end}) 이후입니다. 기수 종료일 당일은 감점에서 제외됩니다.`;
             scoringNotice = `<div class="bc-scoring-notice">이 날짜는 점수에 반영되지 않습니다. ${reason}</div>`;
         }
 
