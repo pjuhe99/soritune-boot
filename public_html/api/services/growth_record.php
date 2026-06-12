@@ -20,12 +20,16 @@ const GROWTH_ADMIN_ROLES = ['operation', 'coach', 'head', 'subhead1', 'subhead2'
 
 /**
  * 실측 MIME → 저장 확장자. 미지원이면 null.
- * (m4a 는 기기별로 audio/mp4·video/mp4·audio/x-m4a 로 갈림 — 전부 수용)
+ * (m4a 는 컨테이너 brand 에 따라 libmagic 판정이 갈림 — M4A→audio/x-m4a,
+ *  mp42/isom→video/mp4, 3gp4(삼성 음성녹음)→video/3gpp, qt→video/quicktime.
+ *  raw AAC(ADTS) 를 .m4a 로 저장하는 녹음앱도 있어 aac 까지 수용)
  */
 function growthAudioExt(string $mime): ?string {
     $map = [
         'audio/mpeg' => 'mp3', 'audio/mp3' => 'mp3',
         'audio/mp4'  => 'm4a', 'video/mp4'  => 'm4a', 'audio/x-m4a' => 'm4a',
+        'video/3gpp' => 'm4a', 'audio/3gpp' => 'm4a', 'video/quicktime' => 'm4a',
+        'audio/aac'  => 'aac', 'audio/x-hx-aac-adts' => 'aac',
         'audio/wav'  => 'wav', 'audio/x-wav' => 'wav', 'audio/wave' => 'wav',
         'audio/webm' => 'webm', 'video/webm' => 'webm',
         'audio/ogg'  => 'ogg',  'application/ogg' => 'ogg',
